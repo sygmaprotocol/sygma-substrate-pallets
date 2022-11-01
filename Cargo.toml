@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "basic-fee-handler",
+    "bridge",
+    "traits",
+]
+
+exclude = [
+
+]
