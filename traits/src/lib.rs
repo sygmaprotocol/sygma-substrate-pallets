@@ -2,7 +2,7 @@
 
 use xcm::latest::{prelude::*, AssetId};
 
-pub type DestDomainID = u8;
+pub type DomainID = u8;
 pub type DepositNonce = u64;
 pub type ResourceId = [u8; 32];
 

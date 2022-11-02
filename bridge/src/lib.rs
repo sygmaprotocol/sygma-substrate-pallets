@@ -26,7 +26,7 @@ pub mod pallet {
     use sp_core::U256;
     use sp_runtime::{traits::AccountIdConversion, RuntimeDebug};
     use sp_std::{boxed::Box, cmp, convert::From, vec, vec::Vec};
-    use sygma_traits::{DepositNonce, DestDomainID, FeeHandler, ResourceId};
+    use sygma_traits::{DepositNonce, DomainID, FeeHandler, ResourceId};
     use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
     use xcm_executor::traits::TransactAsset;
 
@@ -35,7 +35,7 @@ pub mod pallet {
 
     #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
     pub struct Proposal {
-        origin_domain_id: DestDomainID,
+        origin_domain_id: DomainID,
         deposit_nonce: DepositNonce,
         resource_id: ResourceId,
         data: Vec<u8>,
@@ -57,7 +57,7 @@ pub mod pallet {
         /// The identifier for this chain.
         /// This must be unique and must not collide with existing IDs within a set of bridged chains.
         #[pallet::constant]
-        type DestDomainID: Get<DestDomainID>;
+        type DestDomainID: Get<DomainID>;
 
         /// Bridge transfer reserve account
         #[pallet::constant]
@@ -83,7 +83,7 @@ pub mod pallet {
         /// When initial bridge transfer send to dest domain
         /// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data, handler_reponse]
         Deposit(
-            DestDomainID,
+            DomainID,
             ResourceId,
             DepositNonce,
             T::AccountId,
@@ -127,7 +127,7 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn mpc_keys)]
     pub type UsedNonces<T: Config> =
-        StorageDoubleMap<_, Twox64Concat, DestDomainID, Twox64Concat, U256, U256>;
+        StorageDoubleMap<_, Twox64Concat, DomainID, Twox64Concat, U256, U256>;
 
     #[pallet::call]
     impl<T: Config> Pallet<T>
@@ -136,7 +136,7 @@ pub mod pallet {
     {
         /// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
         #[pallet::weight(195_000_000)]
-        pub fn pause_bridge(origin: OriginFor<T>, id: DestDomainID) -> DispatchResult {
+        pub fn pause_bridge(origin: OriginFor<T>, id: DomainID) -> DispatchResult {
             // Ensure bridge committee
             T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -149,7 +149,7 @@ pub mod pallet {
 
         /// Unpause bridge.
         #[pallet::weight(195_000_000)]
-        pub fn unpause_bridge(origin: OriginFor<T>, id: DestDomainID) -> DispatchResult {
+        pub fn unpause_bridge(origin: OriginFor<T>, id: DomainID) -> DispatchResult {
             // Ensure bridge committee
             T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 

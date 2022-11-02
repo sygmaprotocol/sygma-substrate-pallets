@@ -16,4 +16,6 @@ TODO
 
 - Test
 
-TODO
+```sh
+ $ cargo test
+```
