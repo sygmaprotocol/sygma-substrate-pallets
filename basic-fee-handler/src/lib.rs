@@ -2,6 +2,8 @@
 
 pub use self::pallet::*;
 
+mod mock;
+
 #[frame_support::pallet]
 pub mod pallet {
     use codec::{Decode, Encode, EncodeLike};
@@ -54,8 +56,11 @@ pub mod pallet {
             T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
             // Update asset fee
+            AssetFees::<T>::insert(&asset, amount);
 
-            Err(Error::<T>::Unimplemented.into())
+            // Emit FeeSet event
+            Self::deposit_event(Event::FeeSet { asset, amount });
+            Ok(())
         }
     }
 
@@ -66,11 +71,35 @@ pub mod pallet {
         }
 
         fn get_fee(&self, asset: AssetId) -> Option<u128> {
-            // TODO
-            None
+            AssetFees::<T>::get(asset)
         }
     }
 
     #[cfg(test)]
-    mod test {}
+    mod test {
+        use super::*;
+        use crate::Pallet;
+        use frame_support::assert_ok;
+        use crate::AssetFees;
+        use crate::mock::{TestNet, RuntimeOrigin as Origin, ParaA, para_assert_events, RuntimeEvent as Event};
+        use crate::Event as BasicFeeHandlerEvent;
+
+        #[test]
+        fn set_get_fee() {
+            TestNet::reset();
+
+            ParaA::execute_with(|| {
+                let asset_id = 10;
+                let amount = 100;
+
+                assert_ok!(Pallet::set_fee(Origin::root(), asset_id, amount));
+                assert_eq!(<AssetFees<Runtime>>::get(asset_id), amount);
+
+                para_assert_events(vec![
+                    Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet{ asset, amount })
+                ]);
+            })
+        }
+
+    }
 }
