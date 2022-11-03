@@ -22,7 +22,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use scale_info::TypeInfo;
     use sp_core::hash::{H160, H256};
-    use sp_core::hashing::keccak_256;
+    use sp_io::hashing::keccak_256;
     use sp_core::U256;
     use sp_runtime::{traits::AccountIdConversion, RuntimeDebug};
     use sp_std::{boxed::Box, cmp, convert::From, vec, vec::Vec};
