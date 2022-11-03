@@ -5,8 +5,13 @@ members = [
     "basic-fee-handler",
     "bridge",
     "traits",
+    "substrate-node/node",
+    "substrate-node/runtime",
 ]
 
 exclude = [
 
 ]
+
+[profile.release]
+panic = "unwind"
