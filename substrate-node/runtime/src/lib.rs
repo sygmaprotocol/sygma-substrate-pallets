@@ -6,43 +6,44 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_support::{
+	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
+	pallet_prelude::*,
+	traits::{
+		tokens::fungibles::{
+			metadata::Mutate as MetaMutate, Create as FungibleCerate, Mutate as FungibleMutate,
+			Transfer as FungibleTransfer,
+		},
+		Currency, ExistenceRequirement, StorageVersion,
+	},
+	transactional, PalletId,
+};
+use frame_system::pallet_prelude::*;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
+use polkadot_parachain::primitives::Sibling;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, IdentityLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, NumberFor,
+		One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature, AccountId32, Perbill, Permill
+	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill, Permill,
 };
-use sp_core::H256;
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{DomainID, ResourceId};
-use polkadot_parachain::primitives::Sibling;
-use frame_support::dispatch::{Dispatchable, GetDispatchInfo};
-use frame_support::{
-	dispatch::DispatchResult,
-	pallet_prelude::*,
-	traits::tokens::fungibles::{
-		metadata::Mutate as MetaMutate, Create as FungibleCerate, Mutate as FungibleMutate,
-		Transfer as FungibleTransfer,
-	},
-	traits::{Currency, ExistenceRequirement, StorageVersion},
-	transactional, PalletId,
-};
-use frame_system::pallet_prelude::*;
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
-    AccountId32Aliases, AsPrefixedGeneralIndex, ConvertedConcreteAssetId, CurrencyAdapter,
-    FungiblesAdapter, IsConcrete, ParentIsPreset, SiblingParachainConvertsVia,
+	AccountId32Aliases, AsPrefixedGeneralIndex, ConvertedConcreteAssetId, CurrencyAdapter,
+	FungiblesAdapter, IsConcrete, ParentIsPreset, SiblingParachainConvertsVia,
 };
 use xcm_executor::traits::JustTry;
 
@@ -61,7 +62,9 @@ pub use frame_support::{
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
-use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter as PaymentCurrencyAdapter, Multiplier};
+use pallet_transaction_payment::{
+	ConstFeeMultiplier, CurrencyAdapter as PaymentCurrencyAdapter, Multiplier,
+};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 
@@ -301,121 +304,121 @@ const fn deposit(items: u32, bytes: u32) -> Balance {
 
 /// Configure the sygma protocol.
 parameter_types! {
-    pub const AssetDeposit: Balance = 10 * UNIT::get(); // 10 UNITS deposit to create fungible asset class
-    pub const AssetAccountDeposit: Balance = 1 * DOLLARS::get();
-    pub const ApprovalDeposit: Balance = ExistentialDeposit::get();
-    pub const AssetsStringLimit: u32 = 50;
-    /// Key = 32 bytes, Value = 36 bytes (32+1+1+1+1)
-    // https://github.com/paritytech/substrate/blob/069917b/frame/assets/src/lib.rs#L257L271
-    pub const MetadataDepositBase: Balance = deposit(1, 68);
-    pub const MetadataDepositPerByte: Balance = deposit(0, 1);
-    pub const ExecutiveBody: BodyId = BodyId::Executive;
+	pub const AssetDeposit: Balance = 10 * UNIT::get(); // 10 UNITS deposit to create fungible asset class
+	pub const AssetAccountDeposit: Balance = 1 * DOLLARS::get();
+	pub const ApprovalDeposit: Balance = ExistentialDeposit::get();
+	pub const AssetsStringLimit: u32 = 50;
+	/// Key = 32 bytes, Value = 36 bytes (32+1+1+1+1)
+	// https://github.com/paritytech/substrate/blob/069917b/frame/assets/src/lib.rs#L257L271
+	pub const MetadataDepositBase: Balance = deposit(1, 68);
+	pub const MetadataDepositPerByte: Balance = deposit(0, 1);
+	pub const ExecutiveBody: BodyId = BodyId::Executive;
 }
 
 pub type AssetId = u32;
 impl pallet_assets::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Balance = Balance;
-    type AssetId = AssetId;
-    type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type AssetDeposit = AssetDeposit;
-    type AssetAccountDeposit = AssetAccountDeposit;
-    type MetadataDepositBase = MetadataDepositBase;
-    type MetadataDepositPerByte = MetadataDepositPerByte;
-    type ApprovalDeposit = ApprovalDeposit;
-    type StringLimit = AssetsStringLimit;
-    type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = Balance;
+	type AssetId = AssetId;
+	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = AssetAccountDeposit;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+	type StringLimit = AssetsStringLimit;
+	type Freezer = ();
+	type Extra = ();
+	type WeightInfo = ();
 }
 
 impl sygma_basic_feehandler::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type RuntimeEvent = RuntimeEvent;
+	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 }
 
 parameter_types! {
-    pub DestDomainID: DomainID = 1;
-    pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
-    pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
-    pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
-    pub RelayNetwork: NetworkId = NetworkId::Polkadot;
-    pub AssetsPalletLocation: MultiLocation =
-        PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
-    pub PhaLocation: MultiLocation = MultiLocation::here();
-    pub UsdcLocation: MultiLocation = MultiLocation::new(
-        1,
-        X3(
-            Parachain(2004),
-            GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-            GeneralKey(b"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_vec().try_into().expect("less than length limit; qed")),
-        ),
-    );
-    pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6").into();
-    pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e").into();
-    pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub DestDomainID: DomainID = 1;
+	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
+	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
+	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
+	pub AssetsPalletLocation: MultiLocation =
+		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
+	pub PhaLocation: MultiLocation = MultiLocation::here();
+	pub UsdcLocation: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2004),
+			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_vec().try_into().expect("less than length limit; qed")),
+		),
+	);
+	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6").into();
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e").into();
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
 /// when determining ownership of accounts for asset transacting and when attempting to use XCM
 /// `Transact` in order to determine the dispatch Origin.
 pub type LocationToAccountId = (
-    // The parent (Relay-chain) origin converts to the parent `AccountId`.
-    ParentIsPreset<AccountId32>,
-    // Sibling parachain origins convert to AccountId via the `ParaId::into`.
-    SiblingParachainConvertsVia<Sibling, AccountId32>,
-    // Straight up local `AccountId32` origins just alias directly to `AccountId`.
-    AccountId32Aliases<RelayNetwork, AccountId32>,
+	// The parent (Relay-chain) origin converts to the parent `AccountId`.
+	ParentIsPreset<AccountId32>,
+	// Sibling parachain origins convert to AccountId via the `ParaId::into`.
+	SiblingParachainConvertsVia<Sibling, AccountId32>,
+	// Straight up local `AccountId32` origins just alias directly to `AccountId`.
+	AccountId32Aliases<RelayNetwork, AccountId32>,
 );
 
 /// Means for transacting the native currency on this chain.
 pub type CurrencyTransactor = CurrencyAdapter<
-    // Use this currency:
-    Balances,
-    // Use this currency when it is a fungible asset matching the given location or name:
-    IsConcrete<PhaLocation>,
-    // Convert an XCM MultiLocation into a local account id:
-    LocationToAccountId,
-    // Our chain's account ID type (we can't get away without mentioning it explicitly):
-    AccountId32,
-    // We don't track any teleports of `Balances`.
-    (),
+	// Use this currency:
+	Balances,
+	// Use this currency when it is a fungible asset matching the given location or name:
+	IsConcrete<PhaLocation>,
+	// Convert an XCM MultiLocation into a local account id:
+	LocationToAccountId,
+	// Our chain's account ID type (we can't get away without mentioning it explicitly):
+	AccountId32,
+	// We don't track any teleports of `Balances`.
+	(),
 >;
 
 /// Means for transacting assets besides the native currency on this chain.
 pub type FungiblesTransactor = FungiblesAdapter<
-    // Use this fungibles implementation:
-    Assets,
-    // Use this currency when it is a fungible asset matching the given location or name:
-    ConvertedConcreteAssetId<
-        AssetId,
-        Balance,
-        AsPrefixedGeneralIndex<AssetsPalletLocation, AssetId, JustTry>,
-        JustTry,
-    >,
-    // Convert an XCM MultiLocation into a local account id:
-    LocationToAccountId,
-    // Our chain's account ID type (we can't get away without mentioning it explicitly):
-    AccountId32,
-    // We only want to allow teleports of known assets. We use non-zero issuance as an indication
-    // that this asset is known.
-    parachains_common::impls::NonZeroIssuance<AccountId32, Assets>,
-    // The account to use for tracking teleports.
-    CheckingAccount,
+	// Use this fungibles implementation:
+	Assets,
+	// Use this currency when it is a fungible asset matching the given location or name:
+	ConvertedConcreteAssetId<
+		AssetId,
+		Balance,
+		AsPrefixedGeneralIndex<AssetsPalletLocation, AssetId, JustTry>,
+		JustTry,
+	>,
+	// Convert an XCM MultiLocation into a local account id:
+	LocationToAccountId,
+	// Our chain's account ID type (we can't get away without mentioning it explicitly):
+	AccountId32,
+	// We only want to allow teleports of known assets. We use non-zero issuance as an indication
+	// that this asset is known.
+	parachains_common::impls::NonZeroIssuance<AccountId32, Assets>,
+	// The account to use for tracking teleports.
+	CheckingAccount,
 >;
 /// Means for transacting assets on this chain.
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
 impl sygma_bridge::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type DestDomainID = DestDomainID;
-    type TransferReserveAccount = BridgeAccount;
-    type FeeReserveAccount = TreasuryAccount;
-    type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
-    type AssetTransactor = AssetTransactors;
-    type ResourcePairs = ResourcePairs;
+	type RuntimeEvent = RuntimeEvent;
+	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type DestDomainID = DestDomainID;
+	type TransferReserveAccount = BridgeAccount;
+	type FeeReserveAccount = TreasuryAccount;
+	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
+	type AssetTransactor = AssetTransactors;
+	type ResourcePairs = ResourcePairs;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -434,9 +437,9 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
-        Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
-        SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>},
-        SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>},
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
+		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>},
+		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
