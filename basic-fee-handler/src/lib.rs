@@ -7,10 +7,11 @@ pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+    use codec::{Decode, Encode, EncodeLike};
     use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
     use frame_system::pallet_prelude::*;
     use sygma_traits::FeeHandler;
-    use xcm::latest::{AssetId};
+    use xcm::latest::{prelude::*, AssetId};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
