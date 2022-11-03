@@ -8125,8 +8125,12 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-assets",
+ "pallet-balances",
  "parity-scale-codec",
  "scale-info",
+ "sp-io",
+ "sp-runtime",
  "sygma-traits",
  "xcm",
  "xcm-builder",
