@@ -165,8 +165,8 @@ pub mod pallet {
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
 			// Set MPC account public key
-
-			Err(Error::<T>::Unimplemented.into())
+			MpcKey::<T>::set(Some(key));
+			Ok(())
 		}
 
 		/// Initiates a transfer.
