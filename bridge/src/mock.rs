@@ -27,6 +27,7 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 
 pub(crate) type Balance = u128;
 
+
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,

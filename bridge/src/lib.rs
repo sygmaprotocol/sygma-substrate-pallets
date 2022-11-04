@@ -239,5 +239,47 @@ pub mod pallet {
 	}
 
 	#[cfg(test)]
-	mod test {}
+	mod test {
+		use frame_support::{assert_noop, assert_ok};
+		use xcm::latest::MultiLocation;
+		use xcm::prelude::{Concrete, Here};
+		use sygma_basic_feehandler::AssetFees;
+		use crate as bridge;
+		use bridge::mock::{SygmaBridge, new_test_ext, RuntimeEvent as Event, RuntimeOrigin as Origin, Runtime, ALICE};
+		use crate::MpcKey;
+		use frame_support::sp_runtime::traits::BadOrigin;
+
+		#[test]
+		fn set_mpc_key() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_key_a: [u8; 32] = [1; 32];
+				let test_mpc_key_b: [u8; 32] = [2; 32];
+
+				// set to test_ket_a
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
+				assert_eq!(
+					MpcKey::<Runtime>::get().unwrap(),
+					test_mpc_key_a
+				);
+
+				// set to test_ket_b
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_b));
+				assert_eq!(
+					MpcKey::<Runtime>::get().unwrap(),
+					test_mpc_key_b
+				);
+
+				// permission test: unauthorized account should not be able to set mpc key
+				let unauthorized_account = Origin::from(Some(ALICE));
+				assert_noop!(
+                    SygmaBridge::set_mpc_key(unauthorized_account, test_mpc_key_a),
+                    BadOrigin
+                );
+				assert_eq!(
+					MpcKey::<Runtime>::get().unwrap(),
+					test_mpc_key_b
+				);
+			})
+		}
+	}
 }
