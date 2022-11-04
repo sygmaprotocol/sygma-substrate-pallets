@@ -1,17 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub use self::pallet::*;
+
 #[cfg(test)]
 mod mock;
-
-pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
     use codec::{Decode, Encode, EncodeLike};
     use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
     use frame_system::pallet_prelude::*;
+    use xcm::latest::{AssetId, prelude::*};
     use sygma_traits::FeeHandler;
-    use xcm::latest::{prelude::*, AssetId};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -79,12 +79,16 @@ pub mod pallet {
 
     #[cfg(test)]
     mod test {
+        use frame_support::{assert_err, assert_noop, assert_ok};
+        use frame_support::sp_runtime::traits::BadOrigin;
+        use xcm::latest::{MultiLocation, prelude::*};
+        use basic_fee_handler::mock::{ALICE, assert_events,
+                                      BasicFeeHandler, new_test_ext, RuntimeEvent as Event,
+                                      RuntimeOrigin as Origin, Test};
         use crate as basic_fee_handler;
         use crate::AssetFees;
-        use frame_support::assert_ok;
-        use basic_fee_handler::mock::{RuntimeOrigin as Origin, RuntimeEvent as Event, new_test_ext, assert_events, BasicFeeHandler, Test};
+        use crate::Error as BasicFeeHandlerError;
         use crate::Event as BasicFeeHandlerEvent;
-        use xcm::latest::{prelude::*, MultiLocation};
 
         #[test]
         fn set_get_fee() {
@@ -121,9 +125,16 @@ pub mod pallet {
                     amount_a
                 );
 
+                // permission test: unauthorized account should not be able to set fee
+                let unauthorized_account = Origin::from(Some(ALICE));
+                assert_noop!(
+                    BasicFeeHandler::set_fee(unauthorized_account, asset_id_a.clone(), amount_a),
+                    BadOrigin
+                );
+
                 assert_events(vec![
                     Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet { asset: asset_id_a.into(), amount: amount_a }),
-                    Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet { asset: asset_id_b.into(), amount: amount_b })
+                    Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet { asset: asset_id_b.into(), amount: amount_b }),
                 ]);
             })
         }

@@ -16,6 +16,8 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 pub(crate) type Balance = u128;
 
+pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
+
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
