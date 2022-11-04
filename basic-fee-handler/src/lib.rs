@@ -2,13 +2,14 @@
 
 pub use self::pallet::*;
 
+#[allow(unused_variables)]
+#[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use codec::{Decode, Encode, EncodeLike};
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
 	use frame_system::pallet_prelude::*;
 	use sygma_traits::FeeHandler;
-	use xcm::latest::{prelude::*, AssetId};
+	use xcm::latest::AssetId;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -55,6 +56,8 @@ pub mod pallet {
 
 			// Update asset fee
 
+			// For clippy happy
+			Self::deposit_event(Event::FeeSet { asset, amount });
 			Err(Error::<T>::Unimplemented.into())
 		}
 	}
@@ -65,7 +68,7 @@ pub mod pallet {
 			Self(PhantomData)
 		}
 
-		fn get_fee(&self, asset: AssetId) -> Option<u128> {
+		fn get_fee(&self, _asset: AssetId) -> Option<u128> {
 			// TODO
 			None
 		}
