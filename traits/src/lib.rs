@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use xcm::latest::{prelude::*, AssetId};
+use xcm::latest::AssetId;
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;
@@ -14,6 +14,7 @@ pub trait FeeHandler: Sized {
 	fn get_fee(&self, asset_id: AssetId) -> Option<u128>;
 }
 
+#[allow(clippy::unused_unit)]
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 impl FeeHandler for Tuple {
 	fn new() -> Self {

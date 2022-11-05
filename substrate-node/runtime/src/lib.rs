@@ -6,34 +6,21 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::{
-	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
-	pallet_prelude::*,
-	traits::{
-		tokens::fungibles::{
-			metadata::Mutate as MetaMutate, Create as FungibleCerate, Mutate as FungibleMutate,
-			Transfer as FungibleTransfer,
-		},
-		Currency, ExistenceRequirement, StorageVersion,
-	},
-	transactional, PalletId,
-};
-use frame_system::pallet_prelude::*;
+use frame_support::pallet_prelude::*;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use polkadot_parachain::primitives::Sibling;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, NumberFor,
-		One, Verify,
+		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill, Permill,
+	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -299,13 +286,13 @@ parameter_types! {
 }
 
 const fn deposit(items: u32, bytes: u32) -> Balance {
-	items as Balance * 15 * CENTS::get() + (bytes as Balance) * 1 * CENTS::get()
+	items as Balance * 15 * CENTS::get() + (bytes as Balance) * CENTS::get()
 }
 
-/// Configure the sygma protocol.
+// Configure the sygma protocol.
 parameter_types! {
 	pub const AssetDeposit: Balance = 10 * UNIT::get(); // 10 UNITS deposit to create fungible asset class
-	pub const AssetAccountDeposit: Balance = 1 * DOLLARS::get();
+	pub const AssetAccountDeposit: Balance = DOLLARS::get();
 	pub const ApprovalDeposit: Balance = ExistentialDeposit::get();
 	pub const AssetsStringLimit: u32 = 50;
 	/// Key = 32 bytes, Value = 36 bytes (32+1+1+1+1)
@@ -355,8 +342,8 @@ parameter_types! {
 			GeneralKey(b"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
-	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6").into();
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e").into();
+	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 }
 
