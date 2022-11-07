@@ -2,6 +2,9 @@
 
 pub use self::pallet::*;
 
+#[cfg(test)]
+mod mock;
+
 #[allow(unused_variables)]
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
@@ -19,7 +22,7 @@ pub mod pallet {
 	pub type AssetFees<T: Config> = StorageMap<_, Twox64Concat, AssetId, u128>;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
@@ -33,7 +36,7 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Fee set for a specific asset
 		/// args: [asset, amount]
@@ -55,25 +58,78 @@ pub mod pallet {
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
 			// Update asset fee
+			AssetFees::<T>::insert(&asset, amount);
 
-			// For clippy happy
+			// Emit FeeSet event
 			Self::deposit_event(Event::FeeSet { asset, amount });
-			Err(Error::<T>::Unimplemented.into())
+			Ok(())
 		}
 	}
 
 	pub struct BasicFeeHandlerImpl<T>(PhantomData<T>);
+
 	impl<T: Config> FeeHandler for BasicFeeHandlerImpl<T> {
 		fn new() -> Self {
 			Self(PhantomData)
 		}
 
-		fn get_fee(&self, _asset: AssetId) -> Option<u128> {
-			// TODO
-			None
+		fn get_fee(&self, asset: AssetId) -> Option<u128> {
+			AssetFees::<T>::get(asset)
 		}
 	}
 
 	#[cfg(test)]
-	mod test {}
+	mod test {
+		use crate as basic_fee_handler;
+		use crate::{AssetFees, Event as BasicFeeHandlerEvent};
+		use basic_fee_handler::mock::{
+			assert_events, new_test_ext, BasicFeeHandler, RuntimeEvent as Event,
+			RuntimeOrigin as Origin, Test, ALICE,
+		};
+		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
+		use xcm::latest::{prelude::*, MultiLocation};
+
+		#[test]
+		fn set_get_fee() {
+			new_test_ext().execute_with(|| {
+				let asset_id_a = Concrete(MultiLocation::new(1, Here));
+				let amount_a = 100u128;
+
+				let asset_id_b = Concrete(MultiLocation::new(2, Here));
+				let amount_b = 101u128;
+
+				// set fee 100 with assetId asset_id_a
+				assert_ok!(BasicFeeHandler::set_fee(Origin::root(), asset_id_a.clone(), amount_a));
+				assert_eq!(AssetFees::<Test>::get(asset_id_a.clone()).unwrap(), amount_a);
+
+				// set fee 101 with assetId asset_id_b
+				assert_ok!(BasicFeeHandler::set_fee(Origin::root(), asset_id_b.clone(), amount_b));
+				assert_eq!(AssetFees::<Test>::get(asset_id_b.clone()).unwrap(), amount_b);
+
+				// fee of asset_id_a should not be equal to amount_b
+				assert_ne!(AssetFees::<Test>::get(asset_id_a.clone()).unwrap(), amount_b);
+
+				// fee of asset_id_b should not be equal to amount_a
+				assert_ne!(AssetFees::<Test>::get(asset_id_b.clone()).unwrap(), amount_a);
+
+				// permission test: unauthorized account should not be able to set fee
+				let unauthorized_account = Origin::from(Some(ALICE));
+				assert_noop!(
+					BasicFeeHandler::set_fee(unauthorized_account, asset_id_a.clone(), amount_a),
+					BadOrigin
+				);
+
+				assert_events(vec![
+					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
+						asset: asset_id_a,
+						amount: amount_a,
+					}),
+					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
+						asset: asset_id_b,
+						amount: amount_b,
+					}),
+				]);
+			})
+		}
+	}
 }
