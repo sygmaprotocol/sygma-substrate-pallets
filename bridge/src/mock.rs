@@ -27,7 +27,6 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 
 pub(crate) type Balance = u128;
 
-
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -87,7 +86,7 @@ parameter_types! {
 }
 
 const fn deposit(items: u32, bytes: u32) -> Balance {
-	items as Balance * 15 * CENTS::get() + (bytes as Balance) * 1 * CENTS::get()
+	items as Balance * 15 * CENTS::get() + (bytes as Balance) * CENTS::get()
 }
 
 impl pallet_balances::Config for Runtime {
@@ -104,7 +103,7 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub const AssetDeposit: Balance = 10 * UNIT::get(); // 10 UNITS deposit to create fungible asset class
-	pub const AssetAccountDeposit: Balance = 1 * DOLLARS::get();
+	pub const AssetAccountDeposit: Balance = DOLLARS::get();
 	pub const ApprovalDeposit: Balance = ExistentialDeposit::get();
 	pub const AssetsStringLimit: u32 = 50;
 	/// Key = 32 bytes, Value = 36 bytes (32+1+1+1+1)
@@ -161,8 +160,8 @@ parameter_types! {
 			GeneralKey(b"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
-	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6").into();
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e").into();
+	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 }
 
@@ -227,11 +226,14 @@ impl sygma_bridge::Config for Runtime {
 	type ResourcePairs = ResourcePairs;
 }
 
+#[allow(dead_code)]
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
+#[allow(dead_code)]
 pub const ENDOWED_BALANCE: Balance = 100_000_000;
 
+#[allow(dead_code)]
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
@@ -240,6 +242,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 // Checks events against the latest. A contiguous set of events must be provided. They must
 // include the most recent event, but do not have to include every past event.
+#[allow(dead_code)]
 pub fn assert_events(mut expected: Vec<RuntimeEvent>) {
 	let mut actual: Vec<RuntimeEvent> =
 		system::Pallet::<Runtime>::events().iter().map(|e| e.event.clone()).collect();
@@ -248,6 +251,6 @@ pub fn assert_events(mut expected: Vec<RuntimeEvent>) {
 
 	for evt in expected {
 		let next = actual.pop().expect("event expected");
-		assert_eq!(next, evt.into(), "Events don't match");
+		assert_eq!(next, evt, "Events don't match");
 	}
 }
