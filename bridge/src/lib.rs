@@ -266,11 +266,11 @@ pub mod pallet {
 				let test_mpc_key_a: [u8; 32] = [1; 32];
 				let test_mpc_key_b: [u8; 32] = [2; 32];
 
-				// set to test_ket_a
+				// set to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
 
-				// set to test_ket_b: should be MpcKeyNotUpdatable error
+				// set to test_key_b: should be MpcKeyNotUpdatable error
 				assert_noop!(
 					SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_b),
 					bridge::Error::<Runtime>::MpcKeyNotUpdatable
@@ -298,7 +298,7 @@ pub mod pallet {
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
 
-				// set mpc key to test_ket_a
+				// set mpc key to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
 
@@ -332,7 +332,7 @@ pub mod pallet {
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
 
-				// set mpc key to test_ket_a
+				// set mpc key to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
 
