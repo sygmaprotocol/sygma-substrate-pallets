@@ -90,13 +90,17 @@ pub mod pallet {
 		BadMpcSignature,
 		/// MPC key not set
 		MissingMpcKey,
+		/// Bridge is paused
+		BridgePaused,
+		/// Bridge is unpaused
+		BridgeUnpaused,
 		/// Fee config option missing
 		MissingFeeConfig,
 		/// Asset not bound to a resource id
 		AssetNotBound,
 		/// Proposal has either failed or succeeded
 		ProposalAlreadyComplete,
-		/// Transactor operation fialed
+		/// Transactor operation failed
 		TransactorFailed,
 		/// Function unimplemented
 		Unimplemented,
@@ -106,6 +110,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn dest_counts)]
 	pub type DepositCounts<T> = StorageValue<_, DepositNonce, ValueQuery>;
+
+	/// Bridge Pause indicator
+	#[pallet::storage]
+	#[pallet::getter(fn is_paused)]
+	pub type IsPaused<T> = StorageValue<_, bool, ValueQuery>;
 
 	/// Pre-set MPC public key
 	#[pallet::storage]
@@ -129,11 +138,15 @@ pub mod pallet {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
-			// Check current status
+			// make sure MPC key is set up
+			ensure!(MpcKey::<T>::get() != None, Error::<T>::MissingMpcKey);
+
+			// make sure the current status is unpaused
+			ensure!(IsPaused::<T>::get() == false, Error::<T>::BridgePaused);
 
 			// Mark as paused
-
-			Err(Error::<T>::Unimplemented.into())
+			IsPaused::<T>::set(true);
+			Ok(())
 		}
 
 		/// Unpause bridge.
@@ -142,11 +155,15 @@ pub mod pallet {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
-			// Check current status
+			// make sure MPC key is set up
+			ensure!(MpcKey::<T>::get() != None, Error::<T>::MissingMpcKey);
+
+			// make sure the current status is paused
+			ensure!(IsPaused::<T>::get() == true, Error::<T>::BridgeUnpaused);
 
 			// Mark as unpaused
-
-			Err(Error::<T>::Unimplemented.into())
+			IsPaused::<T>::set(false);
+			Ok(())
 		}
 
 		/// Mark an ECDSA public key as a MPC account.
@@ -234,7 +251,7 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::MpcKey;
+		use crate::{IsPaused, MpcKey};
 		use bridge::mock::{new_test_ext, Runtime, RuntimeOrigin as Origin, SygmaBridge, ALICE};
 		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
 
@@ -243,6 +260,11 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				let test_mpc_key_a: [u8; 32] = [1; 32];
 				let test_mpc_key_b: [u8; 32] = [2; 32];
+
+				// TODO: remove
+				assert_eq!(IsPaused::<Runtime>::get(), false);
+				// IsPaused::<Runtime>::set(false);
+				// assert_eq!(IsPaused::<Runtime>::get(), false);
 
 				// set to test_ket_a
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
