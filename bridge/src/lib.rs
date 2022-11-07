@@ -90,6 +90,8 @@ pub mod pallet {
 		BadMpcSignature,
 		/// MPC key not set
 		MissingMpcKey,
+		/// MPC key can not be updated
+		MpcKeyNotUpdatable,
 		/// Fee config option missing
 		MissingFeeConfig,
 		/// Asset not bound to a resource id
@@ -154,6 +156,8 @@ pub mod pallet {
 		pub fn set_mpc_key(origin: OriginFor<T>, _key: [u8; 32]) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
+
+			ensure!(MpcKey::<T>::get().is_none(), Error::<T>::MpcKeyNotUpdatable);
 
 			// Set MPC account public key
 			MpcKey::<T>::set(Some(_key));
@@ -248,9 +252,11 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
 
-				// set to test_ket_b
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_b));
-				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_b);
+				// set to test_ket_b: should be MpcKeyNotUpdatable error
+				assert_noop!(
+					SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_b),
+					bridge::Error::<Runtime>::MpcKeyNotUpdatable
+				);
 
 				// permission test: unauthorized account should not be able to set mpc key
 				let unauthorized_account = Origin::from(Some(ALICE));
@@ -258,7 +264,7 @@ pub mod pallet {
 					SygmaBridge::set_mpc_key(unauthorized_account, test_mpc_key_a),
 					BadOrigin
 				);
-				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_b);
+				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
 			})
 		}
 	}
