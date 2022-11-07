@@ -5,34 +5,24 @@ mod mock;
 
 pub use self::pallet::*;
 
+#[allow(unused_variables)]
+#[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use codec::{Decode, Encode, EncodeLike};
+	use codec::{Decode, Encode};
 	use frame_support::{
-		dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
-		pallet_prelude::*,
-		traits::{
-			tokens::fungibles::{
-				metadata::Mutate as MetaMutate, Create as FungibleCerate, Mutate as FungibleMutate,
-				Transfer as FungibleTransfer,
-			},
-			Currency, ExistenceRequirement, StorageVersion,
-		},
-		transactional, PalletId,
+		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
 	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
-	use sp_core::{
-		hash::{H160, H256},
-		U256,
-	};
-	use sp_io::hashing::keccak_256;
-	use sp_runtime::{traits::AccountIdConversion, RuntimeDebug};
-	use sp_std::{boxed::Box, cmp, convert::From, vec, vec::Vec};
+	use sp_core::{hash::H256, U256};
+	use sp_runtime::RuntimeDebug;
+	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{DepositNonce, DomainID, FeeHandler, ResourceId};
-	use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
+	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
+	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -81,6 +71,7 @@ pub mod pallet {
 		type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 	}
 
+	#[allow(dead_code)]
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -134,7 +125,7 @@ pub mod pallet {
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
 		#[pallet::weight(195_000_000)]
-		pub fn pause_bridge(origin: OriginFor<T>, id: DomainID) -> DispatchResult {
+		pub fn pause_bridge(origin: OriginFor<T>, _id: DomainID) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -147,7 +138,7 @@ pub mod pallet {
 
 		/// Unpause bridge.
 		#[pallet::weight(195_000_000)]
-		pub fn unpause_bridge(origin: OriginFor<T>, id: DomainID) -> DispatchResult {
+		pub fn unpause_bridge(origin: OriginFor<T>, _id: DomainID) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -160,7 +151,7 @@ pub mod pallet {
 
 		/// Mark an ECDSA public key as a MPC account.
 		#[pallet::weight(195_000_000)]
-		pub fn set_mpc_key(origin: OriginFor<T>, key: [u8; 32]) -> DispatchResult {
+		pub fn set_mpc_key(origin: OriginFor<T>, _key: [u8; 32]) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -173,9 +164,9 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[transactional]
 		pub fn deposit(
-			origin: OriginFor<T>,
-			asset: MultiAsset,
-			dest: MultiLocation,
+			_origin: OriginFor<T>,
+			_asset: MultiAsset,
+			_dest: MultiLocation,
 		) -> DispatchResult {
 			// Asset transactor
 
@@ -198,9 +189,10 @@ pub mod pallet {
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
 		#[pallet::weight(195_000_000)]
 		#[transactional]
-		pub fn retry(origin: OriginFor<T>, hash: H256) -> DispatchResult {
+		pub fn retry(_origin: OriginFor<T>, hash: H256) -> DispatchResult {
 			// Emit retry event
-
+			// For clippy happy
+			Self::deposit_event(Event::<T>::Retry(hash));
 			Err(Error::<T>::Unimplemented.into())
 		}
 
@@ -208,9 +200,9 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[transactional]
 		pub fn execute_proposal(
-			origin: OriginFor<T>,
-			proposals: Vec<Proposal>,
-			signature: Vec<u8>,
+			_origin: OriginFor<T>,
+			_proposals: Vec<Proposal>,
+			_signature: Vec<u8>,
 		) -> DispatchResult {
 			// Verify MPC signature
 
@@ -233,7 +225,8 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
 		/// Verifies that proposal data is signed by MPC address.
-		fn verify(proposals: Vec<Proposal>, signature: Vec<u8>) -> bool {
+		#[allow(dead_code)]
+		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
 			false
 		}
 	}

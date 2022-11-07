@@ -5,13 +5,14 @@ pub use self::pallet::*;
 #[cfg(test)]
 mod mock;
 
+#[allow(unused_variables)]
+#[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-    use codec::{Decode, Encode, EncodeLike};
-    use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
-    use frame_system::pallet_prelude::*;
-    use xcm::latest::{AssetId, prelude::*};
-    use sygma_traits::FeeHandler;
+	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
+	use frame_system::pallet_prelude::*;
+	use sygma_traits::FeeHandler;
+	use xcm::latest::AssetId;
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
