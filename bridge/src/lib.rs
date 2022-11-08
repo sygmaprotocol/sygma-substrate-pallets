@@ -90,6 +90,8 @@ pub mod pallet {
 		BadMpcSignature,
 		/// MPC key not set
 		MissingMpcKey,
+		/// MPC key can not be updated
+		MpcKeyNotUpdatable,
 		/// Fee config option missing
 		MissingFeeConfig,
 		/// Asset not bound to a resource id
@@ -155,9 +157,11 @@ pub mod pallet {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
-			// Set MPC account public key
+			ensure!(MpcKey::<T>::get().is_none(), Error::<T>::MpcKeyNotUpdatable);
 
-			Err(Error::<T>::Unimplemented.into())
+			// Set MPC account public key
+			MpcKey::<T>::set(Some(_key));
+			Ok(())
 		}
 
 		/// Initiates a transfer.
@@ -232,5 +236,36 @@ pub mod pallet {
 	}
 
 	#[cfg(test)]
-	mod test {}
+	mod test {
+		use crate as bridge;
+		use crate::MpcKey;
+		use bridge::mock::{new_test_ext, Runtime, RuntimeOrigin as Origin, SygmaBridge, ALICE};
+		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
+
+		#[test]
+		fn set_mpc_key() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_key_a: [u8; 32] = [1; 32];
+				let test_mpc_key_b: [u8; 32] = [2; 32];
+
+				// set to test_ket_a
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
+				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+
+				// set to test_ket_b: should be MpcKeyNotUpdatable error
+				assert_noop!(
+					SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_b),
+					bridge::Error::<Runtime>::MpcKeyNotUpdatable
+				);
+
+				// permission test: unauthorized account should not be able to set mpc key
+				let unauthorized_account = Origin::from(Some(ALICE));
+				assert_noop!(
+					SygmaBridge::set_mpc_key(unauthorized_account, test_mpc_key_a),
+					BadOrigin
+				);
+				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+			})
+		}
+	}
 }
