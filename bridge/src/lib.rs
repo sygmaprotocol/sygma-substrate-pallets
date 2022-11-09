@@ -15,10 +15,10 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
-	use sp_core::{hash::H256, U256};
+	use sp_core::{ecdsa::Signature, hash::H256, U256};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
-	use sygma_traits::{DepositNonce, DomainID, FeeHandler, ResourceId};
+	use sygma_traits::{DepositNonce, DomainID, FeeHandler, MpcPubkey, ResourceId};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
@@ -129,7 +129,7 @@ pub mod pallet {
 	/// Pre-set MPC public key
 	#[pallet::storage]
 	#[pallet::getter(fn mpc_key)]
-	pub type MpcKey<T> = StorageValue<_, [u8; 32], ValueQuery>;
+	pub type MpcKey<T> = StorageValue<_, MpcPubkey, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -181,7 +181,7 @@ pub mod pallet {
 
 		/// Mark an ECDSA public key as a MPC account.
 		#[pallet::weight(195_000_000)]
-		pub fn set_mpc_key(origin: OriginFor<T>, _key: [u8; 32]) -> DispatchResult {
+		pub fn set_mpc_key(origin: OriginFor<T>, _key: MpcPubkey) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -260,7 +260,12 @@ pub mod pallet {
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
 		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
-			false
+			let _sig = Signature::from_slice(&_signature).expect("failed to parse signature");
+
+			// TODO: parse proposal vec and using keccak_256 to hashing to get the final message
+			let _pubey = _sig.recover(_proposals).expect("failed to recover pubkey");
+
+			_pubey.0 == MpcKey::<T>::get().0
 		}
 	}
 
@@ -273,13 +278,14 @@ pub mod pallet {
 			SygmaBridge, ALICE,
 		};
 		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
+		use sygma_traits::MpcPubkey;
 
 		#[test]
 		fn set_mpc_key() {
 			new_test_ext().execute_with(|| {
-				let default_key: [u8; 32] = Default::default();
-				let test_mpc_key_a: [u8; 32] = [1; 32];
-				let test_mpc_key_b: [u8; 32] = [2; 32];
+				let default_key: MpcPubkey = MpcPubkey::default();
+				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_key_b: MpcPubkey = MpcPubkey([2u8; 33]);
 
 				assert_eq!(MpcKey::<Runtime>::get(), default_key);
 
@@ -306,8 +312,8 @@ pub mod pallet {
 		#[test]
 		fn pause_bridge() {
 			new_test_ext().execute_with(|| {
-				let default_key: [u8; 32] = Default::default();
-				let test_mpc_key_a: [u8; 32] = [1; 32];
+				let default_key: MpcPubkey = MpcPubkey::default();
+				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
 
 				assert_eq!(MpcKey::<Runtime>::get(), default_key);
 
@@ -345,8 +351,8 @@ pub mod pallet {
 		#[test]
 		fn unpause_bridge() {
 			new_test_ext().execute_with(|| {
-				let default_key: [u8; 32] = Default::default();
-				let test_mpc_key_a: [u8; 32] = [1; 32];
+				let default_key: MpcPubkey = MpcPubkey::default();
+				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
 
 				assert_eq!(MpcKey::<Runtime>::get(), default_key);
 
