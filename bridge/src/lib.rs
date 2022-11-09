@@ -82,6 +82,12 @@ pub mod pallet {
 		/// When user is going to retry a bridge transfer
 		/// args: [tx_hash]
 		Retry(H256),
+		/// When bridge is paused
+		/// args: [dest_domain_id]
+		BridgePaused(DomainID),
+		/// When bridge is unpaused
+		/// args: [dest_domain_id]
+		BridgeUnpaused(DomainID),
 	}
 
 	#[pallet::error]
@@ -94,8 +100,6 @@ pub mod pallet {
 		MpcKeyNotUpdatable,
 		/// Bridge is paused
 		BridgePaused,
-		/// Bridge not recognized
-		BridgeNotRecognized,
 		/// Bridge is unpaused
 		BridgeUnpaused,
 		/// Fee config option missing
@@ -116,9 +120,11 @@ pub mod pallet {
 	pub type DepositCounts<T> = StorageValue<_, DepositNonce, ValueQuery>;
 
 	/// Bridge Pause indicator
+	/// Bridge is unpaused initially, until pause
+	/// After MPC key setup, bridge should be paused until ready to unpause
 	#[pallet::storage]
 	#[pallet::getter(fn is_paused)]
-	pub type IsPaused<T> = StorageMap<_, Twox64Concat, DomainID, bool>;
+	pub type IsPaused<T> = StorageValue<_, bool, ValueQuery>;
 
 	/// Pre-set MPC public key
 	#[pallet::storage]
@@ -137,9 +143,8 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
-		/// If given DomainID bridge not exists yet, this method will initial it as paused
 		#[pallet::weight(195_000_000)]
-		pub fn pause_bridge(origin: OriginFor<T>, _id: DomainID) -> DispatchResult {
+		pub fn pause_bridge(origin: OriginFor<T>) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -147,13 +152,16 @@ pub mod pallet {
 			ensure!(MpcKey::<T>::get().is_some(), Error::<T>::MissingMpcKey);
 
 			// Mark as paused
-			IsPaused::<T>::set(_id, Option::from(true));
+			IsPaused::<T>::set(true);
+
+			// Emit BridgePause event
+			Self::deposit_event(Event::BridgePaused(T::DestDomainID::get()));
 			Ok(())
 		}
 
 		/// Unpause bridge.
 		#[pallet::weight(195_000_000)]
-		pub fn unpause_bridge(origin: OriginFor<T>, _id: DomainID) -> DispatchResult {
+		pub fn unpause_bridge(origin: OriginFor<T>) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -161,11 +169,13 @@ pub mod pallet {
 			ensure!(MpcKey::<T>::get().is_some(), Error::<T>::MissingMpcKey);
 
 			// make sure the current status is paused
-			ensure!(IsPaused::<T>::get(_id).is_some(), Error::<T>::BridgeNotRecognized);
-			ensure!(IsPaused::<T>::get(_id).unwrap(), Error::<T>::BridgeUnpaused);
+			ensure!(IsPaused::<T>::get(), Error::<T>::BridgeUnpaused);
 
 			// Mark as unpaused
-			IsPaused::<T>::set(_id, Option::from(false));
+			IsPaused::<T>::set(false);
+
+			// Emit BridgeUnpause event
+			Self::deposit_event(Event::BridgeUnpaused(T::DestDomainID::get()));
 			Ok(())
 		}
 
@@ -256,8 +266,11 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{IsPaused, MpcKey};
-		use bridge::mock::{new_test_ext, Runtime, RuntimeOrigin as Origin, SygmaBridge, ALICE};
+		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey};
+		use bridge::mock::{
+			assert_events, new_test_ext, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
+			SygmaBridge, ALICE,
+		};
 		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
 
 		#[test]
@@ -290,11 +303,10 @@ pub mod pallet {
 		fn pause_bridge() {
 			new_test_ext().execute_with(|| {
 				let test_mpc_key_a: [u8; 32] = [1; 32];
-				let test_domain_id_1 = 1;
 
-				// pause bridge 1 when mpc key is None, should be err
+				// pause bridge when mpc key is None, should be err
 				assert_noop!(
-					SygmaBridge::pause_bridge(Origin::root(), test_domain_id_1),
+					SygmaBridge::pause_bridge(Origin::root()),
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
 
@@ -302,21 +314,20 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
 
-				// pause bridge 1 again, should be ok
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), test_domain_id_1));
-				assert!(IsPaused::<Runtime>::get(1).unwrap());
+				// pause bridge again, should be ok
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert!(IsPaused::<Runtime>::get());
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
 
-				// pause bridge 1 again after paused, should be ok
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), test_domain_id_1));
-				assert!(IsPaused::<Runtime>::get(1).unwrap());
+				// pause bridge again after paused, should be ok
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert!(IsPaused::<Runtime>::get());
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
 
 				// permission test: unauthorized account should not be able to pause bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
-				assert_noop!(
-					SygmaBridge::pause_bridge(unauthorized_account, test_domain_id_1),
-					BadOrigin
-				);
-				assert!(IsPaused::<Runtime>::get(1).unwrap());
+				assert_noop!(SygmaBridge::pause_bridge(unauthorized_account), BadOrigin);
+				assert!(IsPaused::<Runtime>::get());
 			})
 		}
 
@@ -324,44 +335,37 @@ pub mod pallet {
 		fn unpause_bridge() {
 			new_test_ext().execute_with(|| {
 				let test_mpc_key_a: [u8; 32] = [1; 32];
-				let test_domain_id_1 = 1;
 
-				// unpause bridge 1 when mpc key is None, should be error
+				// unpause bridge when mpc key is None, should be error
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root(), test_domain_id_1),
+					SygmaBridge::unpause_bridge(Origin::root()),
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
 
-				// set mpc key to test_key_a
+				// set mpc key to test_key_a and pause bridge
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
 
-				// pause bridge 1 first
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), test_domain_id_1));
+				// bridge should be paused here
+				assert!(IsPaused::<Runtime>::get());
 
-				// try to unpause bridge 1, should be ok
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), test_domain_id_1));
+				// ready to unpause bridge, should be ok
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgeUnpaused(1))]);
 
 				// try to unpause it again, should be error
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root(), test_domain_id_1),
+					SygmaBridge::unpause_bridge(Origin::root()),
 					bridge::Error::<Runtime>::BridgeUnpaused
-				);
-
-				// try to unpause a unrecognized bridge, should be error
-				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root(), 2),
-					bridge::Error::<Runtime>::BridgeNotRecognized
 				);
 
 				// permission test: unauthorized account should not be able to unpause a recognized
 				// bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
-				assert_noop!(
-					SygmaBridge::unpause_bridge(unauthorized_account, test_domain_id_1),
-					BadOrigin
-				);
-				assert!(!IsPaused::<Runtime>::get(1).unwrap());
+				assert_noop!(SygmaBridge::unpause_bridge(unauthorized_account), BadOrigin);
+				assert!(!IsPaused::<Runtime>::get());
 			})
 		}
 	}
