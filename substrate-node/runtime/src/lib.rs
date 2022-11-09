@@ -26,7 +26,7 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sygma_traits::{DomainID, ResourceId};
+use sygma_traits::{DomainID, ExtractRecipient, IsReserve, ResourceId};
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
 	AccountId32Aliases, AsPrefixedGeneralIndex, ConvertedConcreteAssetId, CurrencyAdapter,
@@ -397,6 +397,25 @@ pub type FungiblesTransactor = FungiblesAdapter<
 /// Means for transacting assets on this chain.
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
+pub struct ReserveChecker;
+impl IsReserve for ReserveChecker {
+	fn is_reserve(asset_id: &XcmAssetId) -> bool {
+		asset_id == &PhaLocation::get().into()
+	}
+}
+
+// Project can have it's own implementation to adapt their own spec design.
+pub struct RecipientParser;
+impl ExtractRecipient for RecipientParser {
+	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
+		// For example, we force a dest location should be represented by following format.
+		match (dest.parents, &dest.interior) {
+			(0, Junctions::X1(GeneralKey(recipient))) => Some(recipient.to_vec()),
+			_ => None,
+		}
+	}
+}
+
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -406,6 +425,8 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
+	type IsReserve = ReserveChecker;
+	type ExtractRecipient = RecipientParser;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

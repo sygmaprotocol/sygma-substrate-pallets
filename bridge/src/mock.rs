@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
-use sygma_traits::{DomainID, IsReserve, ResourceId};
+use sygma_traits::{DomainID, ExtractRecipient, IsReserve, ResourceId};
 
 use frame_support::{
 	parameter_types,
@@ -217,11 +217,19 @@ pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
 pub struct ReserveChecker;
 impl IsReserve for ReserveChecker {
-	fn is_reserve(&self, asset_id: &XcmAssetId) -> bool {
-		if asset_id == &PhaLocation::get().into() {
-			true
-		} else {
-			false
+	fn is_reserve(asset_id: &XcmAssetId) -> bool {
+		asset_id == &PhaLocation::get().into()
+	}
+}
+
+// Project can have it's own implementation to adapt their own spec design.
+pub struct RecipientParser;
+impl ExtractRecipient for RecipientParser {
+	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
+		// For example, we force a dest location should be represented by following format.
+		match (dest.parents, &dest.interior) {
+			(0, Junctions::X1(GeneralKey(recipient))) => Some(recipient.to_vec()),
+			_ => None,
 		}
 	}
 }
@@ -236,6 +244,7 @@ impl sygma_bridge::Config for Runtime {
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type IsReserve = ReserveChecker;
+	type ExtractRecipient = RecipientParser;
 }
 
 #[allow(dead_code)]

@@ -18,7 +18,9 @@ pub mod pallet {
 	use sp_core::{hash::H256, U256};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
-	use sygma_traits::{DepositNonce, DomainID, FeeHandler, IsReserve, ResourceId};
+	use sygma_traits::{
+		DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserve, ResourceId,
+	};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
@@ -72,6 +74,9 @@ pub mod pallet {
 
 		/// Return if asset reserved on current chain
 		type IsReserve: IsReserve;
+
+		///  Extract recipient from given MultiLocation
+		type ExtractRecipient: ExtractRecipient;
 	}
 
 	#[allow(dead_code)]
@@ -81,10 +86,17 @@ pub mod pallet {
 		/// When initial bridge transfer send to dest domain
 		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
 		/// handler_reponse]
-		Deposit(DomainID, ResourceId, DepositNonce, T::AccountId, Vec<u8>, Vec<u8>),
+		Deposit {
+			dest_domain_id: DomainID,
+			resource_id: ResourceId,
+			deposit_nonce: DepositNonce,
+			sender: T::AccountId,
+			deposit_data: Vec<u8>,
+			handler_repoonse: Vec<u8>,
+		},
 		/// When user is going to retry a bridge transfer
 		/// args: [tx_hash]
-		Retry(H256),
+		Retry { hash: H256 },
 		/// When bridge is paused
 		/// args: [dest_domain_id]
 		BridgePaused { dest_domain_id: DomainID },
@@ -97,6 +109,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Protected operation, must be performed by relayer
 		BadMpcSignature,
+		InsufficientBalance,
+		ExtractRecipientFailed,
+		TransactFailed,
+		FeeTooExpensive,
 		/// MPC key not set
 		MissingMpcKey,
 		/// MPC key can not be updated
@@ -200,26 +216,69 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[transactional]
 		pub fn deposit(
-			_origin: OriginFor<T>,
-			_asset: MultiAsset,
-			_dest: MultiLocation,
+			origin: OriginFor<T>,
+			asset: MultiAsset,
+			dest: MultiLocation,
 		) -> DispatchResult {
-			// Asset transactor
+			let sender = ensure_signed(origin)?;
+			// Extract asset (MultiAsset) to get corresponding ResourceId and transfer amount
+			let (resource_id, amount) =
+				Self::extract_asset(&asset).ok_or(Error::<T>::AssetNotBound)?;
+			// Extract dest (MultiLocation) to get corresponding Etheruem recipient address
+			let recipient = T::ExtractRecipient::extract_recipient(&dest)
+				.ok_or(Error::<T>::ExtractRecipientFailed)?;
+			let fee = T::FeeHandler::get_fee(&asset.id).ok_or(Error::<T>::MissingFeeConfig)?;
 
-			// Extract asset (MultiAsset) to get corresponding ResourceId
+			ensure!(amount > fee, Error::<T>::FeeTooExpensive);
 
-			// Extract dest (MultiLocation) to get corresponding DomainId and Etheruem address
+			// Withdraw `amount` of asset from sender
+			T::AssetTransactor::withdraw_asset(
+				&asset,
+				&Junction::AccountId32 { network: NetworkId::Any, id: sender.clone().into() }
+					.into(),
+			)
+			.map_err(|_| Error::<T>::TransactFailed)?;
 
-			// Handle asset with Transactor, potential examples:
-			// T::Transactor::withdraw_asset(fee + amount, sender_location);
-			// T::Transactor::deposit_asset(fee, T::FeeReserveAccount::get().into());
-			// T::Transactor::deposit_asset(amount, T::TransferReserveAccount::get().into());
+			// Deposit `fee` of asset to treasury account
+			T::AssetTransactor::deposit_asset(
+				&(asset.id.clone(), Fungible(fee)).into(),
+				&Junction::AccountId32 {
+					network: NetworkId::Any,
+					id: T::FeeReserveAccount::get().into(),
+				}
+				.into(),
+			)
+			.map_err(|_| Error::<T>::TransactFailed)?;
+
+			// Deposit `amount - fee` of asset to reserve account if asset is reserved in local
+			// chain.
+			if T::IsReserve::is_reserve(&asset.id) {
+				T::AssetTransactor::deposit_asset(
+					&(asset.id.clone(), Fungible(amount - fee)).into(),
+					&Junction::AccountId32 {
+						network: NetworkId::Any,
+						id: T::TransferReserveAccount::get().into(),
+					}
+					.into(),
+				)
+				.map_err(|_| Error::<T>::TransactFailed)?;
+			}
 
 			// Bump deposit nonce
+			let deposit_nonce = DepositCounts::<T>::get();
+			DepositCounts::<T>::put(deposit_nonce + 1);
 
 			// Emit Deposit event
+			Self::deposit_event(Event::Deposit {
+				dest_domain_id: T::DestDomainID::get(),
+				resource_id,
+				deposit_nonce,
+				sender,
+				deposit_data: Self::create_deposit_data(amount - fee, recipient),
+				handler_repoonse: vec![],
+			});
 
-			Err(Error::<T>::Unimplemented.into())
+			Ok(())
 		}
 
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
@@ -228,7 +287,7 @@ pub mod pallet {
 		pub fn retry(_origin: OriginFor<T>, hash: H256) -> DispatchResult {
 			// Emit retry event
 			// For clippy happy
-			Self::deposit_event(Event::<T>::Retry(hash));
+			Self::deposit_event(Event::<T>::Retry { hash });
 			Err(Error::<T>::Unimplemented.into())
 		}
 
@@ -264,6 +323,34 @@ pub mod pallet {
 		#[allow(dead_code)]
 		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
 			false
+		}
+
+		/// Extract asset id and transfer amount from `MultiAsset`, currently only fungible asset
+		/// are supported.
+		fn extract_asset(asset: &MultiAsset) -> Option<(ResourceId, u128)> {
+			match (&asset.fun, &asset.id) {
+				(Fungible(amount), _) => T::ResourcePairs::get()
+					.iter()
+					.position(|a| a.0 == asset.id)
+					.map(|idx| (T::ResourcePairs::get()[idx].1, *amount)),
+				_ => None,
+			}
+		}
+
+		fn create_deposit_data(amount: u128, recipient: Vec<u8>) -> Vec<u8> {
+			[
+				&Self::hex_zero_padding_32(amount),
+				&Self::hex_zero_padding_32(recipient.len() as u128),
+				recipient.as_slice(),
+			]
+			.concat()
+			.to_vec()
+		}
+
+		fn hex_zero_padding_32(i: u128) -> [u8; 32] {
+			let mut result = [0u8; 32];
+			U256::from(i).to_little_endian(&mut result);
+			result
 		}
 	}
 
