@@ -84,10 +84,10 @@ pub mod pallet {
 		Retry(H256),
 		/// When bridge is paused
 		/// args: [dest_domain_id]
-		BridgePaused(DomainID),
+		BridgePaused { dest_domain_id: DomainID },
 		/// When bridge is unpaused
 		/// args: [dest_domain_id]
-		BridgeUnpaused(DomainID),
+		BridgeUnpaused { dest_domain_id: DomainID },
 	}
 
 	#[pallet::error]
@@ -155,7 +155,7 @@ pub mod pallet {
 			IsPaused::<T>::set(true);
 
 			// Emit BridgePause event
-			Self::deposit_event(Event::BridgePaused(T::DestDomainID::get()));
+			Self::deposit_event(Event::BridgePaused { dest_domain_id: T::DestDomainID::get() });
 			Ok(())
 		}
 
@@ -175,7 +175,7 @@ pub mod pallet {
 			IsPaused::<T>::set(false);
 
 			// Emit BridgeUnpause event
-			Self::deposit_event(Event::BridgeUnpaused(T::DestDomainID::get()));
+			Self::deposit_event(Event::BridgeUnpaused { dest_domain_id: T::DestDomainID::get() });
 			Ok(())
 		}
 
@@ -324,12 +324,16 @@ pub mod pallet {
 				// pause bridge again, should be ok
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert!(IsPaused::<Runtime>::get());
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
+					dest_domain_id: 1,
+				})]);
 
 				// pause bridge again after paused, should be ok
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert!(IsPaused::<Runtime>::get());
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
+					dest_domain_id: 1,
+				})]);
 
 				// permission test: unauthorized account should not be able to pause bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
@@ -356,14 +360,18 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
 				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
+					dest_domain_id: 1,
+				})]);
 
 				// bridge should be paused here
 				assert!(IsPaused::<Runtime>::get());
 
 				// ready to unpause bridge, should be ok
 				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgeUnpaused(1))]);
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgeUnpaused {
+					dest_domain_id: 1,
+				})]);
 
 				// try to unpause it again, should be error
 				assert_noop!(
