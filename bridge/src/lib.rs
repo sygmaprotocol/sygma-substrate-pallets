@@ -109,9 +109,13 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Protected operation, must be performed by relayer
 		BadMpcSignature,
+		/// Insufficient balance on sender account
 		InsufficientBalance,
+		/// Failed to extract EVM receipient address according to given recipient parser
 		ExtractRecipientFailed,
+		/// Asset transactor execution failed
 		TransactFailed,
+		/// The withdrawn amount can not cover the fee payment
 		FeeTooExpensive,
 		/// MPC key not set
 		MissingMpcKey,
@@ -221,6 +225,10 @@ pub mod pallet {
 			dest: MultiLocation,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+
+			ensure!(MpcKey::<T>::get().is_some(), Error::<T>::MissingMpcKey);
+			// TODO.wf: ensure bridge hasn't been paused
+
 			// Extract asset (MultiAsset) to get corresponding ResourceId and transfer amount
 			let (resource_id, amount) =
 				Self::extract_asset(&asset).ok_or(Error::<T>::AssetNotBound)?;
