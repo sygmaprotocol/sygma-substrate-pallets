@@ -69,11 +69,7 @@ pub mod pallet {
 	pub struct BasicFeeHandlerImpl<T>(PhantomData<T>);
 
 	impl<T: Config> FeeHandler for BasicFeeHandlerImpl<T> {
-		fn new() -> Self {
-			Self(PhantomData)
-		}
-
-		fn get_fee(&self, asset: AssetId) -> Option<u128> {
+		fn get_fee(asset: &AssetId) -> Option<u128> {
 			AssetFees::<T>::get(asset)
 		}
 	}
