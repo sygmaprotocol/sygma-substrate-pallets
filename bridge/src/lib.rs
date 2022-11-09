@@ -16,7 +16,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
 	use sp_core::{hash::H256, U256};
-	use sp_runtime::RuntimeDebug;
+	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{DepositNonce, DomainID, FeeHandler, ResourceId};
 	use xcm::latest::{prelude::*, MultiLocation};
@@ -129,7 +129,7 @@ pub mod pallet {
 	/// Pre-set MPC public key
 	#[pallet::storage]
 	#[pallet::getter(fn mpc_key)]
-	pub type MpcKey<T> = StorageValue<_, [u8; 32]>;
+	pub type MpcKey<T> = StorageValue<_, [u8; 32], ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -149,7 +149,7 @@ pub mod pallet {
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
 			// make sure MPC key is set up
-			ensure!(MpcKey::<T>::get().is_some(), Error::<T>::MissingMpcKey);
+			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 
 			// Mark as paused
 			IsPaused::<T>::set(true);
@@ -166,7 +166,7 @@ pub mod pallet {
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
 			// make sure MPC key is set up
-			ensure!(MpcKey::<T>::get().is_some(), Error::<T>::MissingMpcKey);
+			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 
 			// make sure the current status is paused
 			ensure!(IsPaused::<T>::get(), Error::<T>::BridgeUnpaused);
@@ -185,10 +185,11 @@ pub mod pallet {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
-			ensure!(MpcKey::<T>::get().is_none(), Error::<T>::MpcKeyNotUpdatable);
+			// Cannot set MPC key is it's already set
+			ensure!(MpcKey::<T>::get().is_clear(), Error::<T>::MpcKeyNotUpdatable);
 
 			// Set MPC account public key
-			MpcKey::<T>::set(Some(_key));
+			MpcKey::<T>::set(_key);
 			Ok(())
 		}
 
@@ -276,12 +277,15 @@ pub mod pallet {
 		#[test]
 		fn set_mpc_key() {
 			new_test_ext().execute_with(|| {
+				let default_key: [u8; 32] = Default::default();
 				let test_mpc_key_a: [u8; 32] = [1; 32];
 				let test_mpc_key_b: [u8; 32] = [2; 32];
 
+				assert_eq!(MpcKey::<Runtime>::get(), default_key);
+
 				// set to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
-				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
 
 				// set to test_key_b: should be MpcKeyNotUpdatable error
 				assert_noop!(
@@ -295,16 +299,19 @@ pub mod pallet {
 					SygmaBridge::set_mpc_key(unauthorized_account, test_mpc_key_a),
 					BadOrigin
 				);
-				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
 			})
 		}
 
 		#[test]
 		fn pause_bridge() {
 			new_test_ext().execute_with(|| {
+				let default_key: [u8; 32] = Default::default();
 				let test_mpc_key_a: [u8; 32] = [1; 32];
 
-				// pause bridge when mpc key is None, should be err
+				assert_eq!(MpcKey::<Runtime>::get(), default_key);
+
+				// pause bridge when mpc key is not set, should be err
 				assert_noop!(
 					SygmaBridge::pause_bridge(Origin::root()),
 					bridge::Error::<Runtime>::MissingMpcKey
@@ -312,7 +319,7 @@ pub mod pallet {
 
 				// set mpc key to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
-				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
 
 				// pause bridge again, should be ok
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
@@ -334,9 +341,12 @@ pub mod pallet {
 		#[test]
 		fn unpause_bridge() {
 			new_test_ext().execute_with(|| {
+				let default_key: [u8; 32] = Default::default();
 				let test_mpc_key_a: [u8; 32] = [1; 32];
 
-				// unpause bridge when mpc key is None, should be error
+				assert_eq!(MpcKey::<Runtime>::get(), default_key);
+
+				// unpause bridge when mpc key is not set, should be error
 				assert_noop!(
 					SygmaBridge::unpause_bridge(Origin::root()),
 					bridge::Error::<Runtime>::MissingMpcKey
@@ -344,7 +354,7 @@ pub mod pallet {
 
 				// set mpc key to test_key_a and pause bridge
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
-				assert_eq!(MpcKey::<Runtime>::get().unwrap(), test_mpc_key_a);
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused(1))]);
 
