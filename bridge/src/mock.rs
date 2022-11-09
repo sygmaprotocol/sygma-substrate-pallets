@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
-use sygma_traits::{DomainID, ResourceId};
+use sygma_traits::{DomainID, IsReserve, ResourceId};
 
 use frame_support::{
 	parameter_types,
@@ -215,6 +215,17 @@ pub type FungiblesTransactor = FungiblesAdapter<
 /// Means for transacting assets on this chain.
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
+pub struct ReserveChecker;
+impl IsReserve for ReserveChecker {
+	fn is_reserve(&self, asset_id: &XcmAssetId) -> bool {
+		if asset_id == &PhaLocation::get().into() {
+			true
+		} else {
+			false
+		}
+	}
+}
+
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -224,6 +235,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
+	type IsReserve = ReserveChecker;
 }
 
 #[allow(dead_code)]

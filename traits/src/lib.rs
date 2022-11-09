@@ -6,6 +6,10 @@ pub type DomainID = u8;
 pub type DepositNonce = u64;
 pub type ResourceId = [u8; 32];
 
+pub trait IsReserve {
+	fn is_reserve(&self, asset_id: &AssetId) -> bool;
+}
+
 pub trait FeeHandler: Sized {
 	// Return fee represent by a specific asset
 	fn get_fee(asset_id: &AssetId) -> Option<u128>;

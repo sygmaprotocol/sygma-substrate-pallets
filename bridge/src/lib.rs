@@ -18,7 +18,7 @@ pub mod pallet {
 	use sp_core::{hash::H256, U256};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
-	use sygma_traits::{DepositNonce, DomainID, FeeHandler, ResourceId};
+	use sygma_traits::{DepositNonce, DomainID, FeeHandler, IsReserve, ResourceId};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
@@ -69,6 +69,9 @@ pub mod pallet {
 
 		/// AssetId and ResourceId pairs
 		type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
+
+		/// Return if asset reserved on current chain
+		type IsReserve: IsReserve;
 	}
 
 	#[allow(dead_code)]
