@@ -226,8 +226,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(MpcKey::<T>::get().is_some(), Error::<T>::MissingMpcKey);
-			// TODO.wf: ensure bridge hasn't been paused
+			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Extract asset (MultiAsset) to get corresponding ResourceId and transfer amount
 			let (resource_id, amount) =
