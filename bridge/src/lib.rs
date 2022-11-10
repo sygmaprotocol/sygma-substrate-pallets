@@ -369,8 +369,8 @@ pub mod pallet {
 		use bridge::mock::{
 			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
 			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
-			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcLocation, UsdcResourceId,
-			ALICE, ASSET_OWNER, ENDOWED_BALANCE,
+			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
+			UsdcResourceId, ALICE, ASSET_OWNER, ENDOWED_BALANCE,
 		};
 		use frame_support::{
 			assert_noop, assert_ok, traits::tokens::fungibles::Create as FungibleCerate,
@@ -549,11 +549,11 @@ pub mod pallet {
 				// Register foreign asset (USDC) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
-				>>::create(0, ASSET_OWNER, true, 1,));
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
 
 				// Mint some USDC to ALICE for test
 				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,));
-				assert_eq!(Assets::balance(0u32, &ALICE), ENDOWED_BALANCE);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -567,9 +567,9 @@ pub mod pallet {
 						.into(),
 				));
 				// Check balances
-				assert_eq!(Assets::balance(0u32, &ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Assets::balance(0u32, &BridgeAccount::get()), 0);
-				assert_eq!(Assets::balance(0u32, &TreasuryAccount::get()), fee);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE - amount);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), 0);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 					dest_domain_id: DestDomainID::get(),
@@ -587,32 +587,189 @@ pub mod pallet {
 
 		#[test]
 		fn deposit_unbounded_asset_should_fail() {
-			new_test_ext().execute_with(|| {})
+			new_test_ext().execute_with(|| {
+				let unbounded_asset_location = MultiLocation::new(1, X1(GeneralIndex(123)));
+				let test_mpc_key: [u8; 32] = [1; 32];
+				let fee = 100u128;
+				let amount = 200u128;
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					unbounded_asset_location.clone().into(),
+					fee
+				));
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(Concrete(unbounded_asset_location), Fungible(amount)).into(),
+						(
+							0,
+							X1(GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							))
+						)
+							.into(),
+					),
+					bridge::Error::<Runtime>::AssetNotBound
+				);
+			})
 		}
 
 		#[test]
 		fn deposit_to_unrecognized_dest_should_fail() {
-			new_test_ext().execute_with(|| {})
+			new_test_ext().execute_with(|| {
+				let invalid_dest = MultiLocation::new(
+					0,
+					X2(
+						GeneralIndex(0),
+						GeneralKey(
+							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap(),
+						),
+					),
+				);
+				let test_mpc_key: [u8; 32] = [1; 32];
+				let fee = 100u128;
+				let amount = 200u128;
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					PhaLocation::get().into(),
+					fee
+				));
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						invalid_dest,
+					),
+					bridge::Error::<Runtime>::ExtractRecipientFailed
+				);
+			})
 		}
 
 		#[test]
 		fn deposit_without_fee_set_should_fail() {
-			new_test_ext().execute_with(|| {})
+			new_test_ext().execute_with(|| {
+				let test_mpc_key: [u8; 32] = [1; 32];
+				let amount = 200u128;
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(
+							0,
+							X1(GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							))
+						)
+							.into(),
+					),
+					bridge::Error::<Runtime>::MissingFeeConfig
+				);
+			})
 		}
 
 		#[test]
 		fn deposit_less_than_fee_should_fail() {
-			new_test_ext().execute_with(|| {})
+			new_test_ext().execute_with(|| {
+				let test_mpc_key: [u8; 32] = [1; 32];
+				let fee = 200u128;
+				let amount = 100u128;
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					PhaLocation::get().into(),
+					fee
+				));
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(
+							0,
+							X1(GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							))
+						)
+							.into(),
+					),
+					bridge::Error::<Runtime>::FeeTooExpensive
+				);
+			})
 		}
 
 		#[test]
 		fn deposit_when_bridge_paused_should_fail() {
-			new_test_ext().execute_with(|| {})
+			new_test_ext().execute_with(|| {
+				let test_mpc_key: [u8; 32] = [1; 32];
+				let fee = 100u128;
+				let amount = 200u128;
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					PhaLocation::get().into(),
+					fee
+				));
+				// Pause bridge
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				// Should failed
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(
+							0,
+							X1(GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							))
+						)
+							.into(),
+					),
+					bridge::Error::<Runtime>::BridgePaused
+				);
+				// Unpause bridge
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				// Should success
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+					(
+						0,
+						X1(GeneralKey(
+							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+						))
+					)
+						.into(),
+				));
+			})
 		}
 
 		#[test]
 		fn deposit_without_mpc_set_should_fail() {
-			new_test_ext().execute_with(|| {})
+			new_test_ext().execute_with(|| {
+				let fee = 200u128;
+				let amount = 100u128;
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					PhaLocation::get().into(),
+					fee
+				));
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(
+							0,
+							X1(GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							))
+						)
+							.into(),
+					),
+					bridge::Error::<Runtime>::MissingMpcKey
+				);
+			})
 		}
 	}
 }

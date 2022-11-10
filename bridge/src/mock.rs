@@ -149,6 +149,7 @@ parameter_types! {
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	pub PhaLocation: MultiLocation = MultiLocation::here();
+	pub UsdcAssetId: AssetId = 0;
 	pub UsdcLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
@@ -195,14 +196,13 @@ pub struct SimpleForeignAssetConverter(PhantomData<()>);
 impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
 		if &UsdcLocation::get() == id.borrow() {
-			// USDC asset id
-			Ok(0u32)
+			Ok(UsdcAssetId::get())
 		} else {
 			Err(())
 		}
 	}
 	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
-		if *what.borrow() == 0 {
+		if *what.borrow() == UsdcAssetId::get() {
 			Ok(UsdcLocation::get())
 		} else {
 			Err(())
@@ -217,7 +217,7 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 				if id != &UsdcLocation::get() {
 					Err(ExecutionError::AssetNotFound)
 				} else {
-					Ok((0u32, *amount))
+					Ok((UsdcAssetId::get(), *amount))
 				},
 			_ => Err(ExecutionError::AssetNotFound),
 		}
