@@ -22,17 +22,17 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity},
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
-use sp_std::prelude::*;
+use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{DomainID, ExtractRecipient, IsReserve, ResourceId};
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
-	AccountId32Aliases, AsPrefixedGeneralIndex, ConvertedConcreteAssetId, CurrencyAdapter,
-	FungiblesAdapter, IsConcrete, ParentIsPreset, SiblingParachainConvertsVia,
+	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
+	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::JustTry;
+use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -339,11 +339,12 @@ parameter_types! {
 		X3(
 			Parachain(2004),
 			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-			GeneralKey(b"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
 	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
+	pub UsdcAssetId: AssetId = 0;
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 }
 
@@ -373,17 +374,47 @@ pub type CurrencyTransactor = CurrencyAdapter<
 	(),
 >;
 
+/// A simple Asset converter that extract the bingding relationship between AssetId and
+/// MultiLocation, And convert Asset transfer amount to Balance
+pub struct SimpleForeignAssetConverter(PhantomData<()>);
+
+impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
+	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
+		if &UsdcLocation::get() == id.borrow() {
+			Ok(UsdcAssetId::get())
+		} else {
+			Err(())
+		}
+	}
+	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
+		if *what.borrow() == UsdcAssetId::get() {
+			Ok(UsdcLocation::get())
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
+	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
+		match (&a.fun, &a.id) {
+			(Fungible(ref amount), Concrete(ref id)) =>
+				if id != &UsdcLocation::get() {
+					Err(ExecutionError::AssetNotFound)
+				} else {
+					Ok((UsdcAssetId::get(), *amount))
+				},
+			_ => Err(ExecutionError::AssetNotFound),
+		}
+	}
+}
+
 /// Means for transacting assets besides the native currency on this chain.
 pub type FungiblesTransactor = FungiblesAdapter<
 	// Use this fungibles implementation:
 	Assets,
 	// Use this currency when it is a fungible asset matching the given location or name:
-	ConvertedConcreteAssetId<
-		AssetId,
-		Balance,
-		AsPrefixedGeneralIndex<AssetsPalletLocation, AssetId, JustTry>,
-		JustTry,
-	>,
+	SimpleForeignAssetConverter,
 	// Convert an XCM MultiLocation into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
