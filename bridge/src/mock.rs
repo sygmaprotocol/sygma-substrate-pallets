@@ -217,9 +217,9 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 				if id != &UsdcLocation::get() {
 					Err(ExecutionError::AssetNotFound)
 				} else {
-					Ok((0u32.into(), *amount))
+					Ok((0u32, *amount))
 				},
-			_ => return Err(ExecutionError::AssetNotFound),
+			_ => Err(ExecutionError::AssetNotFound),
 		}
 	}
 }

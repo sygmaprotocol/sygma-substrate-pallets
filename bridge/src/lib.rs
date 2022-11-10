@@ -553,7 +553,7 @@ pub mod pallet {
 
 				// Mint some USDC to ALICE for test
 				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,));
-				assert_eq!(Assets::balance(0u32.into(), &ALICE), ENDOWED_BALANCE);
+				assert_eq!(Assets::balance(0u32, &ALICE), ENDOWED_BALANCE);
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -567,9 +567,9 @@ pub mod pallet {
 						.into(),
 				));
 				// Check balances
-				assert_eq!(Assets::balance(0u32.into(), &ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Assets::balance(0u32.into(), &BridgeAccount::get()), 0);
-				assert_eq!(Assets::balance(0u32.into(), &TreasuryAccount::get()), fee);
+				assert_eq!(Assets::balance(0u32, &ALICE), ENDOWED_BALANCE - amount);
+				assert_eq!(Assets::balance(0u32, &BridgeAccount::get()), 0);
+				assert_eq!(Assets::balance(0u32, &TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 					dest_domain_id: DestDomainID::get(),
