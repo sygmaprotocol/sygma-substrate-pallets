@@ -2,7 +2,6 @@
 
 use codec::{Decode, Encode};
 use frame_support::dispatch::TypeInfo;
-use std::default::Default;
 use xcm::latest::AssetId;
 
 pub type DomainID = u8;
