@@ -10,12 +10,14 @@ pub use self::pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use codec::{Decode, Encode};
+	use eth_encode_packed::{abi, SolidityDataType};
+	use ethers_core::abi::{encode, Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
 	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
-	use sp_core::{ecdsa::Signature, hash::H256, U256};
+	use sp_core::{ecdsa::Signature, hash::H256, keccak_256, U256};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{DepositNonce, DomainID, FeeHandler, MpcPubkey, ResourceId};
@@ -262,10 +264,46 @@ pub mod pallet {
 		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
 			let _sig = Signature::from_slice(&_signature).expect("failed to parse signature");
 
-			// TODO: parse proposal vec and using keccak_256 to hashing to get the final message
-			let _pubey = _sig.recover(_proposals).expect("failed to recover pubkey");
+			let _proposal_typehash = keccak_256(
+				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
+					.as_bytes(),
+			);
+			let mut keccak_data = Vec::new();
 
-			_pubey.0 == MpcKey::<T>::get().0
+			for prop in _proposals {
+				let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
+				let _proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
+				let _proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
+				let _proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
+
+				keccak_data.push(keccak_256(&encode(&[
+					Token::FixedBytes(_proposal_typehash.to_vec()),
+					_proposal_domain_id_token,
+					_proposal_deposit_nonce_token,
+					_proposal_resource_id_token,
+					_proposal_data_token,
+				])));
+			}
+
+			// flatten the keccak_data into vec<u8>
+			let mut final_keccak_data = Vec::new();
+			for data in keccak_data {
+				for d in data {
+					final_keccak_data.push(d)
+				}
+			}
+
+			let input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+			let (_bytes, _) = abi::encode_packed(input);
+			let hashed_keccak_data = keccak_256(_bytes.as_slice());
+
+			let message = keccak_256(&encode(&[
+				Token::FixedBytes(_proposal_typehash.to_vec()),
+				Token::FixedBytes(hashed_keccak_data.to_vec()),
+			]));
+			let pubkey = _sig.recover(message).expect("failed to recover pubkey");
+
+			pubkey.0 == MpcKey::<T>::get().0
 		}
 	}
 
