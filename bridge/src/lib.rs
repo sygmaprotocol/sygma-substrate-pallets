@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
 #[cfg(test)]
 mod mock;
 
@@ -262,8 +264,12 @@ pub mod pallet {
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
 		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
-			let _sig = Signature::from_slice(&_signature).expect("failed to parse signature");
+			let _sig = Signature::from_slice(&_signature);
+			if _sig.is_none() {
+				return false
+			}
 
+			// parse proposals and construct signing message
 			let _proposal_typehash = keccak_256(
 				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
@@ -297,25 +303,39 @@ pub mod pallet {
 			let (_bytes, _) = abi::encode_packed(input);
 			let hashed_keccak_data = keccak_256(_bytes.as_slice());
 
+			// construct the final signing message
 			let message = keccak_256(&encode(&[
 				Token::FixedBytes(_proposal_typehash.to_vec()),
 				Token::FixedBytes(hashed_keccak_data.to_vec()),
 			]));
-			let pubkey = _sig.recover(message).expect("failed to recover pubkey");
 
-			pubkey.0 == MpcKey::<T>::get().0
+			// recover the signing pubkey
+			let _pubkey = _sig.unwrap().recover(message);
+			if _pubkey.is_none() {
+				return false
+			}
+
+			_pubkey.unwrap().0 == MpcKey::<T>::get().0
 		}
 	}
 
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey};
+		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey, Proposal};
+		use alloc::{vec, vec::Vec};
 		use bridge::mock::{
 			assert_events, new_test_ext, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
 			SygmaBridge, ALICE,
 		};
+		use codec::Encode;
+		use eth_encode_packed::{
+			abi,
+			ethabi::{encode, Token},
+			SolidityDataType,
+		};
 		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
+		use sp_core::{ecdsa, keccak_256, Pair};
 		use sygma_traits::MpcPubkey;
 
 		#[test]
@@ -428,6 +448,205 @@ pub mod pallet {
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(SygmaBridge::unpause_bridge(unauthorized_account), BadOrigin);
 				assert!(!IsPaused::<Runtime>::get());
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_invalid_signature() {
+			new_test_ext().execute_with(|| {
+				let signature = vec![1u8];
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_invalid_message() {
+			new_test_ext().execute_with(|| {
+				// generate mpc keypair
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let public = pair.public();
+				let message = b"Something important";
+				let signature = pair.sign(&message[..]);
+
+				// make sure generated keypair, message and signature are all good
+				assert!(ecdsa::Pair::verify(&signature, &message[..], &public));
+				assert!(!ecdsa::Pair::verify(&signature, b"Something else", &public));
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				// verify non matched signature against proposal list, should failed
+				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_valid_message_unmatched_mpc() {
+			new_test_ext().execute_with(|| {
+				// generate the signing keypair
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+
+				// set mpc key to another random key
+				let test_mpc_key: MpcPubkey = MpcPubkey([7u8; 33]);
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				// construct signing message
+				let _proposal_typehash = keccak_256(
+					"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
+						.as_bytes(),
+				);
+				let mut keccak_data = Vec::new();
+				for prop in &proposals {
+					let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
+					let _proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
+					let _proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
+					let _proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
+
+					keccak_data.push(keccak_256(&encode(&[
+						Token::FixedBytes(_proposal_typehash.to_vec()),
+						_proposal_domain_id_token,
+						_proposal_deposit_nonce_token,
+						_proposal_resource_id_token,
+						_proposal_data_token,
+					])));
+				}
+				// flatten the keccak_data into vec<u8>
+				let mut final_keccak_data = Vec::new();
+				for data in keccak_data {
+					for d in data {
+						final_keccak_data.push(d)
+					}
+				}
+				let input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+				let (_bytes, _) = abi::encode_packed(input);
+				let hashed_keccak_data = keccak_256(_bytes.as_slice());
+
+				// final signing message
+				let message = keccak_256(&encode(&[
+					Token::FixedBytes(_proposal_typehash.to_vec()),
+					Token::FixedBytes(hashed_keccak_data.to_vec()),
+				]));
+
+				// sign final message using generated prikey
+				let signature = pair.sign(&message[..]);
+
+				// verify signature, should be error because the signing key != mpc key
+				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_valid_message_valid_signature() {
+			new_test_ext().execute_with(|| {
+				// generate mpc keypair
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let test_mpc_key: MpcPubkey = MpcPubkey(pair.public().0);
+
+				// set mpc key to generated keypair's pubkey
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				// construct signing message
+				let _proposal_typehash = keccak_256(
+					"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
+						.as_bytes(),
+				);
+				let mut keccak_data = Vec::new();
+				for prop in &proposals {
+					let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
+					let _proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
+					let _proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
+					let _proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
+
+					keccak_data.push(keccak_256(&encode(&[
+						Token::FixedBytes(_proposal_typehash.to_vec()),
+						_proposal_domain_id_token,
+						_proposal_deposit_nonce_token,
+						_proposal_resource_id_token,
+						_proposal_data_token,
+					])));
+				}
+				// flatten the keccak_data into vec<u8>
+				let mut final_keccak_data = Vec::new();
+				for data in keccak_data {
+					for d in data {
+						final_keccak_data.push(d)
+					}
+				}
+				let input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+				let (_bytes, _) = abi::encode_packed(input);
+				let hashed_keccak_data = keccak_256(_bytes.as_slice());
+
+				// final signing message
+				let message = keccak_256(&encode(&[
+					Token::FixedBytes(_proposal_typehash.to_vec()),
+					Token::FixedBytes(hashed_keccak_data.to_vec()),
+				]));
+
+				// sign final message using generated mpc prikey
+				let signature = pair.sign(&message[..]);
+
+				// verify signature, should be ok
+				assert!(SygmaBridge::verify(proposals, signature.encode()));
 			})
 		}
 	}
