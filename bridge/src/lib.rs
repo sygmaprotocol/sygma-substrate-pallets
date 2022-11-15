@@ -19,7 +19,8 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
-	use sp_core::{ecdsa::Signature, hash::H256, keccak_256, U256};
+	use sp_core::{ecdsa::Signature, hash::H256, U256};
+	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{DepositNonce, DomainID, FeeHandler, MpcPubkey, ResourceId};
@@ -310,12 +311,17 @@ pub mod pallet {
 			]));
 
 			// recover the signing pubkey
-			let _pubkey = _sig.unwrap().recover(message);
-			if _pubkey.is_none() {
-				return false
+			// let _pubkey = _sig.unwrap().recover(message);
+			// FIXME: A better way to convert _sig to [u8; 65]
+			if let Ok(_pubkey) = secp256k1_ecdsa_recover(
+				&_sig.unwrap().try_into().expect("Unexpected sig. qed."),
+				&message,
+			) {
+				// FIXME: Compare MPC key [u8; 33] to pubkey [u8; 64], here just for compiling pass
+				_pubkey[0..33] == MpcKey::<T>::get().0
+			} else {
+				false
 			}
-
-			_pubkey.unwrap().0 == MpcKey::<T>::get().0
 		}
 	}
 
@@ -335,7 +341,8 @@ pub mod pallet {
 			SolidityDataType,
 		};
 		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
-		use sp_core::{ecdsa, keccak_256, Pair};
+		use sp_core::{ecdsa, Pair};
+		use sp_io::hashing::keccak_256;
 		use sygma_traits::MpcPubkey;
 
 		#[test]
