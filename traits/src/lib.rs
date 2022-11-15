@@ -7,8 +7,8 @@ pub type DomainID = u8;
 pub type DepositNonce = u64;
 pub type ResourceId = [u8; 32];
 
-pub trait IsReserve {
-	fn is_reserve(asset_id: &AssetId) -> bool;
+pub trait IsReserved {
+	fn is_reserved(asset_id: &AssetId) -> bool;
 }
 
 pub trait ExtractRecipient {

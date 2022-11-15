@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
-use sygma_traits::{DomainID, ExtractRecipient, IsReserve, ResourceId};
+use sygma_traits::{DomainID, ExtractRecipient, IsReserved, ResourceId};
 
 use frame_support::{
 	parameter_types,
@@ -244,8 +244,8 @@ pub type FungiblesTransactor = FungiblesAdapter<
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
 pub struct ReserveChecker;
-impl IsReserve for ReserveChecker {
-	fn is_reserve(asset_id: &XcmAssetId) -> bool {
+impl IsReserved for ReserveChecker {
+	fn is_reserved(asset_id: &XcmAssetId) -> bool {
 		asset_id == &PhaLocation::get().into()
 	}
 }
@@ -271,7 +271,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
-	type IsReserve = ReserveChecker;
+	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
 }
 

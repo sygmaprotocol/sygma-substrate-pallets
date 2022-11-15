@@ -26,7 +26,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sygma_traits::{DomainID, ExtractRecipient, IsReserve, ResourceId};
+use sygma_traits::{DomainID, ExtractRecipient, IsReserved, ResourceId};
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
@@ -429,8 +429,8 @@ pub type FungiblesTransactor = FungiblesAdapter<
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
 pub struct ReserveChecker;
-impl IsReserve for ReserveChecker {
-	fn is_reserve(asset_id: &XcmAssetId) -> bool {
+impl IsReserved for ReserveChecker {
+	fn is_reserved(asset_id: &XcmAssetId) -> bool {
 		asset_id == &PhaLocation::get().into()
 	}
 }
@@ -456,7 +456,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
-	type IsReserve = ReserveChecker;
+	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
 }
 

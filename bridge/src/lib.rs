@@ -19,7 +19,7 @@ pub mod pallet {
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{
-		DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserve, ResourceId,
+		DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, ResourceId,
 	};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
@@ -73,7 +73,7 @@ pub mod pallet {
 		type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 
 		/// Return if asset reserved on current chain
-		type IsReserve: IsReserve;
+		type ReserveChecker: IsReserved;
 
 		///  Extract recipient from given MultiLocation
 		type ExtractRecipient: ExtractRecipient;
@@ -92,7 +92,7 @@ pub mod pallet {
 			deposit_nonce: DepositNonce,
 			sender: T::AccountId,
 			deposit_data: Vec<u8>,
-			handler_repoonse: Vec<u8>,
+			handler_response: Vec<u8>,
 		},
 		/// When user is going to retry a bridge transfer
 		/// args: [tx_hash]
@@ -260,7 +260,7 @@ pub mod pallet {
 
 			// Deposit `amount - fee` of asset to reserve account if asset is reserved in local
 			// chain.
-			if T::IsReserve::is_reserve(&asset.id) {
+			if T::ReserveChecker::is_reserved(&asset.id) {
 				T::AssetTransactor::deposit_asset(
 					&(asset.id.clone(), Fungible(amount - fee)).into(),
 					&Junction::AccountId32 {
@@ -283,7 +283,7 @@ pub mod pallet {
 				deposit_nonce,
 				sender,
 				deposit_data: Self::create_deposit_data(amount - fee, recipient),
-				handler_repoonse: vec![],
+				handler_response: vec![],
 			});
 
 			Ok(())
@@ -529,7 +529,7 @@ pub mod pallet {
 						amount - fee,
 						b"ethereum recipient".to_vec(),
 					),
-					handler_repoonse: vec![],
+					handler_response: vec![],
 				})]);
 			})
 		}
@@ -580,7 +580,7 @@ pub mod pallet {
 						amount - fee,
 						b"ethereum recipient".to_vec(),
 					),
-					handler_repoonse: vec![],
+					handler_response: vec![],
 				})]);
 			})
 		}
