@@ -1739,9 +1739,9 @@ dependencies = [
 
 [[package]]
 name = "ethers-core"
-version = "0.10.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8d03de95d0e7c67bfa2d2ca6e726d2db72c8801c22501d4f8251f56b2adb02f"
+checksum = "4536e70feeae231b73ac2221f1339a9a1969dea9cf1d679be26b73a36f14f4e7"
 dependencies = [
  "arrayvec 0.7.2",
  "bytes",
@@ -1754,8 +1754,10 @@ dependencies = [
  "rand 0.8.5",
  "rlp",
  "rlp-derive",
+ "rust_decimal",
  "serde",
  "serde_json",
+ "strum",
  "thiserror",
  "tiny-keccak",
  "unicode-xid",
@@ -5967,6 +5969,17 @@ dependencies = [
  "netlink-proto",
  "nix",
  "thiserror",
+]
+
+[[package]]
+name = "rust_decimal"
+version = "1.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee9164faf726e4f3ece4978b25ca877ddc6802fa77f38cdccb32c7f805ecd70c"
+dependencies = [
+ "arrayvec 0.7.2",
+ "num-traits",
+ "serde",
 ]
 
 [[package]]

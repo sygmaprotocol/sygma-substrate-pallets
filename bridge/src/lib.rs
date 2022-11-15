@@ -315,7 +315,6 @@ pub mod pallet {
 			]));
 
 			// recover the signing pubkey
-			// let _pubkey = _sig.unwrap().recover(message);
 			if let Ok(_pubkey) = secp256k1_ecdsa_recover_compressed(_sig, &blake2_256(&message)) {
 				_pubkey == MpcKey::<T>::get().0
 			} else {
