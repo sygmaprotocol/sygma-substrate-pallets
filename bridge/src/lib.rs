@@ -19,8 +19,11 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
-	use sp_core::{ecdsa::Signature, hash::H256, U256};
-	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
+	use sp_core::{hash::H256, U256};
+	use sp_io::{
+		crypto::secp256k1_ecdsa_recover_compressed,
+		hashing::{blake2_256, keccak_256},
+	};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{DepositNonce, DomainID, FeeHandler, MpcPubkey, ResourceId};
@@ -265,10 +268,11 @@ pub mod pallet {
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
 		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
-			let _sig = Signature::from_slice(&_signature);
-			if _sig.is_none() {
-				return false
-			}
+			let _sig_result = &_signature.try_into();
+			let _sig = match _sig_result {
+				Ok(sig) => sig,
+				Err(error) => return false,
+			};
 
 			// parse proposals and construct signing message
 			let _proposal_typehash = keccak_256(
@@ -312,13 +316,8 @@ pub mod pallet {
 
 			// recover the signing pubkey
 			// let _pubkey = _sig.unwrap().recover(message);
-			// FIXME: A better way to convert _sig to [u8; 65]
-			if let Ok(_pubkey) = secp256k1_ecdsa_recover(
-				&_sig.unwrap().try_into().expect("Unexpected sig. qed."),
-				&message,
-			) {
-				// FIXME: Compare MPC key [u8; 33] to pubkey [u8; 64], here just for compiling pass
-				_pubkey[0..33] == MpcKey::<T>::get().0
+			if let Ok(_pubkey) = secp256k1_ecdsa_recover_compressed(_sig, &blake2_256(&message)) {
+				_pubkey == MpcKey::<T>::get().0
 			} else {
 				false
 			}
@@ -478,6 +477,7 @@ pub mod pallet {
 				};
 				let proposals = vec![p1, p2];
 
+				// should be false
 				assert!(!SygmaBridge::verify(proposals, signature.encode()));
 			})
 		}
@@ -510,7 +510,7 @@ pub mod pallet {
 				};
 				let proposals = vec![p1, p2];
 
-				// verify non matched signature against proposal list, should failed
+				// verify non matched signature against proposal list, should be false
 				assert!(!SygmaBridge::verify(proposals, signature.encode()));
 			})
 		}
@@ -581,7 +581,7 @@ pub mod pallet {
 				// sign final message using generated prikey
 				let signature = pair.sign(&message[..]);
 
-				// verify signature, should be error because the signing key != mpc key
+				// verify signature, should be false because the signing key != mpc key
 				assert!(!SygmaBridge::verify(proposals, signature.encode()));
 			})
 		}
@@ -652,7 +652,7 @@ pub mod pallet {
 				// sign final message using generated mpc prikey
 				let signature = pair.sign(&message[..]);
 
-				// verify signature, should be ok
+				// verify signature, should be true
 				assert!(SygmaBridge::verify(proposals, signature.encode()));
 			})
 		}
