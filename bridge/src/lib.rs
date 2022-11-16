@@ -11,8 +11,10 @@ pub use self::pallet::*;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
+	use alloc::string::String;
 	use codec::{Decode, Encode};
 	use eth_encode_packed::{abi, SolidityDataType};
+	use ethers::types::{transaction::eip712, H160, U256 as ethers_u256};
 	use ethers_core::abi::{encode, Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
@@ -279,8 +281,8 @@ pub mod pallet {
 				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
 			);
-			let mut keccak_data = Vec::new();
 
+			let mut keccak_data = Vec::new();
 			for prop in _proposals {
 				let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
 				let _proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
@@ -304,18 +306,38 @@ pub mod pallet {
 				}
 			}
 
-			let input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-			let (_bytes, _) = abi::encode_packed(input);
+			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+			let (_bytes, _) = abi::encode_packed(final_keccak_data_input);
 			let hashed_keccak_data = keccak_256(_bytes.as_slice());
 
-			// construct the final signing message
-			let message = keccak_256(&encode(&[
+			let _struct_hash = keccak_256(&encode(&[
 				Token::FixedBytes(_proposal_typehash.to_vec()),
 				Token::FixedBytes(hashed_keccak_data.to_vec()),
 			]));
 
+			// domain separator
+			let default_eip712_domain = eip712::EIP712Domain::default();
+			let eip712_domain = eip712::EIP712Domain {
+				name: String::from("Bridge"),
+				version: String::from("3.1.0"),
+				chain_id: ethers_u256([1u64; 4]),    // todo: how to get chain_id?
+				verifying_contract: H160([1u8; 20]), // todo: how to get contract address?
+				salt: default_eip712_domain.salt,
+			};
+			let _domain_separator = eip712_domain.separator();
+
+			let typed_data_hash_input = &vec![
+				SolidityDataType::String("\x19\x01"),
+				SolidityDataType::Bytes(&_domain_separator),
+				SolidityDataType::Bytes(&_struct_hash),
+			];
+			let (_bytes, _) = abi::encode_packed(typed_data_hash_input);
+			let final_message = keccak_256(_bytes.as_slice());
+
 			// recover the signing pubkey
-			if let Ok(_pubkey) = secp256k1_ecdsa_recover_compressed(_sig, &blake2_256(&message)) {
+			if let Ok(_pubkey) =
+				secp256k1_ecdsa_recover_compressed(_sig, &blake2_256(&final_message))
+			{
 				_pubkey == MpcKey::<T>::get().0
 			} else {
 				false
@@ -338,6 +360,7 @@ pub mod pallet {
 			ethabi::{encode, Token},
 			SolidityDataType,
 		};
+		use ethers::types::{transaction::eip712, H160, U256 as ethers_u256};
 		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
 		use sp_core::{ecdsa, Pair};
 		use sp_io::hashing::keccak_256;
@@ -540,11 +563,12 @@ pub mod pallet {
 				};
 				let proposals = vec![p1, p2];
 
-				// construct signing message
+				// parse proposals and construct signing message
 				let _proposal_typehash = keccak_256(
 					"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 						.as_bytes(),
 				);
+
 				let mut keccak_data = Vec::new();
 				for prop in &proposals {
 					let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
@@ -560,6 +584,7 @@ pub mod pallet {
 						_proposal_data_token,
 					])));
 				}
+
 				// flatten the keccak_data into vec<u8>
 				let mut final_keccak_data = Vec::new();
 				for data in keccak_data {
@@ -567,18 +592,37 @@ pub mod pallet {
 						final_keccak_data.push(d)
 					}
 				}
-				let input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-				let (_bytes, _) = abi::encode_packed(input);
+
+				let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+				let (_bytes, _) = abi::encode_packed(final_keccak_data_input);
 				let hashed_keccak_data = keccak_256(_bytes.as_slice());
 
-				// final signing message
-				let message = keccak_256(&encode(&[
+				let _struct_hash = keccak_256(&encode(&[
 					Token::FixedBytes(_proposal_typehash.to_vec()),
 					Token::FixedBytes(hashed_keccak_data.to_vec()),
 				]));
 
+				// domain separator
+				let default_eip712_domain = eip712::EIP712Domain::default();
+				let eip712_domain = eip712::EIP712Domain {
+					name: String::from("Bridge"),
+					version: String::from("3.1.0"),
+					chain_id: ethers_u256([1u64; 4]),    // todo: how to get chain_id?
+					verifying_contract: H160([1u8; 20]), // todo: how to get contract address?
+					salt: default_eip712_domain.salt,
+				};
+				let _domain_separator = eip712_domain.separator();
+
+				let typed_data_hash_input = &vec![
+					SolidityDataType::String("\x19\x01"),
+					SolidityDataType::Bytes(&_domain_separator),
+					SolidityDataType::Bytes(&_struct_hash),
+				];
+				let (_bytes, _) = abi::encode_packed(typed_data_hash_input);
+				let final_message = keccak_256(_bytes.as_slice());
+
 				// sign final message using generated prikey
-				let signature = pair.sign(&message[..]);
+				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be false because the signing key != mpc key
 				assert!(!SygmaBridge::verify(proposals, signature.encode()));
@@ -611,11 +655,12 @@ pub mod pallet {
 				};
 				let proposals = vec![p1, p2];
 
-				// construct signing message
+				// parse proposals and construct signing message
 				let _proposal_typehash = keccak_256(
 					"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 						.as_bytes(),
 				);
+
 				let mut keccak_data = Vec::new();
 				for prop in &proposals {
 					let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
@@ -631,6 +676,7 @@ pub mod pallet {
 						_proposal_data_token,
 					])));
 				}
+
 				// flatten the keccak_data into vec<u8>
 				let mut final_keccak_data = Vec::new();
 				for data in keccak_data {
@@ -638,18 +684,37 @@ pub mod pallet {
 						final_keccak_data.push(d)
 					}
 				}
-				let input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-				let (_bytes, _) = abi::encode_packed(input);
+
+				let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+				let (_bytes, _) = abi::encode_packed(final_keccak_data_input);
 				let hashed_keccak_data = keccak_256(_bytes.as_slice());
 
-				// final signing message
-				let message = keccak_256(&encode(&[
+				let _struct_hash = keccak_256(&encode(&[
 					Token::FixedBytes(_proposal_typehash.to_vec()),
 					Token::FixedBytes(hashed_keccak_data.to_vec()),
 				]));
 
+				// domain separator
+				let default_eip712_domain = eip712::EIP712Domain::default();
+				let eip712_domain = eip712::EIP712Domain {
+					name: String::from("Bridge"),
+					version: String::from("3.1.0"),
+					chain_id: ethers_u256([1u64; 4]),    // todo: how to get chain_id?
+					verifying_contract: H160([1u8; 20]), // todo: how to get contract address?
+					salt: default_eip712_domain.salt,
+				};
+				let _domain_separator = eip712_domain.separator();
+
+				let typed_data_hash_input = &vec![
+					SolidityDataType::String("\x19\x01"),
+					SolidityDataType::Bytes(&_domain_separator),
+					SolidityDataType::Bytes(&_struct_hash),
+				];
+				let (_bytes, _) = abi::encode_packed(typed_data_hash_input);
+				let final_message = keccak_256(_bytes.as_slice());
+
 				// sign final message using generated mpc prikey
-				let signature = pair.sign(&message[..]);
+				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be true
 				assert!(SygmaBridge::verify(proposals, signature.encode()));

@@ -10,6 +10,7 @@ log = { version = "0.4.14", default-features = false }
 ethers-core = { version = "0.13.0", default-features = false }
 eth-encode-packed = { version =  "0.1.0", default-features = false }
 getrandom = { version = "0.2", features = ["js"] }
+ethers = { version =  "0.13.0", default-features = false }
 
 # Substrate
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.30", default-features = false, features = ["disable_panic_handler", "disable_oom", "disable_allocator"] }
