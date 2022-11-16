@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
-use sygma_traits::{DomainID, ResourceId};
+use sygma_traits::{DomainID, ExtractRecipient, IsReserved, ResourceId};
 
 use frame_support::{
 	parameter_types,
@@ -15,12 +15,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32, Perbill,
 };
+use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
-	AccountId32Aliases, AsPrefixedGeneralIndex, ConvertedConcreteAssetId, CurrencyAdapter,
-	FungiblesAdapter, IsConcrete, ParentIsPreset, SiblingParachainConvertsVia,
+	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
+	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::JustTry;
+use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -85,10 +86,6 @@ parameter_types! {
 	pub const MILLICENTS: Balance = CENTS::get() / 1_000;
 }
 
-const fn deposit(items: u32, bytes: u32) -> Balance {
-	items as Balance * 15 * CENTS::get() + (bytes as Balance) * CENTS::get()
-}
-
 impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
 	type DustRemoval = ();
@@ -102,14 +99,14 @@ impl pallet_balances::Config for Runtime {
 }
 
 parameter_types! {
-	pub const AssetDeposit: Balance = 10 * UNIT::get(); // 10 UNITS deposit to create fungible asset class
-	pub const AssetAccountDeposit: Balance = DOLLARS::get();
+	pub const AssetDeposit: Balance = 0;
+	pub const AssetAccountDeposit: Balance =0;
 	pub const ApprovalDeposit: Balance = ExistentialDeposit::get();
 	pub const AssetsStringLimit: u32 = 50;
 	/// Key = 32 bytes, Value = 36 bytes (32+1+1+1+1)
 	// https://github.com/paritytech/substrate/blob/069917b/frame/assets/src/lib.rs#L257L271
-	pub const MetadataDepositBase: Balance = deposit(1, 68);
-	pub const MetadataDepositPerByte: Balance = deposit(0, 1);
+	pub const MetadataDepositBase: Balance = 0;
+	pub const MetadataDepositPerByte: Balance = 0;
 	pub const ExecutiveBody: BodyId = BodyId::Executive;
 }
 
@@ -152,12 +149,13 @@ parameter_types! {
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	pub PhaLocation: MultiLocation = MultiLocation::here();
+	pub UsdcAssetId: AssetId = 0;
 	pub UsdcLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
 			Parachain(2004),
 			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-			GeneralKey(b"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
 	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
@@ -191,17 +189,47 @@ pub type CurrencyTransactor = CurrencyAdapter<
 	(),
 >;
 
+/// A simple Asset converter that extract the bingding relationship between AssetId and
+/// MultiLocation, And convert Asset transfer amount to Balance
+pub struct SimpleForeignAssetConverter(PhantomData<()>);
+
+impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
+	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
+		if &UsdcLocation::get() == id.borrow() {
+			Ok(UsdcAssetId::get())
+		} else {
+			Err(())
+		}
+	}
+	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
+		if *what.borrow() == UsdcAssetId::get() {
+			Ok(UsdcLocation::get())
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
+	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
+		match (&a.fun, &a.id) {
+			(Fungible(ref amount), Concrete(ref id)) =>
+				if id != &UsdcLocation::get() {
+					Err(ExecutionError::AssetNotFound)
+				} else {
+					Ok((UsdcAssetId::get(), *amount))
+				},
+			_ => Err(ExecutionError::AssetNotFound),
+		}
+	}
+}
+
 /// Means for transacting assets besides the native currency on this chain.
 pub type FungiblesTransactor = FungiblesAdapter<
 	// Use this fungibles implementation:
 	Assets,
 	// Use this currency when it is a fungible asset matching the given location or name:
-	ConvertedConcreteAssetId<
-		AssetId,
-		Balance,
-		AsPrefixedGeneralIndex<AssetsPalletLocation, AssetId, JustTry>,
-		JustTry,
-	>,
+	SimpleForeignAssetConverter,
 	// Convert an XCM MultiLocation into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -215,6 +243,25 @@ pub type FungiblesTransactor = FungiblesAdapter<
 /// Means for transacting assets on this chain.
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
+pub struct ReserveChecker;
+impl IsReserved for ReserveChecker {
+	fn is_reserved(asset_id: &XcmAssetId) -> bool {
+		asset_id == &PhaLocation::get().into()
+	}
+}
+
+// Project can have it's own implementation to adapt their own spec design.
+pub struct RecipientParser;
+impl ExtractRecipient for RecipientParser {
+	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
+		// For example, we force a dest location should be represented by following format.
+		match (dest.parents, &dest.interior) {
+			(0, Junctions::X1(GeneralKey(recipient))) => Some(recipient.to_vec()),
+			_ => None,
+		}
+	}
+}
+
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -224,17 +271,22 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
+	type ReserveChecker = ReserveChecker;
+	type ExtractRecipient = RecipientParser;
 }
 
-#[allow(dead_code)]
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
-#[allow(dead_code)]
+pub const ASSET_OWNER: AccountId32 = AccountId32::new([1u8; 32]);
 pub const ENDOWED_BALANCE: Balance = 100_000_000;
 
-#[allow(dead_code)]
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
+	pallet_balances::GenesisConfig::<Runtime> {
+		balances: vec![(ALICE, ENDOWED_BALANCE), (ASSET_OWNER, ENDOWED_BALANCE)],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext

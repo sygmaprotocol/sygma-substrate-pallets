@@ -8172,6 +8172,7 @@ dependencies = [
  "frame-support",
  "parity-scale-codec",
  "scale-info",
+ "sp-std",
  "xcm",
  "xcm-builder",
 ]
