@@ -2,7 +2,8 @@
 
 use codec::{Decode, Encode};
 use frame_support::dispatch::TypeInfo;
-use xcm::latest::AssetId;
+use sp_std::vec::Vec;
+use xcm::latest::{AssetId, MultiLocation};
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;
@@ -15,6 +16,14 @@ impl Default for MpcPubkey {
 	fn default() -> Self {
 		MpcPubkey([0; 33])
 	}
+}
+
+pub trait IsReserved {
+	fn is_reserved(asset_id: &AssetId) -> bool;
+}
+
+pub trait ExtractRecipient {
+	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>>;
 }
 
 pub trait FeeHandler: Sized {
