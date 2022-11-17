@@ -1,7 +1,9 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
-use sygma_traits::{DomainID, ExtractRecipient, IsReserved, ResourceId};
+use sygma_traits::{
+	ChainID, DomainID, ExtractRecipient, IsReserved, ResourceId, VerifyingContractAddress,
+};
 
 use frame_support::{
 	parameter_types,
@@ -9,7 +11,7 @@ use frame_support::{
 };
 use frame_system::{self as system};
 use polkadot_parachain::primitives::Sibling;
-use sp_core::H256;
+use sp_core::{hash::H256, H160, U256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -143,6 +145,8 @@ impl sygma_basic_feehandler::Config for Runtime {
 parameter_types! {
 	pub DestDomainID: DomainID = 1;
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
+	pub DestChainID: ChainID = U256([1u64; 4]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = H160([1u8; 20]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
@@ -268,6 +272,8 @@ impl sygma_bridge::Config for Runtime {
 	type DestDomainID = DestDomainID;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
+	type DestChainID = DestChainID;
+	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;

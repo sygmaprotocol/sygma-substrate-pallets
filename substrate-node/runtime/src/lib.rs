@@ -13,7 +13,7 @@ use pallet_grandpa::{
 use polkadot_parachain::primitives::Sibling;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H160, U256};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
@@ -26,7 +26,9 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sygma_traits::{DomainID, ExtractRecipient, IsReserved, ResourceId};
+use sygma_traits::{
+	ChainID, DomainID, ExtractRecipient, IsReserved, ResourceId, VerifyingContractAddress,
+};
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
@@ -329,6 +331,8 @@ parameter_types! {
 	pub DestDomainID: DomainID = 1;
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	pub DestChainID: ChainID = U256([1u64; 4]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = H160([1u8; 20]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
@@ -453,6 +457,8 @@ impl sygma_bridge::Config for Runtime {
 	type DestDomainID = DestDomainID;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
+	type DestChainID = DestChainID;
+	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;

@@ -14,7 +14,7 @@ pub mod pallet {
 	use alloc::string::String;
 	use codec::{Decode, Encode};
 	use eth_encode_packed::{abi, SolidityDataType};
-	use ethers::types::{transaction::eip712, H160, U256 as ethers_u256};
+	use ethers::types::transaction::eip712;
 	use ethers_core::abi::{encode, Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
@@ -29,7 +29,8 @@ pub mod pallet {
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{
-		DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey, ResourceId,
+		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
+		ResourceId, VerifyingContractAddress,
 	};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
@@ -69,6 +70,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransferReserveAccount: Get<Self::AccountId>;
 
+		/// Pallet ChainID
+		/// This is used in EIP712 typed data domain
+		#[pallet::constant]
+		type DestChainID: Get<ChainID>;
+
+		/// EIP712 Verifying contract address
+		/// This is used in EIP712 typed data domain
+		#[pallet::constant]
+		type DestVerifyingContractAddress: Get<VerifyingContractAddress>;
+
 		/// Fee reserve account
 		#[pallet::constant]
 		type FeeReserveAccount: Get<Self::AccountId>;
@@ -85,7 +96,7 @@ pub mod pallet {
 		/// Return if asset reserved on current chain
 		type ReserveChecker: IsReserved;
 
-		///  Extract recipient from given MultiLocation
+		/// Extract recipient from given MultiLocation
 		type ExtractRecipient: ExtractRecipient;
 	}
 
@@ -95,7 +106,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
 		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
-		/// handler_reponse]
+		/// handler_response]
 		Deposit {
 			dest_domain_id: DomainID,
 			resource_id: ResourceId,
@@ -339,21 +350,20 @@ pub mod pallet {
 	{
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
-		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
-			let _sig_result = &_signature.try_into();
-			let _sig = match _sig_result {
-				Ok(sig) => sig,
+		fn verify(proposals: Vec<Proposal>, signature: Vec<u8>) -> bool {
+			let sig = match signature.try_into() {
+				Ok(_sig) => _sig,
 				Err(error) => return false,
 			};
 
 			// parse proposals and construct signing message
-			let final_message = Pallet::<T>::construct_ecdsa_signing_proposals_data(&_proposals);
+			let final_message = Self::construct_ecdsa_signing_proposals_data(&proposals);
 
 			// recover the signing pubkey
-			if let Ok(_pubkey) =
-				secp256k1_ecdsa_recover_compressed(_sig, &blake2_256(&final_message))
+			if let Ok(pubkey) =
+				secp256k1_ecdsa_recover_compressed(&sig, &blake2_256(&final_message))
 			{
-				_pubkey == MpcKey::<T>::get().0
+				pubkey == MpcKey::<T>::get().0
 			} else {
 				false
 			}
@@ -361,24 +371,24 @@ pub mod pallet {
 
 		/// Parse proposals and construct the original signing message
 		pub fn construct_ecdsa_signing_proposals_data(proposals: &Vec<Proposal>) -> [u8; 32] {
-			let _proposal_typehash = keccak_256(
+			let proposal_typehash = keccak_256(
 				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
 			);
 
 			let mut keccak_data = Vec::new();
 			for prop in proposals {
-				let _proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
-				let _proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
-				let _proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
-				let _proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
+				let proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
+				let proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
+				let proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
+				let proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
 
 				keccak_data.push(keccak_256(&encode(&[
-					Token::FixedBytes(_proposal_typehash.to_vec()),
-					_proposal_domain_id_token,
-					_proposal_deposit_nonce_token,
-					_proposal_resource_id_token,
-					_proposal_data_token,
+					Token::FixedBytes(proposal_typehash.to_vec()),
+					proposal_domain_id_token,
+					proposal_deposit_nonce_token,
+					proposal_resource_id_token,
+					proposal_data_token,
 				])));
 			}
 
@@ -391,11 +401,11 @@ pub mod pallet {
 			}
 
 			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-			let (_bytes, _) = abi::encode_packed(final_keccak_data_input);
-			let hashed_keccak_data = keccak_256(_bytes.as_slice());
+			let (bytes, _) = abi::encode_packed(final_keccak_data_input);
+			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
-			let _struct_hash = keccak_256(&encode(&[
-				Token::FixedBytes(_proposal_typehash.to_vec()),
+			let struct_hash = keccak_256(&encode(&[
+				Token::FixedBytes(proposal_typehash.to_vec()),
 				Token::FixedBytes(hashed_keccak_data.to_vec()),
 			]));
 
@@ -404,20 +414,20 @@ pub mod pallet {
 			let eip712_domain = eip712::EIP712Domain {
 				name: String::from("Bridge"),
 				version: String::from("3.1.0"),
-				chain_id: ethers_u256([1u64; 4]),    // todo: how to get chain_id?
-				verifying_contract: H160([1u8; 20]), // todo: how to get contract address?
+				chain_id: T::DestChainID::get(),
+				verifying_contract: T::DestVerifyingContractAddress::get(),
 				salt: default_eip712_domain.salt,
 			};
-			let _domain_separator = eip712_domain.separator();
+			let domain_separator = eip712_domain.separator();
 
 			let typed_data_hash_input = &vec![
 				SolidityDataType::String("\x19\x01"),
-				SolidityDataType::Bytes(&_domain_separator),
-				SolidityDataType::Bytes(&_struct_hash),
+				SolidityDataType::Bytes(&domain_separator),
+				SolidityDataType::Bytes(&struct_hash),
 			];
-			let (_bytes, _) = abi::encode_packed(typed_data_hash_input);
+			let (bytes, _) = abi::encode_packed(typed_data_hash_input);
 
-			keccak_256(_bytes.as_slice())
+			keccak_256(bytes.as_slice())
 		}
 
 		/// Extract asset id and transfer amount from `MultiAsset`, currently only fungible asset
