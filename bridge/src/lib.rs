@@ -116,8 +116,8 @@ pub mod pallet {
 			handler_response: Vec<u8>,
 		},
 		/// When user is going to retry a bridge transfer
-		/// args: [tx_hash]
-		Retry { hash: H256 },
+		/// args: [deposit_tx_hash]
+		Retry { deposit_tx_hash: H256 },
 		/// When bridge is paused
 		/// args: [dest_domain_id]
 		BridgePaused { dest_domain_id: DomainID },
@@ -314,10 +314,12 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[transactional]
 		pub fn retry(_origin: OriginFor<T>, hash: H256) -> DispatchResult {
+			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+
 			// Emit retry event
-			// For clippy happy
-			Self::deposit_event(Event::<T>::Retry { hash });
-			Err(Error::<T>::Unimplemented.into())
+			Self::deposit_event(Event::<T>::Retry { deposit_tx_hash: hash });
+			Ok(())
 		}
 
 		/// Executes a batch of deposit proposals (only if signature is signed by MPC).
@@ -474,7 +476,7 @@ pub mod pallet {
 			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
-		use sp_core::{ecdsa, Pair};
+		use sp_core::{ecdsa, Pair, H256};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
 		use sygma_traits::MpcPubkey;
@@ -1000,6 +1002,38 @@ pub mod pallet {
 					),
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
+			})
+		}
+
+		#[test]
+		fn retry_bridge() {
+			new_test_ext().execute_with(|| {
+				// mpc key is missing, should fail
+				assert_noop!(
+					SygmaBridge::retry(Origin::root(), H256([0u8; 32])),
+					bridge::Error::<Runtime>::MissingMpcKey
+				);
+
+				// set mpc key
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+
+				// pause bridge and retry, should fail
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_noop!(
+					SygmaBridge::retry(Origin::root(), H256([0u8; 32])),
+					bridge::Error::<Runtime>::BridgePaused
+				);
+
+				// unpause bridge
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert!(!IsPaused::<Runtime>::get());
+
+				// retry again, should work
+				assert_ok!(SygmaBridge::retry(Origin::root(), H256([0u8; 32])));
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
+					deposit_tx_hash: H256([0u8; 32]),
+				})]);
 			})
 		}
 	}
