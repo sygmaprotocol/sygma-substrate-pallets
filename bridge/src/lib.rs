@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
 #[cfg(test)]
 mod mock;
 
@@ -9,17 +11,26 @@ pub use self::pallet::*;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
+	use alloc::string::String;
 	use codec::{Decode, Encode};
+	use eth_encode_packed::{abi, SolidityDataType};
+	use ethers::types::transaction::eip712;
+	use ethers_core::abi::{encode, Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
 	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::TypeInfo;
 	use sp_core::{hash::H256, U256};
+	use sp_io::{
+		crypto::secp256k1_ecdsa_recover_compressed,
+		hashing::{blake2_256, keccak_256},
+	};
 	use sp_runtime::{traits::Clear, RuntimeDebug};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{
-		DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, ResourceId,
+		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
+		ResourceId, VerifyingContractAddress,
 	};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
@@ -59,6 +70,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransferReserveAccount: Get<Self::AccountId>;
 
+		/// Pallet ChainID
+		/// This is used in EIP712 typed data domain
+		#[pallet::constant]
+		type DestChainID: Get<ChainID>;
+
+		/// EIP712 Verifying contract address
+		/// This is used in EIP712 typed data domain
+		#[pallet::constant]
+		type DestVerifyingContractAddress: Get<VerifyingContractAddress>;
+
 		/// Fee reserve account
 		#[pallet::constant]
 		type FeeReserveAccount: Get<Self::AccountId>;
@@ -75,7 +96,7 @@ pub mod pallet {
 		/// Return if asset reserved on current chain
 		type ReserveChecker: IsReserved;
 
-		///  Extract recipient from given MultiLocation
+		/// Extract recipient from given MultiLocation
 		type ExtractRecipient: ExtractRecipient;
 	}
 
@@ -85,7 +106,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
 		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
-		/// handler_reponse]
+		/// handler_response]
 		Deposit {
 			dest_domain_id: DomainID,
 			resource_id: ResourceId,
@@ -152,7 +173,7 @@ pub mod pallet {
 	/// Pre-set MPC public key
 	#[pallet::storage]
 	#[pallet::getter(fn mpc_key)]
-	pub type MpcKey<T> = StorageValue<_, [u8; 32], ValueQuery>;
+	pub type MpcKey<T> = StorageValue<_, MpcPubkey, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -204,7 +225,7 @@ pub mod pallet {
 
 		/// Mark an ECDSA public key as a MPC account.
 		#[pallet::weight(195_000_000)]
-		pub fn set_mpc_key(origin: OriginFor<T>, _key: [u8; 32]) -> DispatchResult {
+		pub fn set_mpc_key(origin: OriginFor<T>, _key: MpcPubkey) -> DispatchResult {
 			// Ensure bridge committee
 			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
 
@@ -329,8 +350,84 @@ pub mod pallet {
 	{
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
-		fn verify(_proposals: Vec<Proposal>, _signature: Vec<u8>) -> bool {
-			false
+		fn verify(proposals: Vec<Proposal>, signature: Vec<u8>) -> bool {
+			let sig = match signature.try_into() {
+				Ok(_sig) => _sig,
+				Err(error) => return false,
+			};
+
+			// parse proposals and construct signing message
+			let final_message = Self::construct_ecdsa_signing_proposals_data(&proposals);
+
+			// recover the signing pubkey
+			if let Ok(pubkey) =
+				secp256k1_ecdsa_recover_compressed(&sig, &blake2_256(&final_message))
+			{
+				pubkey == MpcKey::<T>::get().0
+			} else {
+				false
+			}
+		}
+
+		/// Parse proposals and construct the original signing message
+		pub fn construct_ecdsa_signing_proposals_data(proposals: &Vec<Proposal>) -> [u8; 32] {
+			let proposal_typehash = keccak_256(
+				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
+					.as_bytes(),
+			);
+
+			let mut keccak_data = Vec::new();
+			for prop in proposals {
+				let proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
+				let proposal_deposit_nonce_token = Token::Uint(prop.deposit_nonce.into());
+				let proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
+				let proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
+
+				keccak_data.push(keccak_256(&encode(&[
+					Token::FixedBytes(proposal_typehash.to_vec()),
+					proposal_domain_id_token,
+					proposal_deposit_nonce_token,
+					proposal_resource_id_token,
+					proposal_data_token,
+				])));
+			}
+
+			// flatten the keccak_data into vec<u8>
+			let mut final_keccak_data = Vec::new();
+			for data in keccak_data {
+				for d in data {
+					final_keccak_data.push(d)
+				}
+			}
+
+			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+			let (bytes, _) = abi::encode_packed(final_keccak_data_input);
+			let hashed_keccak_data = keccak_256(bytes.as_slice());
+
+			let struct_hash = keccak_256(&encode(&[
+				Token::FixedBytes(proposal_typehash.to_vec()),
+				Token::FixedBytes(hashed_keccak_data.to_vec()),
+			]));
+
+			// domain separator
+			let default_eip712_domain = eip712::EIP712Domain::default();
+			let eip712_domain = eip712::EIP712Domain {
+				name: String::from("Bridge"),
+				version: String::from("3.1.0"),
+				chain_id: T::DestChainID::get(),
+				verifying_contract: T::DestVerifyingContractAddress::get(),
+				salt: default_eip712_domain.salt,
+			};
+			let domain_separator = eip712_domain.separator();
+
+			let typed_data_hash_input = &vec![
+				SolidityDataType::String("\x19\x01"),
+				SolidityDataType::Bytes(&domain_separator),
+				SolidityDataType::Bytes(&struct_hash),
+			];
+			let (bytes, _) = abi::encode_packed(typed_data_hash_input);
+
+			keccak_256(bytes.as_slice())
 		}
 
 		/// Extract asset id and transfer amount from `MultiAsset`, currently only fungible asset
@@ -365,26 +462,30 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey};
+		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey, Proposal};
 		use bridge::mock::{
 			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
 			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
 			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
 			UsdcResourceId, ALICE, ASSET_OWNER, ENDOWED_BALANCE,
 		};
+		use codec::Encode;
 		use frame_support::{
-			assert_noop, assert_ok, traits::tokens::fungibles::Create as FungibleCerate,
+			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
+			traits::tokens::fungibles::Create as FungibleCerate,
 		};
-		use sp_runtime::{traits::BadOrigin, WeakBoundedVec};
+		use sp_core::{ecdsa, Pair};
+		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
+		use sygma_traits::MpcPubkey;
 		use xcm::latest::prelude::*;
 
 		#[test]
 		fn set_mpc_key() {
 			new_test_ext().execute_with(|| {
-				let default_key: [u8; 32] = Default::default();
-				let test_mpc_key_a: [u8; 32] = [1; 32];
-				let test_mpc_key_b: [u8; 32] = [2; 32];
+				let default_key: MpcPubkey = MpcPubkey::default();
+				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_key_b: MpcPubkey = MpcPubkey([2u8; 33]);
 
 				assert_eq!(MpcKey::<Runtime>::get(), default_key);
 
@@ -411,8 +512,8 @@ pub mod pallet {
 		#[test]
 		fn pause_bridge() {
 			new_test_ext().execute_with(|| {
-				let default_key: [u8; 32] = Default::default();
-				let test_mpc_key_a: [u8; 32] = [1; 32];
+				let default_key: MpcPubkey = MpcPubkey::default();
+				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
 
 				assert_eq!(MpcKey::<Runtime>::get(), default_key);
 
@@ -450,8 +551,8 @@ pub mod pallet {
 		#[test]
 		fn unpause_bridge() {
 			new_test_ext().execute_with(|| {
-				let default_key: [u8; 32] = Default::default();
-				let test_mpc_key_a: [u8; 32] = [1; 32];
+				let default_key: MpcPubkey = MpcPubkey::default();
+				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
 
 				assert_eq!(MpcKey::<Runtime>::get(), default_key);
 
@@ -493,9 +594,139 @@ pub mod pallet {
 		}
 
 		#[test]
+		fn verify_mpc_signature_invalid_signature() {
+			new_test_ext().execute_with(|| {
+				let signature = vec![1u8];
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				// should be false
+				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_invalid_message() {
+			new_test_ext().execute_with(|| {
+				// generate mpc keypair
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let public = pair.public();
+				let message = b"Something important";
+				let signature = pair.sign(&message[..]);
+
+				// make sure generated keypair, message and signature are all good
+				assert!(ecdsa::Pair::verify(&signature, &message[..], &public));
+				assert!(!ecdsa::Pair::verify(&signature, b"Something else", &public));
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				// verify non matched signature against proposal list, should be false
+				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_valid_message_unmatched_mpc() {
+			new_test_ext().execute_with(|| {
+				// generate the signing keypair
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+
+				// set mpc key to another random key
+				let test_mpc_key: MpcPubkey = MpcPubkey([7u8; 33]);
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+
+				// sign final message using generated prikey
+				let signature = pair.sign(&final_message[..]);
+
+				// verify signature, should be false because the signing key != mpc key
+				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
+		fn verify_mpc_signature_valid_message_valid_signature() {
+			new_test_ext().execute_with(|| {
+				// generate mpc keypair
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let test_mpc_key: MpcPubkey = MpcPubkey(pair.public().0);
+
+				// set mpc key to generated keypair's pubkey
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+
+				// dummy proposals
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 1,
+					resource_id: [1u8; 32],
+					data: vec![1u8],
+				};
+				let p2 = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 2,
+					resource_id: [2u8; 32],
+					data: vec![2u8],
+				};
+				let proposals = vec![p1, p2];
+
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+
+				// sign final message using generated mpc prikey
+				let signature = pair.sign(&final_message[..]);
+
+				// verify signature, should be true
+				assert!(SygmaBridge::verify(proposals, signature.encode()));
+			})
+		}
+
+		#[test]
 		fn deposit_native_asset_should_work() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
@@ -537,7 +768,7 @@ pub mod pallet {
 		#[test]
 		fn deposit_foreign_asset_should_work() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
@@ -589,7 +820,7 @@ pub mod pallet {
 		fn deposit_unbounded_asset_should_fail() {
 			new_test_ext().execute_with(|| {
 				let unbounded_asset_location = MultiLocation::new(1, X1(GeneralIndex(123)));
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
@@ -627,7 +858,7 @@ pub mod pallet {
 						),
 					),
 				);
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
@@ -650,7 +881,7 @@ pub mod pallet {
 		#[test]
 		fn deposit_without_fee_set_should_fail() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
 				assert_noop!(
@@ -673,7 +904,7 @@ pub mod pallet {
 		#[test]
 		fn deposit_less_than_fee_should_fail() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let fee = 200u128;
 				let amount = 100u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
@@ -702,7 +933,7 @@ pub mod pallet {
 		#[test]
 		fn deposit_when_bridge_paused_should_fail() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: [u8; 32] = [1; 32];
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
