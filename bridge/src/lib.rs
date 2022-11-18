@@ -14,8 +14,11 @@ pub mod pallet {
 	use alloc::string::String;
 	use codec::{Decode, Encode};
 	use eth_encode_packed::{abi, SolidityDataType};
-	use ethers::types::transaction::eip712;
-	use ethers_core::abi::{encode, Token};
+	use ethers::{
+		core::abi::{encode, Token},
+		types::transaction::eip712,
+	};
+	// use ethers_core::abi::{encode, Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
 	};
@@ -412,10 +415,10 @@ pub mod pallet {
 			// domain separator
 			let default_eip712_domain = eip712::EIP712Domain::default();
 			let eip712_domain = eip712::EIP712Domain {
-				name: String::from("Bridge"),
-				version: String::from("3.1.0"),
-				chain_id: T::DestChainID::get(),
-				verifying_contract: T::DestVerifyingContractAddress::get(),
+				name: Some(String::from("Bridge")),
+				version: Some(String::from("3.1.0")),
+				chain_id: Some(T::DestChainID::get()),
+				verifying_contract: Some(T::DestVerifyingContractAddress::get()),
 				salt: default_eip712_domain.salt,
 			};
 			let domain_separator = eip712_domain.separator();

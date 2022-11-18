@@ -1,10 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::TypeInfo,
-	sp_runtime::app_crypto::sp_core::{H160, U256},
-};
+use ethers::types::{H160, U256};
+use frame_support::dispatch::TypeInfo;
 use sp_std::vec::Vec;
 use xcm::latest::{AssetId, MultiLocation};
 
