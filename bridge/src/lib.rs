@@ -415,7 +415,7 @@ pub mod pallet {
 			};
 
 			// parse proposals and construct signing message
-			let final_message = Self::construct_ecdsa_signing_proposals_data(&proposals);
+			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
 
 			// recover the signing pubkey
 			if let Ok(pubkey) =
@@ -719,7 +719,7 @@ pub mod pallet {
 				let proposals = vec![p1, p2];
 
 				// should be false
-				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -752,7 +752,7 @@ pub mod pallet {
 				let proposals = vec![p1, p2];
 
 				// verify non matched signature against proposal list, should be false
-				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -788,7 +788,7 @@ pub mod pallet {
 				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be false because the signing key != mpc key
-				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -824,7 +824,7 @@ pub mod pallet {
 				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be true
-				assert!(SygmaBridge::verify(proposals, signature.encode()));
+				assert!(SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
