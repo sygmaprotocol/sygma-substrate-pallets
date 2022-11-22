@@ -116,12 +116,17 @@ pub mod pallet {
 			deposit_data: Vec<u8>,
 			handler_response: Vec<u8>,
 		},
-		/// When proposal was executed successfully.
-		/// args: []
+		/// When proposal was executed successfully
 		ProposalExecution {
 			origin_domain_id: DomainID,
 			deposit_nonce: DepositNonce,
 			data_hash: [u8; 32],
+		},
+		/// When proposal was faild to execute
+		FailedHandlerExecution {
+			error: Vec<u8>,
+			origin_domain_id: DomainID,
+			deposit_nonce: DepositNonce,
 		},
 		/// When user is going to retry a bridge transfer
 		/// args: [deposit_tx_hash, sender]
@@ -350,52 +355,32 @@ pub mod pallet {
 			// Verify MPC signature
 			ensure!(Self::verify(&proposals, signature.encode()), Error::<T>::BadMpcSignature);
 
-			// Execute proposals
+			// Execute proposals one by on.
+			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
+			// than revert whole transaction
 			for proposal in proposals.iter() {
-				// Check if proposal has executed
-				ensure!(
-					!Self::is_proposal_executed(proposal.deposit_nonce),
-					Error::<T>::ProposalAlreadyComplete
+				Self::execute_proposal_internal(&proposal).map_or_else(
+					|e| {
+						let err_msg: &'static str = e.into();
+						// Emit FailedHandlerExecution
+						Self::deposit_event(Event::FailedHandlerExecution {
+							error: err_msg.as_bytes().to_vec(),
+							origin_domain_id: proposal.origin_domain_id,
+							deposit_nonce: proposal.deposit_nonce,
+						});
+					},
+					|_| {
+						// Update proposal status
+						Self::set_proposal_executed(proposal.deposit_nonce);
+
+						// Emit ProposalExecution
+						Self::deposit_event(Event::ProposalExecution {
+							origin_domain_id: proposal.origin_domain_id,
+							deposit_nonce: proposal.deposit_nonce,
+							data_hash: keccak_256(&proposal.data),
+						});
+					},
 				);
-				// Check if the dest domain id is correct
-				ensure!(
-					proposal.origin_domain_id == T::DestDomainID::get(),
-					Error::<T>::InvalidOriginDomainId
-				);
-				// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
-				let asset_id =
-					Self::rid_to_assetid(&proposal.resource_id).ok_or(Error::<T>::AssetNotBound)?;
-				// Extract Receipt from proposal data to get corresponding location (MultiLocation)
-				let (amount, location) = Self::extract_deposit_data(&proposal.data)
-					.ok_or(Error::<T>::InvalidDepositData)?;
-				let asset = (asset_id.clone(), amount).into();
-
-				// Withdraw `amount` of asset from reserve account
-				if T::ReserveChecker::is_reserved(&asset_id) {
-					T::AssetTransactor::withdraw_asset(
-						&asset,
-						&Junction::AccountId32 {
-							network: NetworkId::Any,
-							id: T::FeeReserveAccount::get().into(),
-						}
-						.into(),
-					)
-					.map_err(|_| Error::<T>::TransactFailed)?;
-				}
-
-				// Deposit `amount` of asset to dest location
-				T::AssetTransactor::deposit_asset(&asset, &location)
-					.map_err(|_| Error::<T>::TransactFailed)?;
-
-				// Update proposal status
-				Self::set_proposal_executed(proposal.deposit_nonce);
-
-				// Emit event
-				Self::deposit_event(Event::ProposalExecution {
-					origin_domain_id: proposal.origin_domain_id,
-					deposit_nonce: proposal.deposit_nonce,
-					data_hash: keccak_256(&proposal.data),
-				});
 			}
 
 			Ok(())
@@ -560,6 +545,46 @@ pub mod pallet {
 			let mut current_nonces = UsedNonces::<T>::get(nonce / 256);
 			current_nonces |= 1 << (nonce % 256);
 			UsedNonces::<T>::insert(nonce / 256, current_nonces);
+		}
+
+		/// Execute a single proposal
+		fn execute_proposal_internal(proposal: &Proposal) -> DispatchResult {
+			// Check if proposal has executed
+			ensure!(
+				!Self::is_proposal_executed(proposal.deposit_nonce),
+				Error::<T>::ProposalAlreadyComplete
+			);
+			// Check if the dest domain id is correct
+			ensure!(
+				proposal.origin_domain_id == T::DestDomainID::get(),
+				Error::<T>::InvalidOriginDomainId
+			);
+			// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
+			let asset_id =
+				Self::rid_to_assetid(&proposal.resource_id).ok_or(Error::<T>::AssetNotBound)?;
+			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
+			let (amount, location) =
+				Self::extract_deposit_data(&proposal.data).ok_or(Error::<T>::InvalidDepositData)?;
+			let asset = (asset_id.clone(), amount).into();
+
+			// Withdraw `amount` of asset from reserve account
+			if T::ReserveChecker::is_reserved(&asset_id) {
+				T::AssetTransactor::withdraw_asset(
+					&asset,
+					&Junction::AccountId32 {
+						network: NetworkId::Any,
+						id: T::FeeReserveAccount::get().into(),
+					}
+					.into(),
+				)
+				.map_err(|_| Error::<T>::TransactFailed)?;
+			}
+
+			// Deposit `amount` of asset to dest location
+			T::AssetTransactor::deposit_asset(&asset, &location)
+				.map_err(|_| Error::<T>::TransactFailed)?;
+
+			Ok(())
 		}
 	}
 
