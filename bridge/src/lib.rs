@@ -116,8 +116,8 @@ pub mod pallet {
 			handler_response: Vec<u8>,
 		},
 		/// When user is going to retry a bridge transfer
-		/// args: [deposit_tx_hash]
-		Retry { deposit_tx_hash: H256 },
+		/// args: [deposit_tx_hash, sender]
+		Retry { deposit_tx_hash: H256, sender: T::AccountId },
 		/// When bridge is paused
 		/// args: [dest_domain_id]
 		BridgePaused { dest_domain_id: DomainID },
@@ -313,12 +313,14 @@ pub mod pallet {
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
 		#[pallet::weight(195_000_000)]
 		#[transactional]
-		pub fn retry(_origin: OriginFor<T>, hash: H256) -> DispatchResult {
+		pub fn retry(origin: OriginFor<T>, hash: H256) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
 			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Emit retry event
-			Self::deposit_event(Event::<T>::Retry { deposit_tx_hash: hash });
+			Self::deposit_event(Event::<T>::Retry { deposit_tx_hash: hash, sender });
 			Ok(())
 		}
 
@@ -1010,7 +1012,7 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc key is missing, should fail
 				assert_noop!(
-					SygmaBridge::retry(Origin::root(), H256([0u8; 32])),
+					SygmaBridge::retry(Origin::signed(ALICE), H256([0u8; 32])),
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
 
@@ -1021,7 +1023,7 @@ pub mod pallet {
 				// pause bridge and retry, should fail
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert_noop!(
-					SygmaBridge::retry(Origin::root(), H256([0u8; 32])),
+					SygmaBridge::retry(Origin::signed(ALICE), H256([0u8; 32])),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 
@@ -1030,9 +1032,10 @@ pub mod pallet {
 				assert!(!IsPaused::<Runtime>::get());
 
 				// retry again, should work
-				assert_ok!(SygmaBridge::retry(Origin::root(), H256([0u8; 32])));
+				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), H256([0u8; 32])));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
 					deposit_tx_hash: H256([0u8; 32]),
+					sender: ALICE,
 				})]);
 			})
 		}
