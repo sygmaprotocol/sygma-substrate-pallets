@@ -283,13 +283,18 @@ impl sygma_bridge::Config for Runtime {
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const ASSET_OWNER: AccountId32 = AccountId32::new([1u8; 32]);
+pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const ENDOWED_BALANCE: Balance = 100_000_000;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 	pallet_balances::GenesisConfig::<Runtime> {
-		balances: vec![(ALICE, ENDOWED_BALANCE), (ASSET_OWNER, ENDOWED_BALANCE)],
+		balances: vec![
+			(ALICE, ENDOWED_BALANCE),
+			(ASSET_OWNER, ENDOWED_BALANCE),
+			(BOB, ENDOWED_BALANCE),
+		],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();

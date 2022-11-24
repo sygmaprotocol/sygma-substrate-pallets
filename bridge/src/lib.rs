@@ -353,7 +353,7 @@ pub mod pallet {
 			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 			// Verify MPC signature
-			ensure!(Self::verify(&proposals, signature.encode()), Error::<T>::BadMpcSignature);
+			ensure!(Self::verify(&proposals, signature), Error::<T>::BadMpcSignature);
 
 			// Execute proposals one by on.
 			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
@@ -573,7 +573,7 @@ pub mod pallet {
 					&asset,
 					&Junction::AccountId32 {
 						network: NetworkId::Any,
-						id: T::FeeReserveAccount::get().into(),
+						id: T::TransferReserveAccount::get().into(),
 					}
 					.into(),
 				)
@@ -596,7 +596,7 @@ pub mod pallet {
 			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
 			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
 			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
-			UsdcResourceId, ALICE, ASSET_OWNER, ENDOWED_BALANCE,
+			UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
 		};
 		use codec::Encode;
 		use frame_support::{
@@ -1163,6 +1163,151 @@ pub mod pallet {
 					deposit_tx_hash: H256([0u8; 32]),
 					sender: ALICE,
 				})]);
+			})
+		}
+
+		#[test]
+		fn proposal_execution_should_work() {
+			new_test_ext().execute_with(|| {
+				// Mpc key is missing, should fail
+				assert_noop!(
+					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
+					bridge::Error::<Runtime>::MissingMpcKey,
+				);
+				// Set mpc key to generated keypair's pubkey
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let test_mpc_key: MpcPubkey = MpcPubkey(pair.public().0);
+				// Generate an evil key
+				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+
+				// Should failed if bridge paused
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_noop!(
+					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
+					bridge::Error::<Runtime>::BridgePaused,
+				);
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+
+				// Deposit some PHA in advance
+				let fee = 100u128;
+				let amount = 200u128;
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					PhaLocation::get().into(),
+					fee
+				));
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(PhaLocation::get()), Fungible(2 * amount)).into(),
+					(
+						0,
+						X1(GeneralKey(
+							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+						))
+					)
+						.into(),
+				));
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Generate proposals
+				let valid_pha_transfer_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 1,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let valid_usdc_transfer_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 2,
+					resource_id: UsdcResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_depositnonce_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 2,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_domainid_proposal = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 3,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_resourceid_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 3,
+					resource_id: [2u8; 32],
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_recipient_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 3,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(amount, b"invalid recipient".to_vec()),
+				};
+
+				let proposals = vec![
+					valid_pha_transfer_proposal,
+					valid_usdc_transfer_proposal,
+					invalid_depositnonce_proposal,
+					invalid_domainid_proposal,
+					invalid_resourceid_proposal,
+					invalid_recipient_proposal,
+				];
+
+				let proposals_with_valid_signature =
+					pair.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+				let proposals_with_bad_signature = evil_pair
+					.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+
+				assert_noop!(
+					SygmaBridge::execute_proposal(
+						Origin::signed(ALICE),
+						proposals.clone(),
+						proposals_with_bad_signature.encode(),
+					),
+					bridge::Error::<Runtime>::BadMpcSignature,
+				);
+				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), 0);
+				assert!(SygmaBridge::verify(
+					&proposals,
+					proposals_with_valid_signature.clone().encode()
+				));
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals,
+					proposals_with_valid_signature.encode(),
+				));
+				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + amount);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), amount);
 			})
 		}
 	}
