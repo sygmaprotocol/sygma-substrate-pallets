@@ -19,6 +19,7 @@ pub mod pallet {
 	use ethabi::{encode as abi_encode, token::Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
+		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
 	use primitive_types::{H256, U256};
@@ -27,7 +28,10 @@ pub mod pallet {
 		crypto::secp256k1_ecdsa_recover_compressed,
 		hashing::{blake2_256, keccak_256},
 	};
-	use sp_runtime::{traits::Clear, RuntimeDebug};
+	use sp_runtime::{
+		traits::{AccountIdConversion, Clear},
+		RuntimeDebug,
+	};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{
 		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
@@ -99,6 +103,9 @@ pub mod pallet {
 
 		/// Extract recipient from given MultiLocation
 		type ExtractRecipient: ExtractRecipient;
+
+		/// Config ID for the current pallet instance
+		type PalletId: Get<PalletId>;
 	}
 
 	#[allow(dead_code)]
@@ -359,7 +366,7 @@ pub mod pallet {
 			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
 			// than revert whole transaction
 			for proposal in proposals.iter() {
-				Self::execute_proposal_internal(&proposal).map_or_else(
+				Self::execute_proposal_internal(proposal).map_or_else(
 					|e| {
 						let err_msg: &'static str = e.into();
 						// Emit FailedHandlerExecution
@@ -377,7 +384,13 @@ pub mod pallet {
 						Self::deposit_event(Event::ProposalExecution {
 							origin_domain_id: proposal.origin_domain_id,
 							deposit_nonce: proposal.deposit_nonce,
-							data_hash: keccak_256(&proposal.data),
+							data_hash: keccak_256(
+								&[
+									proposal.data.clone(),
+									T::PalletId::get().into_account_truncating(),
+								]
+								.concat(),
+							),
 						});
 					},
 				);
@@ -1297,10 +1310,7 @@ pub mod pallet {
 				);
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE);
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), 0);
-				assert!(SygmaBridge::verify(
-					&proposals,
-					proposals_with_valid_signature.clone().encode()
-				));
+				assert!(SygmaBridge::verify(&proposals, proposals_with_valid_signature.encode()));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
 					proposals,
