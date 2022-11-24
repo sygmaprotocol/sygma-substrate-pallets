@@ -478,8 +478,8 @@ pub mod pallet {
 			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
-		use sp_core::{ecdsa, Pair};
 		use primitive_types::H256;
+		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
 		use sygma_traits::MpcPubkey;
