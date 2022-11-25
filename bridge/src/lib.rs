@@ -19,6 +19,7 @@ pub mod pallet {
 	use ethabi::{encode as abi_encode, token::Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
+		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
 	use primitive_types::{H256, U256};
@@ -27,7 +28,10 @@ pub mod pallet {
 		crypto::secp256k1_ecdsa_recover_compressed,
 		hashing::{blake2_256, keccak_256},
 	};
-	use sp_runtime::{traits::Clear, RuntimeDebug};
+	use sp_runtime::{
+		traits::{AccountIdConversion, Clear},
+		RuntimeDebug,
+	};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{
 		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
@@ -99,6 +103,9 @@ pub mod pallet {
 
 		/// Extract recipient from given MultiLocation
 		type ExtractRecipient: ExtractRecipient;
+
+		/// Config ID for the current pallet instance
+		type PalletId: Get<PalletId>;
 	}
 
 	#[allow(dead_code)]
@@ -115,6 +122,18 @@ pub mod pallet {
 			sender: T::AccountId,
 			deposit_data: Vec<u8>,
 			handler_response: Vec<u8>,
+		},
+		/// When proposal was executed successfully
+		ProposalExecution {
+			origin_domain_id: DomainID,
+			deposit_nonce: DepositNonce,
+			data_hash: [u8; 32],
+		},
+		/// When proposal was faild to execute
+		FailedHandlerExecution {
+			error: Vec<u8>,
+			origin_domain_id: DomainID,
+			deposit_nonce: DepositNonce,
 		},
 		/// When user is going to retry a bridge transfer
 		/// args: [deposit_tx_hash, sender]
@@ -155,6 +174,10 @@ pub mod pallet {
 		ProposalAlreadyComplete,
 		/// Transactor operation failed
 		TransactorFailed,
+		/// Origin domain id mismatch
+		InvalidOriginDomainId,
+		/// Deposit data not correct
+		InvalidDepositData,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -178,9 +201,9 @@ pub mod pallet {
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
-	#[pallet::getter(fn mpc_keys)]
+	#[pallet::getter(fn used_nonces)]
 	pub type UsedNonces<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, DomainID, Twox64Concat, U256, U256>;
+		StorageMap<_, Twox64Concat, DepositNonce, DepositNonce, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
@@ -330,22 +353,50 @@ pub mod pallet {
 		#[transactional]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
-			_proposals: Vec<Proposal>,
-			_signature: Vec<u8>,
+			proposals: Vec<Proposal>,
+			signature: Vec<u8>,
 		) -> DispatchResult {
+			// Check MPC key and bridge status
+			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 			// Verify MPC signature
+			ensure!(Self::verify(&proposals, signature), Error::<T>::BadMpcSignature);
 
-			// Parse proposal
+			// Execute proposals one by on.
+			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
+			// than revert whole transaction
+			for proposal in proposals.iter() {
+				Self::execute_proposal_internal(proposal).map_or_else(
+					|e| {
+						let err_msg: &'static str = e.into();
+						// Emit FailedHandlerExecution
+						Self::deposit_event(Event::FailedHandlerExecution {
+							error: err_msg.as_bytes().to_vec(),
+							origin_domain_id: proposal.origin_domain_id,
+							deposit_nonce: proposal.deposit_nonce,
+						});
+					},
+					|_| {
+						// Update proposal status
+						Self::set_proposal_executed(proposal.deposit_nonce);
 
-			// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
+						// Emit ProposalExecution
+						Self::deposit_event(Event::ProposalExecution {
+							origin_domain_id: proposal.origin_domain_id,
+							deposit_nonce: proposal.deposit_nonce,
+							data_hash: keccak_256(
+								&[
+									proposal.data.clone(),
+									T::PalletId::get().into_account_truncating(),
+								]
+								.concat(),
+							),
+						});
+					},
+				);
+			}
 
-			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
-
-			// Handle asset with Transactor
-
-			// Update proposal status
-
-			Err(Error::<T>::Unimplemented.into())
+			Ok(())
 		}
 	}
 
@@ -355,14 +406,14 @@ pub mod pallet {
 	{
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
-		fn verify(proposals: Vec<Proposal>, signature: Vec<u8>) -> bool {
+		fn verify(proposals: &Vec<Proposal>, signature: Vec<u8>) -> bool {
 			let sig = match signature.try_into() {
 				Ok(_sig) => _sig,
 				Err(error) => return false,
 			};
 
 			// parse proposals and construct signing message
-			let final_message = Self::construct_ecdsa_signing_proposals_data(&proposals);
+			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
 
 			// recover the signing pubkey
 			if let Ok(pubkey) =
@@ -456,10 +507,97 @@ pub mod pallet {
 			.to_vec()
 		}
 
+		/// Extract transfer amount and recipient location from deposit data.
+		/// For fungible transfer, data passed into the function should be constructed as follows:
+		/// amount                    uint256     bytes  0 - 32
+		/// recipient data length     uint256     bytes  32 - 64
+		/// recipient data            bytes       bytes  64 - END
+		///
+		/// Only fungible transfer is supportted so far.
+		fn extract_deposit_data(data: &Vec<u8>) -> Option<(u128, MultiLocation)> {
+			if data.len() < 64 {
+				return None
+			}
+			let amount: u128 = U256::from_little_endian(&data[0..32])
+				.try_into()
+				.expect("Amount convert failed. qed.");
+			let recipient_len: usize = U256::from_little_endian(&data[32..64])
+				.try_into()
+				.expect("Length convert failed. qed.");
+			if data.len() != (64 + recipient_len) {
+				return None
+			}
+			let recipient = data[64..data.len()].to_vec();
+			if let Ok(location) = <MultiLocation>::decode(&mut recipient.as_slice()) {
+				Some((amount, location))
+			} else {
+				None
+			}
+		}
+
+		fn rid_to_assetid(rid: &ResourceId) -> Option<AssetId> {
+			T::ResourcePairs::get()
+				.iter()
+				.position(|a| &a.1 == rid)
+				.map(|idx| T::ResourcePairs::get()[idx].0.clone())
+		}
+
 		fn hex_zero_padding_32(i: u128) -> [u8; 32] {
 			let mut result = [0u8; 32];
 			U256::from(i).to_little_endian(&mut result);
 			result
+		}
+
+		/// Return true if deposit nonce has been used
+		fn is_proposal_executed(nonce: DepositNonce) -> bool {
+			(UsedNonces::<T>::get(nonce / 256) & (1 << (nonce % 256))) != 0
+		}
+
+		/// Set bit mask for specific nonce as used
+		fn set_proposal_executed(nonce: DepositNonce) {
+			let mut current_nonces = UsedNonces::<T>::get(nonce / 256);
+			current_nonces |= 1 << (nonce % 256);
+			UsedNonces::<T>::insert(nonce / 256, current_nonces);
+		}
+
+		/// Execute a single proposal
+		fn execute_proposal_internal(proposal: &Proposal) -> DispatchResult {
+			// Check if proposal has executed
+			ensure!(
+				!Self::is_proposal_executed(proposal.deposit_nonce),
+				Error::<T>::ProposalAlreadyComplete
+			);
+			// Check if the dest domain id is correct
+			ensure!(
+				proposal.origin_domain_id == T::DestDomainID::get(),
+				Error::<T>::InvalidOriginDomainId
+			);
+			// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
+			let asset_id =
+				Self::rid_to_assetid(&proposal.resource_id).ok_or(Error::<T>::AssetNotBound)?;
+			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
+			let (amount, location) =
+				Self::extract_deposit_data(&proposal.data).ok_or(Error::<T>::InvalidDepositData)?;
+			let asset = (asset_id.clone(), amount).into();
+
+			// Withdraw `amount` of asset from reserve account
+			if T::ReserveChecker::is_reserved(&asset_id) {
+				T::AssetTransactor::withdraw_asset(
+					&asset,
+					&Junction::AccountId32 {
+						network: NetworkId::Any,
+						id: T::TransferReserveAccount::get().into(),
+					}
+					.into(),
+				)
+				.map_err(|_| Error::<T>::TransactFailed)?;
+			}
+
+			// Deposit `amount` of asset to dest location
+			T::AssetTransactor::deposit_asset(&asset, &location)
+				.map_err(|_| Error::<T>::TransactFailed)?;
+
+			Ok(())
 		}
 	}
 
@@ -471,7 +609,7 @@ pub mod pallet {
 			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
 			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
 			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
-			UsdcResourceId, ALICE, ASSET_OWNER, ENDOWED_BALANCE,
+			UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
 		};
 		use codec::Encode;
 		use frame_support::{
@@ -619,7 +757,7 @@ pub mod pallet {
 				let proposals = vec![p1, p2];
 
 				// should be false
-				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -652,7 +790,7 @@ pub mod pallet {
 				let proposals = vec![p1, p2];
 
 				// verify non matched signature against proposal list, should be false
-				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -688,7 +826,7 @@ pub mod pallet {
 				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be false because the signing key != mpc key
-				assert!(!SygmaBridge::verify(proposals, signature.encode()));
+				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -724,7 +862,7 @@ pub mod pallet {
 				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be true
-				assert!(SygmaBridge::verify(proposals, signature.encode()));
+				assert!(SygmaBridge::verify(&proposals, signature.encode()));
 			})
 		}
 
@@ -1038,6 +1176,148 @@ pub mod pallet {
 					deposit_tx_hash: H256([0u8; 32]),
 					sender: ALICE,
 				})]);
+			})
+		}
+
+		#[test]
+		fn proposal_execution_should_work() {
+			new_test_ext().execute_with(|| {
+				// Mpc key is missing, should fail
+				assert_noop!(
+					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
+					bridge::Error::<Runtime>::MissingMpcKey,
+				);
+				// Set mpc key to generated keypair's pubkey
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let test_mpc_key: MpcPubkey = MpcPubkey(pair.public().0);
+				// Generate an evil key
+				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+
+				// Should failed if bridge paused
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_noop!(
+					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
+					bridge::Error::<Runtime>::BridgePaused,
+				);
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+
+				// Deposit some PHA in advance
+				let fee = 100u128;
+				let amount = 200u128;
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					PhaLocation::get().into(),
+					fee
+				));
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(PhaLocation::get()), Fungible(2 * amount)).into(),
+					(
+						0,
+						X1(GeneralKey(
+							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+						))
+					)
+						.into(),
+				));
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Generate proposals
+				let valid_pha_transfer_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 1,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let valid_usdc_transfer_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 2,
+					resource_id: UsdcResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_depositnonce_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 2,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_domainid_proposal = Proposal {
+					origin_domain_id: 2,
+					deposit_nonce: 3,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_resourceid_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 3,
+					resource_id: [2u8; 32],
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+							.encode(),
+					),
+				};
+				let invalid_recipient_proposal = Proposal {
+					origin_domain_id: DestDomainID::get(),
+					deposit_nonce: 3,
+					resource_id: PhaResourceId::get(),
+					data: SygmaBridge::create_deposit_data(amount, b"invalid recipient".to_vec()),
+				};
+
+				let proposals = vec![
+					valid_pha_transfer_proposal,
+					valid_usdc_transfer_proposal,
+					invalid_depositnonce_proposal,
+					invalid_domainid_proposal,
+					invalid_resourceid_proposal,
+					invalid_recipient_proposal,
+				];
+
+				let proposals_with_valid_signature =
+					pair.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+				let proposals_with_bad_signature = evil_pair
+					.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+
+				assert_noop!(
+					SygmaBridge::execute_proposal(
+						Origin::signed(ALICE),
+						proposals.clone(),
+						proposals_with_bad_signature.encode(),
+					),
+					bridge::Error::<Runtime>::BadMpcSignature,
+				);
+				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), 0);
+				assert!(SygmaBridge::verify(&proposals, proposals_with_valid_signature.encode()));
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals,
+					proposals_with_valid_signature.encode(),
+				));
+				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + amount);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), amount);
 			})
 		}
 	}
