@@ -6,14 +6,14 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::pallet_prelude::*;
+use frame_support::{pallet_prelude::*, PalletId};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use polkadot_parachain::primitives::Sibling;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H160, U256};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
@@ -331,8 +331,8 @@ parameter_types! {
 	pub DestDomainID: DomainID = 1;
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
-	pub DestChainID: ChainID = U256([1u64; 4]);
-	pub DestVerifyingContractAddress: VerifyingContractAddress = H160([1u8; 20]);
+	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
@@ -350,6 +350,7 @@ parameter_types! {
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub UsdcAssetId: AssetId = 0;
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -464,6 +465,7 @@ impl sygma_bridge::Config for Runtime {
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
+	type PalletId = SygmaBridgePalletId;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

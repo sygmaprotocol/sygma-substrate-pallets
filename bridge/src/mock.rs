@@ -8,10 +8,11 @@ use sygma_traits::{
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, PalletInfoAccess},
+	PalletId,
 };
 use frame_system::{self as system};
 use polkadot_parachain::primitives::Sibling;
-use sp_core::{hash::H256, H160, U256};
+use sp_core::hash::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -145,8 +146,8 @@ impl sygma_basic_feehandler::Config for Runtime {
 parameter_types! {
 	pub DestDomainID: DomainID = 1;
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
-	pub DestChainID: ChainID = U256([1u64; 4]);
-	pub DestVerifyingContractAddress: VerifyingContractAddress = H160([1u8; 20]);
+	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
@@ -165,6 +166,7 @@ parameter_types! {
 	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -279,17 +281,23 @@ impl sygma_bridge::Config for Runtime {
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
+	type PalletId = SygmaBridgePalletId;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const ASSET_OWNER: AccountId32 = AccountId32::new([1u8; 32]);
+pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const ENDOWED_BALANCE: Balance = 100_000_000;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 	pallet_balances::GenesisConfig::<Runtime> {
-		balances: vec![(ALICE, ENDOWED_BALANCE), (ASSET_OWNER, ENDOWED_BALANCE)],
+		balances: vec![
+			(ALICE, ENDOWED_BALANCE),
+			(ASSET_OWNER, ENDOWED_BALANCE),
+			(BOB, ENDOWED_BALANCE),
+		],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
