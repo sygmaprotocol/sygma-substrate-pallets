@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+mod eip712;
 #[cfg(test)]
 mod mock;
 
@@ -11,17 +12,17 @@ pub use self::pallet::*;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::eip712;
 	use alloc::string::String;
 	use codec::{Decode, Encode};
-	use eth_encode_packed::{abi, SolidityDataType};
-	use ethers::types::transaction::eip712;
-	use ethers_core::abi::{encode, Token};
+	use eth_encode_packed::{abi::encode_packed, SolidityDataType};
+	use ethabi::{encode as abi_encode, token::Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
 	};
 	use frame_system::pallet_prelude::*;
+	use primitive_types::{H256, U256};
 	use scale_info::TypeInfo;
-	use sp_core::{hash::H256, U256};
 	use sp_io::{
 		crypto::secp256k1_ecdsa_recover_compressed,
 		hashing::{blake2_256, keccak_256},
@@ -387,7 +388,7 @@ pub mod pallet {
 				let proposal_resource_id_token = Token::FixedBytes(prop.resource_id.to_vec());
 				let proposal_data_token = Token::FixedBytes(keccak_256(&prop.data).to_vec());
 
-				keccak_data.push(keccak_256(&encode(&[
+				keccak_data.push(keccak_256(&abi_encode(&[
 					Token::FixedBytes(proposal_typehash.to_vec()),
 					proposal_domain_id_token,
 					proposal_deposit_nonce_token,
@@ -405,10 +406,10 @@ pub mod pallet {
 			}
 
 			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-			let (bytes, _) = abi::encode_packed(final_keccak_data_input);
+			let (bytes, _) = encode_packed(final_keccak_data_input);
 			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
-			let struct_hash = keccak_256(&encode(&[
+			let struct_hash = keccak_256(&abi_encode(&[
 				Token::FixedBytes(proposal_typehash.to_vec()),
 				Token::FixedBytes(hashed_keccak_data.to_vec()),
 			]));
@@ -429,8 +430,7 @@ pub mod pallet {
 				SolidityDataType::Bytes(&domain_separator),
 				SolidityDataType::Bytes(&struct_hash),
 			];
-			let (bytes, _) = abi::encode_packed(typed_data_hash_input);
-
+			let (bytes, _) = encode_packed(typed_data_hash_input);
 			keccak_256(bytes.as_slice())
 		}
 
@@ -478,7 +478,8 @@ pub mod pallet {
 			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
-		use sp_core::{ecdsa, Pair, H256};
+		use primitive_types::H256;
+		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
 		use sygma_traits::MpcPubkey;
