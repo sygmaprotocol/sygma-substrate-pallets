@@ -12,4 +12,5 @@ build:
 	cargo build --release
 
 start-dev:
-	./target/release/node-template --dev
+	./target/release/node-template --dev --ws-external
+
