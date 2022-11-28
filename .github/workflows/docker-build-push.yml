@@ -19,7 +19,9 @@ jobs:
 
       - name: Prepare
         id: prep
-        run: |          
+        run: |
+          # creates local variable of docker image
+          
           # creates local variable of commit hash that triggered workflow
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
           
@@ -63,4 +65,3 @@ jobs:
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
-
