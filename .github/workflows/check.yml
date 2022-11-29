@@ -1,0 +1,38 @@
+name: Format, linter check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-fmt:
+    name: Run cargo fmt
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - uses: ./.github/actions/install_toolchain
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+  cargo-clippy:
+    name: Run cargo clippy
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - uses: ./.github/actions/install_toolchain
+      - name: Install clippy
+        run: rustup component add clippy
+      - name: Run cargo clippy for pallets
+        run: cargo clippy --all-targets -- -D warnings
+
+
+
