@@ -1,10 +1,8 @@
-name: Build and Test
+name: Format, linter check
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    types: [opened, synchronize, reopened]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -40,28 +38,5 @@ jobs:
       - name: Run cargo clippy for pallets
         run: cargo clippy --all-targets -- -D warnings
 
-  cargo-test:
-    name: Run cargo test
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master # https://github.com/easimon/maximize-build-space
-        with:
-          root-reserve-mb: 4096
-          temp-reserve-mb: 1024
-          swap-size-mb: 8192
-          remove-dotnet: "true"
-          remove-android: "true"
-          remove-haskell: "true"
-      - uses: actions/checkout@v3
-        with:
-          submodules: "true"
-      - uses: ./.github/actions/install_toolchain
-      - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace
-      - name: Show disk usage
-        if: always()
-        run: df -h
+
+
