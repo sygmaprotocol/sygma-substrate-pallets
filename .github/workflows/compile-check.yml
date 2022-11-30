@@ -1,4 +1,4 @@
-name: Pre-compile build
+name: Compile check
 
 on:
   pull_request:
