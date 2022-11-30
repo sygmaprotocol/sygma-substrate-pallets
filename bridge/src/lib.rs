@@ -136,7 +136,7 @@ pub mod pallet {
 			deposit_nonce: DepositNonce,
 		},
 		/// When user is going to retry a bridge transfer
-		/// args: [deposit_tx_hash, deposit_extrinsic_index, sender]
+		/// args: [deposit_on_block_height, deposit_extrinsic_index, sender]
 		Retry { deposit_on_block_height: u128, deposit_extrinsic_index: u128, sender: T::AccountId },
 		/// When bridge is paused
 		/// args: [dest_domain_id]
