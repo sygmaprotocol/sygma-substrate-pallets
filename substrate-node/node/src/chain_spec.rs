@@ -81,9 +81,9 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 
 	Ok(ChainSpec::from_genesis(
 		// Name
-		"Local Testnet",
+		"Sygma substrate pallet local Testnet",
 		// ID
-		"local_testnet",
+		"sygma_substrate_pallet_local_testnet",
 		ChainType::Local,
 		move || {
 			testnet_genesis(
@@ -115,7 +115,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		// Telemetry
 		None,
 		// Protocol ID
-		None,
+		Some("Sygma_substrate_pallet"),
 		// Properties
 		None,
 		None,

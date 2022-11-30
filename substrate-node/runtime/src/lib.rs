@@ -104,8 +104,8 @@ pub mod opaque {
 // https://docs.substrate.io/main-docs/build/upgrade#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("node-template"),
-	impl_name: create_runtime_str!("node-template"),
+	spec_name: create_runtime_str!("sygma-substrate-pallet"),
+	impl_name: create_runtime_str!("sygma-substrate-pallet"),
 	authoring_version: 1,
 	// The version of the runtime specification. A full node will not attempt to use its native
 	//   runtime in substitute for the on-chain Wasm runtime unless all of `spec_name`,
@@ -328,16 +328,26 @@ impl sygma_basic_feehandler::Config for Runtime {
 }
 
 parameter_types! {
+	// DestDomainID is the EVM chain domainID that runtime is bridging with
 	pub DestDomainID: DomainID = 1;
+	// TreasuryAccount is an substrate account and currently used for substrate -> EVM bridging fee collection
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
+	// BridgeAccount is an account for holding transferred asset collection
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	// DestDomainID is the EVM chainID that runtime is bridging with
 	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
+	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
+	// When relayers signing, this address will be included in the EIP712Domain
+	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
-	pub PhaLocation: MultiLocation = MultiLocation::here();
+	// NativeLocation is the representation of the current parachain's native asset location in substrate
+	pub NativeLocation: MultiLocation = MultiLocation::here();
+	// UsdcLocation is the representation of the USDC asset location in substrate
+	// USDC is a foreign asset, and it's located on Parachain 2004
 	pub UsdcLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
@@ -346,10 +356,16 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
-	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
+	// NativeResourceId is the resourceID that mapping with the current parachain native asset
+	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
+	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
+	// UsdcAssetId is the substrate assetID of USDC
 	pub UsdcAssetId: AssetId = 0;
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	// ResourcePairs is where all supported assets and their associated resourceID are binding
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	// SygmaBridgePalletId is the palletID
+	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
@@ -370,7 +386,7 @@ pub type CurrencyTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
-	IsConcrete<PhaLocation>,
+	IsConcrete<NativeLocation>,
 	// Convert an XCM MultiLocation into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -436,7 +452,7 @@ pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 pub struct ReserveChecker;
 impl IsReserved for ReserveChecker {
 	fn is_reserved(asset_id: &XcmAssetId) -> bool {
-		asset_id == &PhaLocation::get().into()
+		asset_id == &NativeLocation::get().into()
 	}
 }
 
