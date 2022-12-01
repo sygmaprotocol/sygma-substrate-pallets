@@ -347,7 +347,7 @@ parameter_types! {
 	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
 	pub NativeLocation: MultiLocation = MultiLocation::here();
 	// UsdcLocation is the representation of the USDC asset location in substrate
-	// USDC is a foreign asset, and it's located on Parachain 2004
+	// USDC is a foreign asset, and in our local testing env, it's being registered on Parachain 2004 with the following location
 	pub UsdcLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
