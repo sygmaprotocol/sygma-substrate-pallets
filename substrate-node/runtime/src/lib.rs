@@ -344,7 +344,7 @@ parameter_types! {
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
-	// NativeLocation is the representation of the current parachain's native asset location in substrate
+	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
 	pub NativeLocation: MultiLocation = MultiLocation::here();
 	// UsdcLocation is the representation of the USDC asset location in substrate
 	// USDC is a foreign asset, and it's located on Parachain 2004
