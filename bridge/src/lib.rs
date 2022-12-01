@@ -22,7 +22,7 @@ pub mod pallet {
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
-	use primitive_types::{H256, U256};
+	use primitive_types::U256;
 	use scale_info::TypeInfo;
 	use sp_io::{
 		crypto::secp256k1_ecdsa_recover_compressed,
@@ -136,8 +136,8 @@ pub mod pallet {
 			deposit_nonce: DepositNonce,
 		},
 		/// When user is going to retry a bridge transfer
-		/// args: [deposit_tx_hash, sender]
-		Retry { deposit_tx_hash: H256, sender: T::AccountId },
+		/// args: [deposit_on_block_height, deposit_extrinsic_index, sender]
+		Retry { deposit_on_block_height: u128, deposit_extrinsic_index: u128, sender: T::AccountId },
 		/// When bridge is paused
 		/// args: [dest_domain_id]
 		BridgePaused { dest_domain_id: DomainID },
@@ -337,14 +337,22 @@ pub mod pallet {
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
 		#[pallet::weight(195_000_000)]
 		#[transactional]
-		pub fn retry(origin: OriginFor<T>, hash: H256) -> DispatchResult {
+		pub fn retry(
+			origin: OriginFor<T>,
+			deposit_on_block_height: u128,
+			deposit_extrinsic_index: u128,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Emit retry event
-			Self::deposit_event(Event::<T>::Retry { deposit_tx_hash: hash, sender });
+			Self::deposit_event(Event::<T>::Retry {
+				deposit_on_block_height,
+				deposit_extrinsic_index,
+				sender,
+			});
 			Ok(())
 		}
 
@@ -616,7 +624,6 @@ pub mod pallet {
 			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
-		use primitive_types::H256;
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
@@ -1151,7 +1158,7 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc key is missing, should fail
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), H256([0u8; 32])),
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
 					bridge::Error::<Runtime>::MissingMpcKey
 				);
 
@@ -1162,7 +1169,7 @@ pub mod pallet {
 				// pause bridge and retry, should fail
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), H256([0u8; 32])),
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 
@@ -1171,9 +1178,10 @@ pub mod pallet {
 				assert!(!IsPaused::<Runtime>::get());
 
 				// retry again, should work
-				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), H256([0u8; 32])));
+				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
-					deposit_tx_hash: H256([0u8; 32]),
+					deposit_on_block_height: 1234567u128,
+					deposit_extrinsic_index: 1234u128,
 					sender: ALICE,
 				})]);
 			})
