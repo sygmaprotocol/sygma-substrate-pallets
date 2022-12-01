@@ -7,10 +7,10 @@ use sygma_traits::{
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, PalletInfoAccess},
+	traits::{AsEnsureOriginWithArg, ConstU32, PalletInfoAccess},
 	PalletId,
 };
-use frame_system::{self as system};
+use frame_system::{self as system, EnsureSigned};
 use polkadot_parachain::primitives::Sibling;
 use sp_core::hash::H256;
 use sp_runtime::{
@@ -119,6 +119,7 @@ impl pallet_assets::Config for Runtime {
 	type Balance = Balance;
 	type AssetId = AssetId;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId32>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = AssetDeposit;
 	type AssetAccountDeposit = AssetAccountDeposit;

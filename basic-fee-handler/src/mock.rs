@@ -8,9 +8,9 @@ use frame_support::{
 		traits::{BlakeTwo256, IdentityLookup},
 		AccountId32, Perbill,
 	},
-	traits::ConstU128,
+	traits::{AsEnsureOriginWithArg, ConstU128},
 };
-use frame_system::{self as system, EnsureRoot};
+use frame_system::{self as system, EnsureRoot, EnsureSigned};
 
 use crate as basic_fee_handler;
 
@@ -98,6 +98,7 @@ impl pallet_assets::Config for Test {
 	type Balance = Balance;
 	type AssetId = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId32>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = AssetDeposit;
 	type AssetAccountDeposit = ConstU128<10>;
