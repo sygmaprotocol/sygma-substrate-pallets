@@ -70,8 +70,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn has_access(sig: [u8; 4], caller: T::AccountId) -> bool {
-			// ExtrinsicAccess::<T>::get(&sig).is_some_and(|who| who == caller)
-			false
+			ExtrinsicAccess::<T>::get(&sig).map_or(false, |who| who == caller)
 		}
 	}
 }
