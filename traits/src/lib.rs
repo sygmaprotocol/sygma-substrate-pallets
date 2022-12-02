@@ -12,6 +12,13 @@ pub type ResourceId = [u8; 32];
 pub type ChainID = U256;
 pub type VerifyingContractAddress = H160;
 
+#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo)]
+pub enum TransferType {
+	FungibleTransfer,
+	NonFungibleTransfer,
+	GenericTransfer,
+}
+
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy)]
 pub struct MpcPubkey(pub [u8; 33]);
 
