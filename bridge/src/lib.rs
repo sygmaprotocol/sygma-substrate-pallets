@@ -35,7 +35,7 @@ pub mod pallet {
 	use sp_std::{convert::From, vec, vec::Vec};
 	use sygma_traits::{
 		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
-		ResourceId, VerifyingContractAddress,
+		ResourceId, TransferType, VerifyingContractAddress,
 	};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
@@ -114,7 +114,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
 		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
-		/// handler_response]
+		/// handler_response, transfer_type]
 		Deposit {
 			dest_domain_id: DomainID,
 			resource_id: ResourceId,
@@ -122,6 +122,7 @@ pub mod pallet {
 			sender: T::AccountId,
 			deposit_data: Vec<u8>,
 			handler_response: Vec<u8>,
+			transfer_type: TransferType,
 		},
 		/// When proposal was executed successfully
 		ProposalExecution {
@@ -274,10 +275,11 @@ pub mod pallet {
 			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
-			// Extract asset (MultiAsset) to get corresponding ResourceId and transfer amount
-			let (resource_id, amount) =
+			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
+			// transfer type
+			let (resource_id, amount, transfer_type) =
 				Self::extract_asset(&asset).ok_or(Error::<T>::AssetNotBound)?;
-			// Extract dest (MultiLocation) to get corresponding Etheruem recipient address
+			// Extract dest (MultiLocation) to get corresponding Ethereum recipient address
 			let recipient = T::ExtractRecipient::extract_recipient(&dest)
 				.ok_or(Error::<T>::ExtractRecipientFailed)?;
 			let fee = T::FeeHandler::get_fee(&asset.id).ok_or(Error::<T>::MissingFeeConfig)?;
@@ -329,6 +331,7 @@ pub mod pallet {
 				sender,
 				deposit_data: Self::create_deposit_data(amount - fee, recipient),
 				handler_response: vec![],
+				transfer_type,
 			});
 
 			Ok(())
@@ -495,12 +498,12 @@ pub mod pallet {
 
 		/// Extract asset id and transfer amount from `MultiAsset`, currently only fungible asset
 		/// are supported.
-		fn extract_asset(asset: &MultiAsset) -> Option<(ResourceId, u128)> {
+		fn extract_asset(asset: &MultiAsset) -> Option<(ResourceId, u128, TransferType)> {
 			match (&asset.fun, &asset.id) {
-				(Fungible(amount), _) => T::ResourcePairs::get()
-					.iter()
-					.position(|a| a.0 == asset.id)
-					.map(|idx| (T::ResourcePairs::get()[idx].1, *amount)),
+				(Fungible(amount), _) =>
+					T::ResourcePairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+						(T::ResourcePairs::get()[idx].1, *amount, TransferType::FungibleTransfer)
+					}),
 				_ => None,
 			}
 		}
@@ -627,7 +630,7 @@ pub mod pallet {
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
-		use sygma_traits::MpcPubkey;
+		use sygma_traits::{MpcPubkey, TransferType};
 		use xcm::latest::prelude::*;
 
 		#[test]
@@ -911,6 +914,7 @@ pub mod pallet {
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
+					transfer_type: TransferType::FungibleTransfer,
 				})]);
 			})
 		}
@@ -962,6 +966,7 @@ pub mod pallet {
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
+					transfer_type: TransferType::FungibleTransfer,
 				})]);
 			})
 		}
