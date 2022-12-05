@@ -17,6 +17,7 @@ sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkad
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 
 [features]
 default = ["std"]
