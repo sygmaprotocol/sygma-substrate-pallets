@@ -11,7 +11,7 @@ use frame_support::{
 };
 use frame_system::{self as system, EnsureRoot};
 
-use crate as access_segregator;
+use crate as sygma_access_segregator;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -29,7 +29,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		AccessSegregator: access_segregator::{Pallet, Call, Storage, Event<T>} = 2,
+		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 2,
 	}
 );
 
@@ -89,7 +89,7 @@ parameter_types! {
 	pub const PalletIndex: u8 = 2;
 }
 
-impl access_segregator::Config for Test {
+impl sygma_access_segregator::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = PalletIndex;

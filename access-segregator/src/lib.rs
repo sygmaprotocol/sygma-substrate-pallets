@@ -92,7 +92,7 @@ pub mod pallet {
 
 	#[cfg(test)]
 	mod test {
-		use crate as access_segregator;
+		use crate as sygma_access_segregator;
 		use crate::{
 			mock::{
 				assert_events, new_test_ext, AccessSegregator, PalletIndex, RuntimeEvent as Event,
@@ -108,7 +108,7 @@ pub mod pallet {
 				// (PalletIndex:get(), 0) indicates extrinsic: `grant_access` of this pallet
 				assert_noop!(
 					AccessSegregator::grant_access(Some(ALICE).into(), PalletIndex::get(), 0, BOB),
-					access_segregator::Error::<Test>::GrantAccessFailed
+					sygma_access_segregator::Error::<Test>::GrantAccessFailed
 				);
 				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
 				assert_ok!(AccessSegregator::grant_access(
