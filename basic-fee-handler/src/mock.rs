@@ -30,7 +30,8 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		BasicFeeHandler: basic_fee_handler::{Pallet, Call, Storage, Event<T>},
+		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 3,
+		BasicFeeHandler: basic_fee_handler::{Pallet, Call, Storage, Event<T>} = 4,
 	}
 );
 
@@ -111,9 +112,22 @@ impl pallet_assets::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	// Make sure put same value with `construct_runtime`
+	pub const AccessSegregatorPalletIndex: u8 = 3;
+	pub const FeeHandlerPalletIndex: u8 = 4;
+}
+
+impl sygma_access_segregator::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
+	type PalletIndex = AccessSegregatorPalletIndex;
+}
+
 impl basic_fee_handler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
+	type PalletIndex = FeeHandlerPalletIndex;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

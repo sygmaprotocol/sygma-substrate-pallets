@@ -17,6 +17,7 @@ xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "releas
 
 # Local
 sygma-traits = { path = "../traits", default-features = false }
+sygma-access-segregator = { path = "../access-segregator", default-features = false }
 
 [dev-dependencies]
 # Substrate
@@ -37,4 +38,5 @@ std = [
 	"xcm/std",
 	"xcm-builder/std",
     "sygma-traits/std",
+	"sygma-access-segregator/std",
 ]

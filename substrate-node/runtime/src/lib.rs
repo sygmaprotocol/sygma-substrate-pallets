@@ -327,9 +327,23 @@ impl pallet_assets::Config for Runtime {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	// Make sure put same value with `construct_runtime`
+	pub const AccessSegregatorPalletIndex: u8 = 9;
+	pub const FeeHandlerPalletIndex: u8 = 10;
+	pub const BridgePalletIndex: u8 = 11;
+}
+
+impl sygma_access_segregator::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type PalletIndex = AccessSegregatorPalletIndex;
+}
+
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type PalletIndex = FeeHandlerPalletIndex;
 }
 
 parameter_types! {
@@ -487,6 +501,7 @@ impl sygma_bridge::Config for Runtime {
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
 	type PalletId = SygmaBridgePalletId;
+	type PalletIndex = BridgePalletIndex;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -505,9 +520,10 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
-		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>},
-		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>},
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>} = 8,
+		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
+		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
+		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
 	}
 );
 

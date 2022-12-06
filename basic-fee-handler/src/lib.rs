@@ -28,11 +28,14 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + sygma_access_segregator::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Origin used to administer the pallet
 		type BridgeCommitteeOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Current pallet index defined in runtime
+		type PalletIndex: Get<u8>;
 	}
 
 	#[pallet::event]
@@ -47,6 +50,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Function unimplemented
 		Unimplemented,
+		/// Account has not gained access permission
+		AccessDenied,
 	}
 
 	#[pallet::call]
@@ -54,8 +59,20 @@ pub mod pallet {
 		/// Set bridge fee for a specific asset
 		#[pallet::weight(195_000_000)]
 		pub fn set_fee(origin: OriginFor<T>, asset: AssetId, amount: u128) -> DispatchResult {
-			// Ensure bridge committee
-			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permisson to set fee
+				let who = ensure_signed(origin)?;
+				// 0 is extrinsc index of `set_fee` by default
+				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(0);
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						extrinsic_index,
+						who
+					),
+					Error::<T>::AccessDenied
+				);
+			}
 
 			// Update asset fee
 			AssetFees::<T>::insert(&asset, amount);
@@ -79,10 +96,10 @@ pub mod pallet {
 		use crate as basic_fee_handler;
 		use crate::{AssetFees, Event as BasicFeeHandlerEvent};
 		use basic_fee_handler::mock::{
-			assert_events, new_test_ext, BasicFeeHandler, RuntimeEvent as Event,
-			RuntimeOrigin as Origin, Test, ALICE,
+			assert_events, new_test_ext, AccessSegregator, BasicFeeHandler, FeeHandlerPalletIndex,
+			RuntimeEvent as Event, RuntimeOrigin as Origin, Test, ALICE,
 		};
-		use frame_support::{assert_noop, assert_ok, sp_runtime::traits::BadOrigin};
+		use frame_support::{assert_noop, assert_ok};
 		use xcm::latest::{prelude::*, MultiLocation};
 
 		#[test]
@@ -112,7 +129,7 @@ pub mod pallet {
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
 					BasicFeeHandler::set_fee(unauthorized_account, asset_id_a.clone(), amount_a),
-					BadOrigin
+					basic_fee_handler::Error::<Test>::AccessDenied
 				);
 
 				assert_events(vec![
@@ -125,6 +142,30 @@ pub mod pallet {
 						amount: amount_b,
 					}),
 				]);
+			})
+		}
+
+		#[test]
+		fn access_control() {
+			new_test_ext().execute_with(|| {
+				let asset_id = Concrete(MultiLocation::new(0, Here));
+
+				assert_ok!(BasicFeeHandler::set_fee(Origin::root(), asset_id.clone(), 100),);
+				assert_noop!(
+					BasicFeeHandler::set_fee(Some(ALICE).into(), asset_id.clone(), 200),
+					basic_fee_handler::Error::<Test>::AccessDenied
+				);
+				// (FeeHandlerPalletIndex:get(), 0) indicates extrinsic: `set_fee` of this pallet
+				assert!(!AccessSegregator::has_access(FeeHandlerPalletIndex::get(), 0, ALICE));
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					FeeHandlerPalletIndex::get(),
+					0,
+					ALICE
+				));
+				assert!(AccessSegregator::has_access(FeeHandlerPalletIndex::get(), 0, ALICE));
+				assert_ok!(BasicFeeHandler::set_fee(Some(ALICE).into(), asset_id.clone(), 200),);
+				assert_eq!(AssetFees::<Test>::get(asset_id).unwrap(), 200);
 			})
 		}
 	}
