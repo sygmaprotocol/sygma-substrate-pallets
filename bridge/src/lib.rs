@@ -1377,6 +1377,9 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 
+				// `set_extrinsic_index` only used for unit test env to set current executing
+				// extrinsic index mannually.
+
 				frame_system::Pallet::<Runtime>::set_extrinsic_index(2);
 				assert_noop!(
 					SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key),

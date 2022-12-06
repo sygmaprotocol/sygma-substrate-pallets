@@ -15,6 +15,7 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 	/// Mapping signature of extrinsic to account has access
+	/// (pallet_index, extrinsic_index) => account
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_access)]
 	pub type ExtrinsicAccess<T: Config> = StorageMap<_, Twox64Concat, (u8, u32), T::AccountId>;
