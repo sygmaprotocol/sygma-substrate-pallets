@@ -20,6 +20,7 @@ pub(crate) type Balance = u128;
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
+pub const CHARLIE: AccountId32 = AccountId32::new([2u8; 32]);
 
 frame_support::construct_runtime!(
 	pub enum Test where
