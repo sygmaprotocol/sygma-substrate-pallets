@@ -141,15 +141,10 @@ pub mod pallet {
 		}
 
 		#[test]
-		fn should_not_work_but_works() {
+		fn pure_grant_access_test() {
 			new_test_ext().execute_with(|| {
-				println!("ALICE: {ALICE:?}");
-				println!("BOB: {BOB:?}");
-				println!("CHARLIE: {CHARLIE:?}");
-
-				// ALICE grants BOB access, should fail because in ExtrinsicAccess,
-				// there is no value for key == (T::PalletIndex::get(), 0) at this moment
-				// should get GrantAccessFailed error
+				// ALICE grants BOB access, should fail because AlICE does not have access to
+				// extrinsic 0 yet should get GrantAccessFailed error
 				assert_noop!(
 					AccessSegregator::grant_access(Some(ALICE).into(), PalletIndex::get(), 0, BOB),
 					sygma_access_segregator::Error::<Test>::GrantAccessFailed
@@ -158,7 +153,8 @@ pub mod pallet {
 				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
 				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
 
-				// Root origin grants access to BOB, not ALICE
+				// Root origin grants access to BOB of the access extrinsic 0, not ALICE
+				// so that BOB is able to grant other accounts just like Root origin
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					PalletIndex::get(),
@@ -169,40 +165,36 @@ pub mod pallet {
 				assert!(AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
 				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
 
-				// At this moment, there is value for key == (T::PalletIndex::get(), 0) in
-				// ExtrinsicAccess so anyone is able to grant any extrinsic access to anybody
-
-				// ALICE grants access to CHARLIE
+				// BOB grants access to CHARLIE of access to extrinsic 100, should work
+				// check if CHARLIE already has access to extrinsic 100
+				assert!(!AccessSegregator::has_access(PalletIndex::get(), 100, CHARLIE));
 				assert_ok!(AccessSegregator::grant_access(
-					Some(ALICE).into(),
-					PalletIndex::get(),
-					0,
-					CHARLIE
-				));
-				// Now CHARLIE has access of 0 extrinsic but BOB not
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 0, CHARLIE));
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
-
-				// ALICE grants access to CHARLIE with access of extrinsic 100
-				assert_ok!(AccessSegregator::grant_access(
-					Some(ALICE).into(),
+					Some(BOB).into(),
 					PalletIndex::get(),
 					100,
 					CHARLIE
 				));
-				// Now CHARLIE has access to extrinsic 100 but BOB not
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 100, CHARLIE));
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 100, BOB));
+				// BOB has access of extrinsic 0
+				assert!(AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
 
-				// BOB grants access to CHARLIE with access of extrinsic 999
-				assert_ok!(AccessSegregator::grant_access(
-					Some(BOB).into(),
-					PalletIndex::get(),
-					999,
-					CHARLIE
-				));
-				// Now CHARLIE has access to extrinsic 999
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 999, CHARLIE));
+				// CHARLIE should not have access to any extrinsic other then extrinsic 100
+				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, CHARLIE));
+				assert!(!AccessSegregator::has_access(PalletIndex::get(), 999, CHARLIE));
+				assert!(AccessSegregator::has_access(PalletIndex::get(), 100, CHARLIE));
+
+				// AlICE does not have access to extrinsic 100 at this moment
+				assert!(!AccessSegregator::has_access(PalletIndex::get(), 100, ALICE));
+				// Since CHARLIE has the access to extrinsic 100, CHARLIE tries to grant access to
+				// ALICE of extrinsic 100, should not work
+				assert_noop!(
+					AccessSegregator::grant_access(
+						Some(CHARLIE).into(),
+						PalletIndex::get(),
+						100,
+						ALICE
+					),
+					sygma_access_segregator::Error::<Test>::GrantAccessFailed
+				);
 			})
 		}
 	}
