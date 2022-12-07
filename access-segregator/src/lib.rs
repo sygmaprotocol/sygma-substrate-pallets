@@ -70,7 +70,7 @@ pub mod pallet {
 				// 0 is extrinsc index of `grant_access` by default
 				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(0);
 				ensure!(
-					ExtrinsicAccess::<T>::get((T::PalletIndex::get(), extrinsic_index)).is_some(),
+					Self::has_access(T::PalletIndex::get(), extrinsic_index, who),
 					Error::<T>::GrantAccessFailed
 				);
 			}
