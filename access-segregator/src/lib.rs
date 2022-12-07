@@ -2,7 +2,7 @@
 
 pub use self::pallet::*;
 
-// #[cfg(test)]
+#[cfg(test)]
 mod mock;
 
 #[allow(unused_variables)]
