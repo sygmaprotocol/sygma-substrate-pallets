@@ -40,3 +40,8 @@ pub trait FeeHandler: Sized {
 	// Return fee represent by a specific asset
 	fn get_fee(asset_id: &AssetId) -> Option<u128>;
 }
+
+pub trait PauseStatus {
+	// Return the current bridge pause status
+	fn is_paused() -> bool;
+}

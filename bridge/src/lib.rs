@@ -2,18 +2,18 @@
 
 extern crate alloc;
 
+pub use self::pallet::*;
+
 mod eip712;
 #[cfg(test)]
 mod mock;
-
-pub use self::pallet::*;
 
 #[allow(unused_variables)]
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::eip712;
 	use alloc::string::String;
+
 	use codec::{Decode, Encode};
 	use eth_encode_packed::{abi::encode_packed, SolidityDataType};
 	use ethabi::{encode as abi_encode, token::Token};
@@ -33,12 +33,15 @@ pub mod pallet {
 		RuntimeDebug,
 	};
 	use sp_std::{convert::From, vec, vec::Vec};
-	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
-		ResourceId, TransferType, VerifyingContractAddress,
-	};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
+
+	use sygma_traits::{
+		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
+		PauseStatus, ResourceId, TransferType, VerifyingContractAddress,
+	};
+
+	use crate::eip712;
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
@@ -53,7 +56,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
@@ -92,6 +95,9 @@ pub mod pallet {
 		/// Fee information getter
 		type FeeHandler: FeeHandler;
 
+		/// Pause status getter
+		type PauseStatus: PauseStatus;
+
 		/// Implementation of withdraw and deposit an asset.
 		type AssetTransactor: TransactAsset;
 
@@ -110,7 +116,7 @@ pub mod pallet {
 
 	#[allow(dead_code)]
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
 		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
@@ -411,6 +417,14 @@ pub mod pallet {
 		}
 	}
 
+	pub struct PauseStatusImpl<T>(PhantomData<T>);
+
+	impl<T: Config> PauseStatus for PauseStatusImpl<T> {
+		fn is_paused() -> bool {
+			IsPaused::<T>::get()
+		}
+	}
+
 	impl<T: Config> Pallet<T>
 	where
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
@@ -614,14 +628,6 @@ pub mod pallet {
 
 	#[cfg(test)]
 	mod test {
-		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey, Proposal};
-		use bridge::mock::{
-			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
-			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
-			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
-			UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
-		};
 		use codec::Encode;
 		use frame_support::{
 			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
@@ -630,8 +636,18 @@ pub mod pallet {
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
-		use sygma_traits::{MpcPubkey, TransferType};
 		use xcm::latest::prelude::*;
+
+		use bridge::mock::{
+			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
+			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
+			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
+			UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
+		};
+		use sygma_traits::{MpcPubkey, TransferType};
+
+		use crate as bridge;
+		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey, Proposal};
 
 		#[test]
 		fn set_mpc_key() {
@@ -1331,6 +1347,25 @@ pub mod pallet {
 				));
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + amount);
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), amount);
+			})
+		}
+
+		#[test]
+		fn get_bridge_pause_status() {
+			new_test_ext().execute_with(|| {
+				assert!(!SygmaBridge::is_paused());
+
+				// set mpc key
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+
+				// pause bridge
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert!(SygmaBridge::is_paused());
+
+				// unpause bridge
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert!(!SygmaBridge::is_paused());
 			})
 		}
 	}
