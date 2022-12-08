@@ -332,6 +332,9 @@ impl sygma_basic_feehandler::Config for Runtime {
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 }
 
+// This address is defined in the substrate E2E test of sygma-relayer
+const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
+
 parameter_types! {
 	// DestDomainID is the EVM chain domainID that runtime is bridging with
 	pub DestDomainID: DomainID = 1;
@@ -344,7 +347,7 @@ parameter_types! {
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
 	// When relayers signing, this address will be included in the EIP712Domain
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
-	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160::from_slice(DEST_VERIFYING_CONTRACT_ADDRESS.as_bytes());
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
@@ -547,6 +550,7 @@ pub type Executive = frame_executive::Executive<
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
+extern crate alloc;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
