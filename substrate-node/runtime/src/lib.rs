@@ -22,7 +22,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity},
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
+use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -332,12 +332,20 @@ parameter_types! {
 	pub const AccessSegregatorPalletIndex: u8 = 9;
 	pub const FeeHandlerPalletIndex: u8 = 10;
 	pub const BridgePalletIndex: u8 = 11;
+	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
+		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
+		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(BridgePalletIndex::get(), b"set_mpc_key".to_vec()),
+		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+	].to_vec();
 }
 
 impl sygma_access_segregator::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = AccessSegregatorPalletIndex;
+	type Extrinsics = RegisteredExtrinsics;
 }
 
 impl sygma_basic_feehandler::Config for Runtime {

@@ -145,12 +145,20 @@ parameter_types! {
 	pub const AccessSegregatorPalletIndex: u8 = 4;
 	pub const FeeHandlerPalletIndex: u8 = 5;
 	pub const BridgePalletIndex: u8 = 6;
+	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
+		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
+		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(BridgePalletIndex::get(), b"set_mpc_key".to_vec()),
+		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+	].to_vec();
 }
 
 impl sygma_access_segregator::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = AccessSegregatorPalletIndex;
+	type Extrinsics = RegisteredExtrinsics;
 }
 
 impl sygma_basic_feehandler::Config for Runtime {

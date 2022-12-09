@@ -11,14 +11,15 @@ mod mock;
 pub mod pallet {
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
 	use frame_system::pallet_prelude::*;
+	use sp_std::vec::Vec;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 	/// Mapping signature of extrinsic to account has access
-	/// (pallet_index, extrinsic_index) => account
+	/// (pallet_index, extrinsic_name) => account
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_access)]
-	pub type ExtrinsicAccess<T: Config> = StorageMap<_, Twox64Concat, (u8, u32), T::AccountId>;
+	pub type ExtrinsicAccess<T: Config> = StorageMap<_, Twox64Concat, (u8, Vec<u8>), T::AccountId>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -35,14 +36,18 @@ pub mod pallet {
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;
+
+		/// Registered extrinsics
+		/// List of (pallet_index, extrinsic_name)
+		type Extrinsics: Get<Vec<(u8, Vec<u8>)>>;
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Extrinsic access grant to someone
-		/// args: [pallet_index, extrinsic_index, who]
-		AccessGranted { pallet_index: u8, extrinsic_index: u32, who: T::AccountId },
+		/// args: [pallet_index, extrinsic_name, who]
+		AccessGranted { pallet_index: u8, extrinsic_name: Vec<u8>, who: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -60,34 +65,39 @@ pub mod pallet {
 		pub fn grant_access(
 			origin: OriginFor<T>,
 			pallet_index: u8,
-			extrinsic_index: u32,
+			extrinsic_name: Vec<u8>,
 			who: T::AccountId,
 		) -> DispatchResult {
 			// Ensure bridge committee or the account that has permisson to grant access to an
 			// extrinsic
 			if T::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				let who = ensure_signed(origin)?;
-				// 0 is extrinsc index of `grant_access` by default
-				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(0);
 				ensure!(
-					Self::has_access(T::PalletIndex::get(), extrinsic_index, who),
+					Self::has_access(T::PalletIndex::get(), b"grant_access".to_vec(), who),
 					Error::<T>::GrantAccessFailed
 				);
 			}
 
 			// Apply access
-			ExtrinsicAccess::<T>::insert((pallet_index, extrinsic_index), &who);
+			ExtrinsicAccess::<T>::insert((pallet_index, extrinsic_name.clone()), &who);
 
 			// Emit AccessGranted event
-			Self::deposit_event(Event::AccessGranted { pallet_index, extrinsic_index, who });
+			Self::deposit_event(Event::AccessGranted { pallet_index, extrinsic_name, who });
 			Ok(())
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn has_access(pallet_index: u8, extrinsic_index: u32, caller: T::AccountId) -> bool {
-			ExtrinsicAccess::<T>::get((pallet_index, extrinsic_index))
-				.map_or(false, |who| who == caller)
+		pub fn has_access(pallet_index: u8, extrinsic_name: Vec<u8>, caller: T::AccountId) -> bool {
+			Self::has_registered(pallet_index, extrinsic_name.clone()) &&
+				ExtrinsicAccess::<T>::get((pallet_index, extrinsic_name))
+					.map_or(false, |who| who == caller)
+		}
+
+		pub fn has_registered(pallet_index: u8, extrinsic_name: Vec<u8>) -> bool {
+			T::Extrinsics::get()
+				.iter()
+				.any(|e| e == &(pallet_index, extrinsic_name.clone()))
 		}
 	}
 
@@ -106,34 +116,60 @@ pub mod pallet {
 		#[test]
 		fn should_work() {
 			new_test_ext().execute_with(|| {
-				// (PalletIndex:get(), 0) indicates extrinsic: `grant_access` of this pallet
 				assert_noop!(
-					AccessSegregator::grant_access(Some(ALICE).into(), PalletIndex::get(), 0, BOB),
+					AccessSegregator::grant_access(
+						Some(ALICE).into(),
+						PalletIndex::get(),
+						b"grant_access".to_vec(),
+						BOB
+					),
 					sygma_access_segregator::Error::<Test>::GrantAccessFailed
 				);
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					ALICE
+				));
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					PalletIndex::get(),
-					0,
+					b"grant_access".to_vec(),
 					ALICE
 				));
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					ALICE
+				));
 
-				// ALICE grants access permission to BOB for an extrinsic (100, 100)
-				assert_ok!(AccessSegregator::grant_access(Some(ALICE).into(), 100, 100, BOB));
-				assert!(!AccessSegregator::has_access(100, 100, ALICE));
-				assert!(AccessSegregator::has_access(100, 100, BOB));
+				// ALICE grants access permission to BOB for an extrinsic (PalletIndex::get(),
+				// "unknown_extrinsic")
+				assert_ok!(AccessSegregator::grant_access(
+					Some(ALICE).into(),
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					BOB
+				));
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					ALICE
+				));
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					BOB
+				));
 
 				assert_events(vec![
 					Event::AccessSegregator(AccessSegregatorEvent::AccessGranted {
 						pallet_index: PalletIndex::get(),
-						extrinsic_index: 0,
+						extrinsic_name: b"grant_access".to_vec(),
 						who: ALICE,
 					}),
 					Event::AccessSegregator(AccessSegregatorEvent::AccessGranted {
-						pallet_index: 100,
-						extrinsic_index: 100,
+						pallet_index: PalletIndex::get(),
+						extrinsic_name: b"unknown_extrinsic".to_vec(),
 						who: BOB,
 					}),
 				]);
@@ -146,51 +182,99 @@ pub mod pallet {
 				// ALICE grants BOB access, should fail because AlICE does not have access to
 				// extrinsic 0 yet should get GrantAccessFailed error
 				assert_noop!(
-					AccessSegregator::grant_access(Some(ALICE).into(), PalletIndex::get(), 0, BOB),
+					AccessSegregator::grant_access(
+						Some(ALICE).into(),
+						PalletIndex::get(),
+						b"grant_access".to_vec(),
+						BOB
+					),
 					sygma_access_segregator::Error::<Test>::GrantAccessFailed
 				);
 				// neither ALICE nor BOB should have the access
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					ALICE
+				));
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					BOB
+				));
 
-				// Root origin grants access to BOB of the access extrinsic 0, not ALICE
-				// so that BOB is able to grant other accounts just like Root origin
+				// Root origin grants access to BOB of the access extrinsic `grant_access`, not
+				// ALICE so that BOB is able to grant other accounts just like Root origin
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					PalletIndex::get(),
-					0,
+					b"grant_access".to_vec(),
 					BOB
 				));
 				// BOB has access, but ALICE does not
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, ALICE));
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					BOB
+				));
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					ALICE
+				));
 
-				// BOB grants access to CHARLIE of access to extrinsic 100, should work
-				// check if CHARLIE already has access to extrinsic 100
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 100, CHARLIE));
+				// BOB grants access to CHARLIE of access to extrinsic `unknown_extrinsic`, should
+				// work check if CHARLIE already has access to extrinsic unknown_extrinsic
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					CHARLIE
+				));
 				assert_ok!(AccessSegregator::grant_access(
 					Some(BOB).into(),
 					PalletIndex::get(),
-					100,
+					b"unknown_extrinsic".to_vec(),
 					CHARLIE
 				));
-				// BOB has access of extrinsic 0
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 0, BOB));
 
-				// CHARLIE should not have access to any extrinsic other then extrinsic 100
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 0, CHARLIE));
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 999, CHARLIE));
-				assert!(AccessSegregator::has_access(PalletIndex::get(), 100, CHARLIE));
+				// BOB has access of extrinsic `grant_access`
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					BOB
+				));
 
-				// AlICE does not have access to extrinsic 100 at this moment
-				assert!(!AccessSegregator::has_access(PalletIndex::get(), 100, ALICE));
-				// Since CHARLIE has the access to extrinsic 100, CHARLIE tries to grant access to
-				// ALICE of extrinsic 100, should not work
+				// CHARLIE should not have access to any extrinsic other then extrinsic
+				// `unknown_extrinsic`
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					CHARLIE
+				));
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic2".to_vec(),
+					CHARLIE
+				));
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					CHARLIE
+				));
+
+				// AlICE does not have access to extrinsic `unknown_extrinsic` at this moment
+				assert!(!AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					ALICE
+				));
+				// Since CHARLIE has the access to extrinsic `unknown_extrinsic`, not extrinsic
+				// `grant_access`, CHARLIE tries to grant access to ALICE of extrinsic
+				// `unknown_extrinsic`, should not work
 				assert_noop!(
 					AccessSegregator::grant_access(
 						Some(CHARLIE).into(),
 						PalletIndex::get(),
-						100,
+						b"unknown_extrinsic".to_vec(),
 						ALICE
 					),
 					sygma_access_segregator::Error::<Test>::GrantAccessFailed

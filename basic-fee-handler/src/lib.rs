@@ -62,12 +62,10 @@ pub mod pallet {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to set fee
 				let who = ensure_signed(origin)?;
-				// 0 is extrinsc index of `set_fee` by default
-				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(0);
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
-						extrinsic_index,
+						b"set_fee".to_vec(),
 						who
 					),
 					Error::<T>::AccessDenied
@@ -156,14 +154,22 @@ pub mod pallet {
 					basic_fee_handler::Error::<Test>::AccessDenied
 				);
 				// (FeeHandlerPalletIndex:get(), 0) indicates extrinsic: `set_fee` of this pallet
-				assert!(!AccessSegregator::has_access(FeeHandlerPalletIndex::get(), 0, ALICE));
+				assert!(!AccessSegregator::has_access(
+					FeeHandlerPalletIndex::get(),
+					b"set_fee".to_vec(),
+					ALICE
+				));
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					FeeHandlerPalletIndex::get(),
-					0,
+					b"set_fee".to_vec(),
 					ALICE
 				));
-				assert!(AccessSegregator::has_access(FeeHandlerPalletIndex::get(), 0, ALICE));
+				assert!(AccessSegregator::has_access(
+					FeeHandlerPalletIndex::get(),
+					b"set_fee".to_vec(),
+					ALICE
+				));
 				assert_ok!(BasicFeeHandler::set_fee(Some(ALICE).into(), asset_id.clone(), 200),);
 				assert_eq!(AssetFees::<Test>::get(asset_id).unwrap(), 200);
 			})

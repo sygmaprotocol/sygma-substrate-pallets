@@ -221,12 +221,10 @@ pub mod pallet {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to pause bridge
 				let who = ensure_signed(origin)?;
-				// 0 is extrinsc index of `pause_bridge` by default
-				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(0);
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
-						extrinsic_index,
+						b"pause_bridge".to_vec(),
 						who
 					),
 					Error::<T>::AccessDenied
@@ -249,12 +247,10 @@ pub mod pallet {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to unpause bridge
 				let who = ensure_signed(origin)?;
-				// 1 is extrinsc index of `unpause_bridge` by default
-				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(1);
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
-						extrinsic_index,
+						b"unpause_bridge".to_vec(),
 						who
 					),
 					Error::<T>::AccessDenied
@@ -280,12 +276,10 @@ pub mod pallet {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to set mpc key
 				let who = ensure_signed(origin)?;
-				// 2 is extrinsc index of `set_mpc_key` by default
-				let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(2);
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
-						extrinsic_index,
+						b"set_mpc_key".to_vec(),
 						who
 					),
 					Error::<T>::AccessDenied
@@ -1377,20 +1371,14 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
 
-				// `set_extrinsic_index` only used for unit test env to set current executing
-				// extrinsic index mannually.
-
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(2);
 				assert_noop!(
 					SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(0);
 				assert_noop!(
 					SygmaBridge::pause_bridge(Some(BOB).into()),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(1);
 				assert_noop!(
 					SygmaBridge::unpause_bridge(Some(BOB).into()),
 					bridge::Error::<Runtime>::AccessDenied
@@ -1400,23 +1388,20 @@ pub mod pallet {
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					BridgePalletIndex::get(),
-					// extrinsic index of `set_mpc_key`
-					2,
+					b"set_mpc_key".to_vec(),
 					ALICE
 				));
 				// Grant BOB the access of `pause_bridge` and `unpause_bridge`
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					BridgePalletIndex::get(),
-					// extrinsic index of `pause_bridge`
-					0,
+					b"pause_bridge".to_vec(),
 					BOB
 				));
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					BridgePalletIndex::get(),
-					// extrinsic index of `unpause_bridge`
-					1,
+					b"unpause_bridge".to_vec(),
 					BOB
 				));
 
@@ -1430,20 +1415,16 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key));
 
 				// ALICE pause&unpause bridge shold still failed
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(0);
 				assert_noop!(
 					SygmaBridge::pause_bridge(Some(ALICE).into()),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(1);
 				assert_noop!(
 					SygmaBridge::unpause_bridge(Some(ALICE).into()),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				// BOB pause&unpause bridge shold work
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(0);
 				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into()));
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(1);
 				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into()));
 			})
 		}

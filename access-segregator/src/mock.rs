@@ -88,12 +88,18 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	// Make sure put same value with `construct_runtime`
 	pub const PalletIndex: u8 = 2;
+	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
+		(PalletIndex::get(), b"grant_access".to_vec()),
+		(PalletIndex::get(), b"unknown_extrinsic".to_vec()),
+		(PalletIndex::get(), b"unknown_extrinsic2".to_vec()),
+	].to_vec();
 }
 
 impl sygma_access_segregator::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = PalletIndex;
+	type Extrinsics = RegisteredExtrinsics;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
