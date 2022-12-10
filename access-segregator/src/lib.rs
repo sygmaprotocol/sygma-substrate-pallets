@@ -179,8 +179,8 @@ pub mod pallet {
 		#[test]
 		fn pure_grant_access_test() {
 			new_test_ext().execute_with(|| {
-				// ALICE grants BOB access, should fail because AlICE does not have access to
-				// extrinsic 0 yet should get GrantAccessFailed error
+				// ALICE grants BOB access, should fail because ALICE does not have access to
+				// extrinsic 'grant_access' yet, should get GrantAccessFailed error
 				assert_noop!(
 					AccessSegregator::grant_access(
 						Some(ALICE).into(),

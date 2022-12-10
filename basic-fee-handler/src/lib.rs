@@ -153,7 +153,8 @@ pub mod pallet {
 					BasicFeeHandler::set_fee(Some(ALICE).into(), asset_id.clone(), 200),
 					basic_fee_handler::Error::<Test>::AccessDenied
 				);
-				// (FeeHandlerPalletIndex:get(), 0) indicates extrinsic: `set_fee` of this pallet
+				// (FeeHandlerPalletIndex:get(), b"set_fee") indicates extrinsic: `set_fee` of this
+				// pallet
 				assert!(!AccessSegregator::has_access(
 					FeeHandlerPalletIndex::get(),
 					b"set_fee".to_vec(),

@@ -332,6 +332,8 @@ parameter_types! {
 	pub const AccessSegregatorPalletIndex: u8 = 9;
 	pub const FeeHandlerPalletIndex: u8 = 10;
 	pub const BridgePalletIndex: u8 = 11;
+	// RegisteredExtrinsics here registers all valid (pallet index, extrinsic_name) paris
+	// make sure to update this when adding new access control extrinsic
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
 		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
