@@ -1406,7 +1406,6 @@ pub mod pallet {
 				));
 
 				// BOB set mpc key should still failed
-				frame_system::Pallet::<Runtime>::set_extrinsic_index(2);
 				assert_noop!(
 					SygmaBridge::set_mpc_key(Some(BOB).into(), test_mpc_key),
 					bridge::Error::<Runtime>::AccessDenied
