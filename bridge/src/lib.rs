@@ -59,7 +59,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + sygma_access_segregator::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Origin used to administer the pallet
@@ -106,6 +106,9 @@ pub mod pallet {
 
 		/// Config ID for the current pallet instance
 		type PalletId: Get<PalletId>;
+
+		/// Current pallet index defined in runtime
+		type PalletIndex: Get<u8>;
 	}
 
 	#[allow(dead_code)]
@@ -149,6 +152,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		/// Account has not gained access permission
+		AccessDenied,
 		/// Protected operation, must be performed by relayer
 		BadMpcSignature,
 		/// Insufficient balance on sender account
@@ -214,9 +219,18 @@ pub mod pallet {
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
 		#[pallet::weight(195_000_000)]
 		pub fn pause_bridge(origin: OriginFor<T>) -> DispatchResult {
-			// Ensure bridge committee
-			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
-
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permisson to pause bridge
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"pause_bridge".to_vec(),
+						who
+					),
+					Error::<T>::AccessDenied
+				);
+			}
 			// make sure MPC key is set up
 			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 
@@ -231,9 +245,18 @@ pub mod pallet {
 		/// Unpause bridge.
 		#[pallet::weight(195_000_000)]
 		pub fn unpause_bridge(origin: OriginFor<T>) -> DispatchResult {
-			// Ensure bridge committee
-			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
-
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permisson to unpause bridge
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"unpause_bridge".to_vec(),
+						who
+					),
+					Error::<T>::AccessDenied
+				);
+			}
 			// make sure MPC key is set up
 			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
 
@@ -251,9 +274,18 @@ pub mod pallet {
 		/// Mark an ECDSA public key as a MPC account.
 		#[pallet::weight(195_000_000)]
 		pub fn set_mpc_key(origin: OriginFor<T>, _key: MpcPubkey) -> DispatchResult {
-			// Ensure bridge committee
-			T::BridgeCommitteeOrigin::ensure_origin(origin)?;
-
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permisson to set mpc key
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"set_mpc_key".to_vec(),
+						who
+					),
+					Error::<T>::AccessDenied
+				);
+			}
 			// Cannot set MPC key is it's already set
 			ensure!(MpcKey::<T>::get().is_clear(), Error::<T>::MpcKeyNotUpdatable);
 
@@ -617,15 +649,14 @@ pub mod pallet {
 		use crate as bridge;
 		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey, Proposal};
 		use bridge::mock::{
-			assert_events, new_test_ext, Assets, Balances, BridgeAccount, DestDomainID,
-			PhaLocation, PhaResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin,
-			SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount, UsdcAssetId, UsdcLocation,
-			UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
+			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
+			BridgePalletIndex, DestDomainID, PhaLocation, PhaResourceId, Runtime, RuntimeEvent,
+			RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount,
+			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
 		};
 		use codec::Encode;
 		use frame_support::{
-			assert_noop, assert_ok, sp_runtime::traits::BadOrigin,
-			traits::tokens::fungibles::Create as FungibleCerate,
+			assert_noop, assert_ok, traits::tokens::fungibles::Create as FungibleCerate,
 		};
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
@@ -656,7 +687,7 @@ pub mod pallet {
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
 					SygmaBridge::set_mpc_key(unauthorized_account, test_mpc_key_a),
-					BadOrigin
+					bridge::Error::<Runtime>::AccessDenied
 				);
 				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
 			})
@@ -696,7 +727,10 @@ pub mod pallet {
 
 				// permission test: unauthorized account should not be able to pause bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
-				assert_noop!(SygmaBridge::pause_bridge(unauthorized_account), BadOrigin);
+				assert_noop!(
+					SygmaBridge::pause_bridge(unauthorized_account),
+					bridge::Error::<Runtime>::AccessDenied
+				);
 				assert!(IsPaused::<Runtime>::get());
 			})
 		}
@@ -741,7 +775,10 @@ pub mod pallet {
 				// permission test: unauthorized account should not be able to unpause a recognized
 				// bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
-				assert_noop!(SygmaBridge::unpause_bridge(unauthorized_account), BadOrigin);
+				assert_noop!(
+					SygmaBridge::unpause_bridge(unauthorized_account),
+					bridge::Error::<Runtime>::AccessDenied
+				);
 				assert!(!IsPaused::<Runtime>::get());
 			})
 		}
@@ -1331,6 +1368,68 @@ pub mod pallet {
 				));
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + amount);
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), amount);
+			})
+		}
+
+		#[test]
+		fn access_control() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+
+				assert_noop!(
+					SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+				assert_noop!(
+					SygmaBridge::pause_bridge(Some(BOB).into()),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+				assert_noop!(
+					SygmaBridge::unpause_bridge(Some(BOB).into()),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+
+				// Grant ALICE the access of `set_mpc_key`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"set_mpc_key".to_vec(),
+					ALICE
+				));
+				// Grant BOB the access of `pause_bridge` and `unpause_bridge`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"pause_bridge".to_vec(),
+					BOB
+				));
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"unpause_bridge".to_vec(),
+					BOB
+				));
+
+				// BOB set mpc key should still failed
+				assert_noop!(
+					SygmaBridge::set_mpc_key(Some(BOB).into(), test_mpc_key),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+				// ALICE set mpc key shold work
+				assert_ok!(SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key));
+
+				// ALICE pause&unpause bridge shold still failed
+				assert_noop!(
+					SygmaBridge::pause_bridge(Some(ALICE).into()),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+				assert_noop!(
+					SygmaBridge::unpause_bridge(Some(ALICE).into()),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+				// BOB pause&unpause bridge shold work
+				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into()));
+				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into()));
 			})
 		}
 	}

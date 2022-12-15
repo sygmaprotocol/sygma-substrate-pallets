@@ -22,7 +22,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity},
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
+use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -327,9 +327,33 @@ impl pallet_assets::Config for Runtime {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	// Make sure put same value with `construct_runtime`
+	pub const AccessSegregatorPalletIndex: u8 = 9;
+	pub const FeeHandlerPalletIndex: u8 = 10;
+	pub const BridgePalletIndex: u8 = 11;
+	// RegisteredExtrinsics here registers all valid (pallet index, extrinsic_name) paris
+	// make sure to update this when adding new access control extrinsic
+	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
+		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
+		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(BridgePalletIndex::get(), b"set_mpc_key".to_vec()),
+		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+	].to_vec();
+}
+
+impl sygma_access_segregator::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type PalletIndex = AccessSegregatorPalletIndex;
+	type Extrinsics = RegisteredExtrinsics;
+}
+
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type PalletIndex = FeeHandlerPalletIndex;
 }
 
 parameter_types! {
@@ -487,6 +511,7 @@ impl sygma_bridge::Config for Runtime {
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
 	type PalletId = SygmaBridgePalletId;
+	type PalletIndex = BridgePalletIndex;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -505,9 +530,10 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
-		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>},
-		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>},
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>} = 8,
+		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
+		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
+		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
 	}
 );
 

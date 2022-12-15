@@ -8,11 +8,10 @@ use frame_support::{
 		traits::{BlakeTwo256, IdentityLookup},
 		AccountId32, Perbill,
 	},
-	traits::{AsEnsureOriginWithArg, ConstU128},
 };
-use frame_system::{self as system, EnsureRoot, EnsureSigned};
+use frame_system::{self as system, EnsureRoot};
 
-use crate as basic_fee_handler;
+use crate as sygma_access_segregator;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -20,6 +19,8 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub(crate) type Balance = u128;
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
+pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
+pub const CHARLIE: AccountId32 = AccountId32::new([2u8; 32]);
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -28,10 +29,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 3,
-		BasicFeeHandler: basic_fee_handler::{Pallet, Call, Storage, Event<T>} = 4,
+		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 2,
 	}
 );
 
@@ -87,52 +86,20 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub const AssetDeposit: Balance = 1; // 1 Unit deposit to create asset
-	pub const ApprovalDeposit: Balance = 1;
-	pub const AssetsStringLimit: u32 = 50;
-	pub const MetadataDepositBase: Balance = 1;
-	pub const MetadataDepositPerByte: Balance = 1;
-}
-
-impl pallet_assets::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type Balance = Balance;
-	type AssetId = u32;
-	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId32>>;
-	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type AssetDeposit = AssetDeposit;
-	type AssetAccountDeposit = ConstU128<10>;
-	type MetadataDepositBase = MetadataDepositBase;
-	type MetadataDepositPerByte = MetadataDepositPerByte;
-	type ApprovalDeposit = ApprovalDeposit;
-	type StringLimit = AssetsStringLimit;
-	type Freezer = ();
-	type Extra = ();
-	type WeightInfo = ();
-}
-
-parameter_types! {
 	// Make sure put same value with `construct_runtime`
-	pub const AccessSegregatorPalletIndex: u8 = 3;
-	pub const FeeHandlerPalletIndex: u8 = 4;
+	pub const PalletIndex: u8 = 2;
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
-		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
-		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(PalletIndex::get(), b"grant_access".to_vec()),
+		(PalletIndex::get(), b"unknown_extrinsic".to_vec()),
+		(PalletIndex::get(), b"unknown_extrinsic2".to_vec()),
 	].to_vec();
 }
 
 impl sygma_access_segregator::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
-	type PalletIndex = AccessSegregatorPalletIndex;
+	type PalletIndex = PalletIndex;
 	type Extrinsics = RegisteredExtrinsics;
-}
-
-impl basic_fee_handler::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
-	type PalletIndex = FeeHandlerPalletIndex;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

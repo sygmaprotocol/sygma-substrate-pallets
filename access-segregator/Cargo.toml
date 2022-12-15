@@ -1,5 +1,5 @@
 [package]
-name = "sygma-basic-feehandler"
+name = "sygma-access-segregator"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,14 +12,6 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "pol
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false }
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33", default-features = false }
 
-# Polkadot
-xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33", default-features = false }
-xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33", default-features = false }
-
-# Local
-sygma-traits = { path = "../traits", default-features = false }
-sygma-access-segregator = { path = "../access-segregator", default-features = false }
-
 [dev-dependencies]
 # Substrate
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
@@ -27,7 +19,6 @@ sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
-pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 
 [features]
 default = ["std"]
@@ -36,9 +27,5 @@ std = [
 	"scale-info/std",
     "frame-support/std",
     "frame-system/std",
-	"sp-std/std",
-	"xcm/std",
-	"xcm-builder/std",
-    "sygma-traits/std",
-	"sygma-access-segregator/std",
+    "sp-std/std",
 ]

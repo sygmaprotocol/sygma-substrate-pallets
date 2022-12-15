@@ -3865,6 +3865,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "sygma-access-segregator",
  "sygma-basic-feehandler",
  "sygma-bridge",
  "sygma-traits",
@@ -7551,6 +7552,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
+name = "sygma-access-segregator"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sygma-basic-feehandler"
 version = "0.1.0"
 dependencies = [
@@ -7562,6 +7577,8 @@ dependencies = [
  "scale-info",
  "sp-io",
  "sp-runtime",
+ "sp-std",
+ "sygma-access-segregator",
  "sygma-traits",
  "xcm",
  "xcm-builder",
@@ -7592,6 +7609,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sygma-access-segregator",
  "sygma-basic-feehandler",
  "sygma-traits",
  "xcm",
