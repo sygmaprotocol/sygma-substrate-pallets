@@ -41,11 +41,5 @@ jobs:
       - name: Run cargo clippy for pallets
         run: cargo clippy --all-targets -- -D warnings
 
-  license-check:
-    name: License check
-    runs-on: ubuntu-20.04
-    steps:
-      - run: make license-check
-
 
 
