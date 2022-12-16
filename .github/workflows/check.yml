@@ -1,3 +1,6 @@
+# The Licensed Work is (c) 2022 Sygma
+# SPDX-License-Identifier: LGPL-3.0-only
+
 name: Format, linter check
 
 on:
@@ -37,6 +40,12 @@ jobs:
         run: rustup component add clippy
       - name: Run cargo clippy for pallets
         run: cargo clippy --all-targets -- -D warnings
+
+  license-check:
+    name: License check
+    runs-on: ubuntu-20.04
+    steps:
+      - run: make license-check
 
 
 

@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 //! A collection of node-specific RPC methods.
 //! Substrate provides the `sc-rpc` crate, which defines the core RPC layer
 //! used by Substrate nodes. This file extends those RPC definitions with
