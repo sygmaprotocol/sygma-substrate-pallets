@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
