@@ -91,7 +91,7 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
     const asset = 0 // Concrete(MultiLocation::new(0, Here));
-    const basicFeeAmount = bn1e12.mul(new BN(200)); // 100 * 10 ** 12
+    const basicFeeAmount = bn1e12.mul(new BN(200)); // 200 * 10 ** 12
     const mpcPubKey = process.env.MPCPUBKEY || '222222222222222222222222222222222'; // TODO: load from EVN or replace the hardcoded mpc key with the actual one from relayer
 
     await setMpcKey(api, mpcPubKey, true, sudo);
