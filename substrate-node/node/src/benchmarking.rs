@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 // This file is part of Substrate.
 
 // Copyright (C) 2022 Parity Technologies (UK) Ltd.

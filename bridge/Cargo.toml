@@ -29,6 +29,7 @@ xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "releas
 xcm-executor = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33", default-features = false }
 
 sygma-traits = { path = "../traits", default-features = false }
+sygma-access-segregator = { path = "../access-segregator", default-features = false }
 
 [dev-dependencies]
 assert_matches = "1.4.0"
@@ -82,5 +83,6 @@ std = [
 	"pallet-balances/std",
     "pallet-assets/std",
 	"sygma-traits/std",
+	"sygma-access-segregator/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
