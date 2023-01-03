@@ -517,7 +517,6 @@ impl sygma_bridge::Config for Runtime {
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
 	type PalletId = SygmaBridgePalletId;
-	type PauseStatus = sygma_bridge::PauseStatusImpl<Runtime>;
 	type PalletIndex = BridgePalletIndex;
 }
 
@@ -579,7 +578,6 @@ pub type Executive = frame_executive::Executive<
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
-extern crate alloc;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {

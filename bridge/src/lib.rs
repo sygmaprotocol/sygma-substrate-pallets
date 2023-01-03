@@ -41,7 +41,7 @@ pub mod pallet {
 
 	use sygma_traits::{
 		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
-		PauseStatus, ResourceId, TransferType, VerifyingContractAddress,
+		ResourceId, TransferType, VerifyingContractAddress,
 	};
 
 	use crate::eip712;
@@ -97,9 +97,6 @@ pub mod pallet {
 
 		/// Fee information getter
 		type FeeHandler: FeeHandler;
-
-		/// Pause status getter
-		type PauseStatus: PauseStatus;
 
 		/// Implementation of withdraw and deposit an asset.
 		type AssetTransactor: TransactAsset;
@@ -449,14 +446,6 @@ pub mod pallet {
 			}
 
 			Ok(())
-		}
-	}
-
-	pub struct PauseStatusImpl<T>(PhantomData<T>);
-
-	impl<T: Config> PauseStatus for PauseStatusImpl<T> {
-		fn is_paused() -> bool {
-			IsPaused::<T>::get()
 		}
 	}
 

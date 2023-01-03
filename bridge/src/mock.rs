@@ -309,7 +309,6 @@ impl sygma_bridge::Config for Runtime {
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
 	type PalletId = SygmaBridgePalletId;
-	type PauseStatus = sygma_bridge::PauseStatusImpl<Runtime>;
 	type PalletIndex = BridgePalletIndex;
 }
 
