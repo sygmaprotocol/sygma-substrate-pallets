@@ -2,7 +2,7 @@ const {ApiPromise, WsProvider} = require('@polkadot/api');
 const {cryptoWaitReady} = require('@polkadot/util-crypto');
 const BN = require('bn.js');
 
-const mpcPubKey = '000000000000000000000000000000000'; // TODO: replace mpc key with the actual one from relayer
+const mpcPubKey = '111111111111111111111111111111111'; // TODO: replace mpc key with the actual one from relayer
 const bn1e12 = new BN(10).pow(new BN(12));
 
 async function configSygmaPallet(api, fee, finalization, sudo) {
@@ -10,7 +10,7 @@ async function configSygmaPallet(api, fee, finalization, sudo) {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
         console.log(
-            `--- Submitting extrinsic to config sygma substrate pallet. (nonce: ${nonce}) ---`
+            `--- Submitting extrinsic to config Sygma substrate pallet. (nonce: ${nonce}) ---`
         );
 
         // Setup steps
@@ -53,8 +53,9 @@ async function main() {
     await cryptoWaitReady();
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
+    const basicFee = 100;
 
-    await configSygmaPallet(api, bn1e12.mul(new BN(300)), true, sudo);
+    await configSygmaPallet(api, bn1e12.mul(new BN(basicFee)), true, sudo);
 }
 
 main().catch(console.error).finally(() => process.exit());
