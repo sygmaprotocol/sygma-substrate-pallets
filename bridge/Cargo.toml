@@ -2,6 +2,8 @@
 name = "sygma-bridge"
 version = "0.1.0"
 edition = "2021"
+license = "LGPL-3.0"
+license-file = "../LICENSE"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0", default-features = false, features = ["derive", "max-encoded-len"] }
