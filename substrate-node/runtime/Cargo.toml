@@ -6,7 +6,6 @@ authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
 edition = "2021"
 license = "LGPL-3.0"
-license-file = "../../LICENSE"
 publish = false
 repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 

@@ -34,6 +34,7 @@ targets = [
 # they are connected to another crate in the graph that hasn't been pruned,
 # so it should be used with care. The identifiers are [Package ID Specifications]
 # (https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)
+# these are the unlicensed dependencies
 exclude = ["xcm", "xcm-executor", "xcm-builder", "cumulus-primitives-core", "cumulus-primitives-utility", "parachains-common",
     "polkadot-core-primitives", "polkadot-parachain", "polkadot-primitives", "ring"]
 # If true, metadata will be collected with `--all-features`. Note that this can't
@@ -101,15 +102,23 @@ unlicensed = "deny"
 # List of explicitly allowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
+# LGPL-3.0 is the license that allowed for the crates in sygma substrate pallet
+# all the rest of the licenses are allowed for the dependency
 allow = [
-    "LGPL-3.0"
+    "LGPL-3.0",
+    "MIT",
+    "Apache-2.0",
+    "ISC",
+    "Unicode-DFS-2016",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "BSD-2-Clause",
+    "Apache-2.0 WITH LLVM-exception"
 ]
 # List of explicitly disallowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
-deny = [
-    #"Nokia",
-]
+deny = []
 # Lint level for licenses considered copyleft
 copyleft = "warn"
 # Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
@@ -123,7 +132,7 @@ allow-osi-fsf-free = "neither"
 # 1. License isn't in the allow or deny lists
 # 2. License isn't copyleft
 # 3. License isn't OSI/FSF, or allow-osi-fsf-free = "neither"
-default = "warn"
+default = "deny"
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
 # canonical license text of a valid SPDX license file.
