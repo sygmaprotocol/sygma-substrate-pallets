@@ -1,7 +1,7 @@
 # The Licensed Work is (c) 2022 Sygma
 # SPDX-License-Identifier: LGPL-3.0-only
 
-name: Format, linter check
+name: Format, linter, license check
 
 on:
   pull_request:
@@ -41,5 +41,17 @@ jobs:
       - name: Run cargo clippy for pallets
         run: cargo clippy --all-targets -- -D warnings
 
+  cargo-deny:
+    name: Run cargo deny check licenses
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - uses: ./.github/actions/install_toolchain
+      - name: Install cargo deny
+        run: cargo install --locked cargo-deny
+      - name: Run cargo deny checks for pallets
+        run: cargo-deny check licenses
 
 
