@@ -20,5 +20,5 @@ license-check:
 	cargo deny check license
 
 build-e2e-test-docker-image:
-	#./scripts/start_substrate_node.sh
+	./scripts/start_substrate_node.sh
 	./scripts/e2e_image_build.sh
