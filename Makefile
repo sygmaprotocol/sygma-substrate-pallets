@@ -19,3 +19,6 @@ license-check:
 	@echo "  >  \033[Checking for license headers...\033[0m "
 	cargo deny check license
 
+build-e2e-test-docker-image:
+	#./scripts/start_substrate_node.sh
+	./scripts/e2e_image_build.sh
