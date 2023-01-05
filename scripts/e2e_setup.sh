@@ -5,8 +5,6 @@
 set -e
 
 SETUP_SCRIPTS_DIR=${PWD}/scripts
-NODE_DB_DIR=${PWD}/db
-DOCKERFILE_DIR=${PWD}/Dockerfile_e2e
 CHAINSPECFILE="chain-spec.json"
 
 # Run setup script
@@ -27,15 +25,5 @@ then
   echo "terminating dev node"
   kill $nPid
 fi
-
-# E2E preconfigured docker image build
-echo "building the e2e test docker image..."
-echo "dockerfile in use: $DOCKERFILE_DIR"
-docker build --file "$DOCKERFILE_DIR" -t sygma_substrate_pallets_e2e_preconfigured .
-
-echo "cleanup..."
-rm -rf "$NODE_DB_DIR"
-rm -f $CHAINSPECFILE
-rm -f subsrate_node_log
 
 echo "done"
