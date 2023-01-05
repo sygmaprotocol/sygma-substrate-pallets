@@ -44,7 +44,11 @@ jobs:
           # sets output of step
           echo ::set-output name=tags::${TAGS}
 
-      - name: Run setups
+      - name: Run build and setups
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - uses: ./.github/actions/install_toolchain
         run: make setup-e2e-test
 
       - name: Set up QEMU
