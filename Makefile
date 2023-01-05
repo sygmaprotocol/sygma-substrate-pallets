@@ -20,8 +20,7 @@ license-check:
 	cargo deny check license
 
 # setup-e2e-test launches the pallet node and runs the setup scripts to config necessary data
-setup-e2e-test:
-	cargo build --release
+setup-e2e-test: build
 	./scripts/start_substrate_node.sh
 	./scripts/e2e_setup.sh
 
