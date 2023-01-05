@@ -27,4 +27,4 @@ jobs:
           submodules: "true"
       - uses: ./.github/actions/install_toolchain
       - name: Run cargo check
-        run: cargo build --release
+        run: cargo check

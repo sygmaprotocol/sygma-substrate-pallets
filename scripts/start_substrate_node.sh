@@ -6,10 +6,6 @@ set -e
 
 NODE_DB_DIR=${PWD}/db
 
-# Compile
-echo "compiling..."
-cargo build --release
-
 # Run dev node
 echo "start the dev node up..."
 ./target/release/node-template --dev --ws-external --base-path "$NODE_DB_DIR" > subsrate_node_log 2>&1 &
