@@ -8,7 +8,7 @@ NODE_DB_DIR=${PWD}/db
 
 # Compile
 echo "compiling..."
-make build
+cargo build --release
 
 # Run dev node
 echo "start the dev node up..."
