@@ -18,6 +18,9 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - uses: ./.github/actions/install_toolchain
 
       - name: Prepare
         id: prep
@@ -45,10 +48,6 @@ jobs:
           echo ::set-output name=tags::${TAGS}
 
       - name: Run build and setups
-      - uses: actions/checkout@v3
-        with:
-          submodules: "true"
-      - uses: ./.github/actions/install_toolchain
         run: make setup-e2e-test
 
       - name: Set up QEMU
