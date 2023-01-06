@@ -31,7 +31,7 @@ jobs:
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
 
           # creates local variable to hold docker images
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-latest"
 
           # check if branch/tag that triggered workflow was from tags
           if [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -40,7 +40,7 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/}
 
             # append version and e2e testing name to tags
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}:e2e-testing"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
 
           fi
 
