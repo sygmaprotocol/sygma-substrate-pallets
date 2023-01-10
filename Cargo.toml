@@ -5,6 +5,7 @@ members = [
     "access-segregator",
     "basic-fee-handler",
     "bridge",
+    "fee-handler-router",
     "traits",
     "substrate-node/node",
     "substrate-node/runtime",

@@ -98,7 +98,7 @@ pub mod pallet {
 		type FeeReserveAccount: Get<Self::AccountId>;
 
 		/// Fee information getter
-		type FeeHandler: FeeHandler;
+		type FeeHandler: Get<Box<dyn FeeHandler>>;
 
 		/// Implementation of withdraw and deposit an asset.
 		type AssetTransactor: TransactAsset;
@@ -322,7 +322,8 @@ pub mod pallet {
 			// Extract dest (MultiLocation) to get corresponding Ethereum recipient address
 			let recipient = T::ExtractRecipient::extract_recipient(&dest)
 				.ok_or(Error::<T>::ExtractRecipientFailed)?;
-			let fee = T::FeeHandler::get_fee(&asset.id).ok_or(Error::<T>::MissingFeeConfig)?;
+			let fee =
+				T::FeeHandler::get().get_fee(&asset.id).ok_or(Error::<T>::MissingFeeConfig)?;
 
 			ensure!(amount > fee, Error::<T>::FeeTooExpensive);
 
