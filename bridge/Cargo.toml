@@ -11,6 +11,7 @@ log = { version = "0.4.14", default-features = false }
 eth-encode-packed = { version =  "0.1.0", default-features = false }
 ethabi = { version = "18.0.0", default-features = false }
 primitive-types = { version = "0.12", default-features = false, features = ["scale-info", "serde_no_std"] }
+arrayref = { version = "0.3.6", default-features = false }
 
 # Substrate
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false, features = ["disable_panic_handler", "disable_oom", "disable_allocator"] }

@@ -151,7 +151,7 @@ parameter_types! {
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
 		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
-		(BridgePalletIndex::get(), b"set_mpc_key".to_vec()),
+		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
 	].to_vec();

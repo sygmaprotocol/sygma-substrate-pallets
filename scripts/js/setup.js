@@ -41,15 +41,15 @@ async function setFee(api, asset, amount, finalization, sudo) {
     });
 }
 
-async function setMpcKey(api, mpcPubKey, finalization, sudo) {
+async function setMpcAddress(api, mpcAddr, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
         console.log(
-            `--- Submitting extrinsic to set MPC key. (nonce: ${nonce}) ---`
+            `--- Submitting extrinsic to set MPC address. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
-            .sudo(api.tx.sygmaBridge.setMpcKey(mpcPubKey))
+            .sudo(api.tx.sygmaBridge.setMpcAddress(mpcAddr))
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
@@ -92,15 +92,15 @@ async function main() {
     const sudo = keyring.addFromUri('//Alice');
     const asset = 0 // Concrete(MultiLocation::new(0, Here));
     const basicFeeAmount = bn1e12.mul(new BN(200)); // 200 * 10 ** 12
-    const mpcPubKey = process.env.MPCPUBKEY || '222222222222222222222222222222222'; // TODO: load from EVN or replace the hardcoded mpc key with the actual one from relayer
+    const mpcAddr = process.env.MPCADDR || '0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4';
 
-    await setMpcKey(api, mpcPubKey, true, sudo);
+    await setMpcAddress(api, mpcAddr, true, sudo);
     await setFee(api, asset, basicFeeAmount, true, sudo);
 
     // bridge should be unpaused by the end of the setup
     if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
 
-    // It is unnecessary to set up access separators here since ALICE will be the sudo account and all methods with access control logic are already setup in this script.
+    // It is unnecessary to set up access segregator here since ALICE will be the sudo account and all methods with access control logic are already setup in this script.
     // so that on Relayer, E2E test cases are only about public extrinsic such as deposit, executionProposal, retry .etc
 }
 

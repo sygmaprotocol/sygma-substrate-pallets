@@ -71,7 +71,7 @@ pub mod pallet {
 			extrinsic_name: Vec<u8>,
 			who: T::AccountId,
 		) -> DispatchResult {
-			// Ensure bridge committee or the account that has permisson to grant access to an
+			// Ensure bridge committee or the account that has permission to grant access to an
 			// extrinsic
 			if T::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				let who = ensure_signed(origin)?;
