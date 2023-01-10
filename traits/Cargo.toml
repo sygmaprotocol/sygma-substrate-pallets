@@ -7,6 +7,7 @@ license = "LGPL-3.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+dyn-clone = "1.0.10"
 codec = { package = "parity-scale-codec", version = "3.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.0", default-features = false, features = ["derive", "serde", "decode"] }
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false }
