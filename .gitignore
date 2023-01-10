@@ -1,6 +1,13 @@
 .DS_Store
 
+**/node_modules
+**/package-lock.json
+
 /target
+/db
+subsrate_node_log
+chain-spec.json
+
 .idea
 
 .env

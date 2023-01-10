@@ -5,18 +5,18 @@
 
 extern crate alloc;
 
+pub use self::pallet::*;
+
 mod eip712;
 #[cfg(test)]
 mod mock;
-
-pub use self::pallet::*;
 
 #[allow(unused_variables)]
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::eip712;
 	use alloc::string::String;
+
 	use codec::{Decode, Encode};
 	use eth_encode_packed::{abi::encode_packed, SolidityDataType};
 	use ethabi::{encode as abi_encode, token::Token};
@@ -36,12 +36,15 @@ pub mod pallet {
 		RuntimeDebug,
 	};
 	use sp_std::{convert::From, vec, vec::Vec};
+	use xcm::latest::{prelude::*, MultiLocation};
+	use xcm_executor::traits::TransactAsset;
+
 	use sygma_traits::{
 		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
 		ResourceId, TransferType, VerifyingContractAddress,
 	};
-	use xcm::latest::{prelude::*, MultiLocation};
-	use xcm_executor::traits::TransactAsset;
+
+	use crate::eip712;
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
@@ -56,7 +59,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
@@ -116,7 +119,7 @@ pub mod pallet {
 
 	#[allow(dead_code)]
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
 		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
@@ -1375,6 +1378,25 @@ pub mod pallet {
 		}
 
 		#[test]
+		fn get_bridge_pause_status() {
+			new_test_ext().execute_with(|| {
+				assert!(!SygmaBridge::is_paused());
+
+				// set mpc key
+				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+
+				// pause bridge
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert!(SygmaBridge::is_paused());
+
+				// unpause bridge
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert!(!SygmaBridge::is_paused());
+			})
+		}
+
+		#[test]
 		fn access_control() {
 			new_test_ext().execute_with(|| {
 				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
@@ -1418,10 +1440,10 @@ pub mod pallet {
 					SygmaBridge::set_mpc_key(Some(BOB).into(), test_mpc_key),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				// ALICE set mpc key shold work
+				// ALICE set mpc key should work
 				assert_ok!(SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key));
 
-				// ALICE pause&unpause bridge shold still failed
+				// ALICE pause&unpause bridge should still failed
 				assert_noop!(
 					SygmaBridge::pause_bridge(Some(ALICE).into()),
 					bridge::Error::<Runtime>::AccessDenied
@@ -1430,7 +1452,7 @@ pub mod pallet {
 					SygmaBridge::unpause_bridge(Some(ALICE).into()),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				// BOB pause&unpause bridge shold work
+				// BOB pause&unpause bridge should work
 				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into()));
 				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into()));
 			})

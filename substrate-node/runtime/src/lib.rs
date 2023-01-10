@@ -359,6 +359,9 @@ impl sygma_basic_feehandler::Config for Runtime {
 	type PalletIndex = FeeHandlerPalletIndex;
 }
 
+// This address is defined in the substrate E2E test of sygma-relayer
+const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
+
 parameter_types! {
 	// DestDomainID is the EVM chain domainID that runtime is bridging with
 	pub DestDomainID: DomainID = 1;
@@ -371,7 +374,7 @@ parameter_types! {
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
 	// When relayers signing, this address will be included in the EIP712Domain
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
-	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160::from_slice(hex::decode(DEST_VERIFYING_CONTRACT_ADDRESS).ok().unwrap().as_slice());
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
@@ -389,9 +392,9 @@ parameter_types! {
 		),
 	);
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
-	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
+	pub NativeResourceId: ResourceId = hex_literal::hex!("1000000000000000000000000000000000000000000000000000000000000000");
 	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
 	// UsdcAssetId is the substrate assetID of USDC
 	pub UsdcAssetId: AssetId = 0;
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
