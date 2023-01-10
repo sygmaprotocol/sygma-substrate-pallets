@@ -3,6 +3,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[macro_use]
+extern crate arrayref;
+
 extern crate alloc;
 
 pub use self::pallet::*;
@@ -28,7 +31,7 @@ pub mod pallet {
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
 	use sp_io::{
-		crypto::secp256k1_ecdsa_recover_compressed,
+		crypto::{secp256k1_ecdsa_recover, secp256k1_ecdsa_recover_compressed},
 		hashing::{blake2_256, keccak_256},
 	};
 	use sp_runtime::{
@@ -39,12 +42,11 @@ pub mod pallet {
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
-	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
-		ResourceId, TransferType, VerifyingContractAddress,
-	};
-
 	use crate::eip712;
+	use sygma_traits::{
+		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcAddress,
+		MpcPubkey, ResourceId, TransferType, VerifyingContractAddress,
+	};
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
@@ -174,6 +176,8 @@ pub mod pallet {
 		MissingMpcKey,
 		/// MPC key can not be updated
 		MpcKeyNotUpdatable,
+		/// MPC address can not be updated
+		MpcAddrNotUpdatable,
 		/// Bridge is paused
 		BridgePaused,
 		/// Bridge is unpaused
@@ -210,6 +214,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn mpc_key)]
 	pub type MpcKey<T> = StorageValue<_, MpcPubkey, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn mpc_add)]
+	pub type MpcAdd<T> = StorageValue<_, MpcAddress, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -297,6 +305,29 @@ pub mod pallet {
 
 			// Set MPC account public key
 			MpcKey::<T>::set(_key);
+			Ok(())
+		}
+
+		/// Mark an ECDSA address as a MPC account.
+		#[pallet::weight(195_000_000)]
+		pub fn set_mpc_address(origin: OriginFor<T>, addr: MpcAddress) -> DispatchResult {
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permission to set mpc key
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"set_mpc_address".to_vec(),
+						who
+					),
+					Error::<T>::AccessDenied
+				);
+			}
+			// Cannot set MPC address as it's already set
+			ensure!(MpcAdd::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
+
+			// Set MPC account address
+			MpcAdd::<T>::set(addr);
 			Ok(())
 		}
 
@@ -472,6 +503,37 @@ pub mod pallet {
 			} else {
 				false
 			}
+		}
+
+		/// Verifies that proposal data is signed by MPC address.
+		#[allow(dead_code)]
+		fn verify_by_mpc_address(proposals: &Vec<Proposal>, signature: Vec<u8>) -> bool {
+			let sig = match signature.try_into() {
+				Ok(_sig) => _sig,
+				Err(error) => return false,
+			};
+
+			// parse proposals and construct signing message
+			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
+
+			// recover the signing address
+			if let Ok(pubkey) =
+				// recover the uncompressed pubkey
+				secp256k1_ecdsa_recover(&sig, &blake2_256(&final_message))
+			{
+				let address = Self::public_key_to_address(&pubkey);
+
+				address == MpcAdd::<T>::get().0
+			} else {
+				false
+			}
+		}
+
+		/// convert the ECDSA 64-byte uncompressed pubkey to H160 address
+		pub fn public_key_to_address(public_key: &[u8]) -> [u8; 20] {
+			let hash = keccak_256(public_key);
+			let final_hash = array_ref![&hash, 12, 20];
+			*final_hash
 		}
 
 		/// Parse proposals and construct the original signing message

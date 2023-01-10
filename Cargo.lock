@@ -7589,6 +7589,7 @@ dependencies = [
 name = "sygma-bridge"
 version = "0.1.0"
 dependencies = [
+ "arrayref",
  "assert_matches",
  "eth-encode-packed",
  "ethabi",
