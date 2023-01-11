@@ -4,6 +4,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use dyn_clone::{clone_trait_object, DynClone};
 use frame_support::dispatch::TypeInfo;
 use primitive_types::{H160, U256};
 use sp_std::vec::Vec;
@@ -39,7 +40,10 @@ pub trait ExtractRecipient {
 	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>>;
 }
 
-pub trait FeeHandler: Sized {
+pub trait FeeHandler: DynClone {
 	// Return fee represent by a specific asset
-	fn get_fee(asset_id: &AssetId) -> Option<u128>;
+	fn get_fee(&self, domain: DomainID, asset: &AssetId) -> Option<u128>;
 }
+
+// Generate an implementation of the standard library Clone for Box<dyn FeeHandler>
+clone_trait_object!(FeeHandler);
