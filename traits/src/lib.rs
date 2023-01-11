@@ -4,11 +4,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use dyn_clone::{clone_trait_object, DynClone};
 use frame_support::dispatch::TypeInfo;
 use primitive_types::{H160, U256};
 use sp_std::vec::Vec;
 use xcm::latest::{AssetId, MultiLocation};
-use dyn_clone::{clone_trait_object, DynClone};
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;

@@ -14,7 +14,7 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU128},
 };
 use frame_system::{self as system, EnsureRoot, EnsureSigned};
-use sygma_traits::FeeHandler;
+use sygma_traits::{DomainID, FeeHandler};
 use xcm::latest::{AssetId as XcmAssetId, MultiLocation};
 
 use crate as fee_handler_router;
@@ -119,6 +119,8 @@ impl pallet_assets::Config for Test {
 }
 
 parameter_types! {
+	pub const EthereumDomainID: DomainID = 0;
+	pub const MoonbeamDomainID: DomainID = 1;
 	// Make sure put same value with `construct_runtime`
 	pub const AccessSegregatorPalletIndex: u8 = 3;
 	pub const FeeHandlerPalletIndex: u8 = 4;
@@ -128,8 +130,12 @@ parameter_types! {
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
 	].to_vec();
 	pub PhaLocation: MultiLocation = MultiLocation::here();
-	pub BasicFeeHandler: Box<dyn FeeHandler> = Box::new(sygma_basic_feehandler::BasicFeeHandlerImpl::<Test>::new());
-	pub FeeHandlers: Vec<(XcmAssetId, Box<dyn FeeHandler>)> = [(PhaLocation::get().into(), BasicFeeHandler::get())].to_vec();
+	pub BasicFeeHandlerForEthereum: Box<dyn FeeHandler> = Box::new(sygma_basic_feehandler::BasicFeeHandlerImpl::<Test>::new());
+	pub BasicFeeHandlerForMoonbeam: Box<dyn FeeHandler> = Box::new(sygma_basic_feehandler::BasicFeeHandlerImpl::<Test>::new());
+	pub FeeHandlers: Vec<((DomainID, XcmAssetId), Box<dyn FeeHandler>)> = [
+		((EthereumDomainID::get(), PhaLocation::get().into()), BasicFeeHandlerForEthereum::get()),
+		((MoonbeamDomainID::get(), PhaLocation::get().into()), BasicFeeHandlerForMoonbeam::get()),
+	].to_vec();
 }
 
 impl sygma_basic_feehandler::Config for Test {
