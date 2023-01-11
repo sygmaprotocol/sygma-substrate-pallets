@@ -13,7 +13,7 @@ mod mock;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{pallet_prelude::*, traits::StorageVersion};
-	use sygma_traits::FeeHandler;
+	use sygma_traits::{DomainID, FeeHandler};
 	use xcm::latest::AssetId;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
@@ -43,13 +43,13 @@ pub mod pallet {
 	pub struct FeeHandlerRouterImpl<T>(PhantomData<T>);
 
 	impl<T: Config> FeeHandler for FeeHandlerRouterImpl<T> {
-		fn get_fee(&self, asset: &AssetId) -> Option<u128> {
+		fn get_fee(&self, domain: DomainID, asset: &AssetId) -> Option<u128> {
 			match T::FeeHandlers::get()
 				.iter()
 				.position(|e| e.0 == *asset)
 				.map(|idx| dyn_clone::clone_box(&*T::FeeHandlers::get()[idx].1))
 			{
-				Some(handler) => handler.get_fee(asset),
+				Some(handler) => handler.get_fee(domain, asset),
 				_ => None,
 			}
 		}
