@@ -322,8 +322,9 @@ pub mod pallet {
 			// Extract dest (MultiLocation) to get corresponding Ethereum recipient address
 			let recipient = T::ExtractRecipient::extract_recipient(&dest)
 				.ok_or(Error::<T>::ExtractRecipientFailed)?;
-			let fee =
-				T::FeeHandler::get().get_fee(&asset.id).ok_or(Error::<T>::MissingFeeConfig)?;
+			let fee = T::FeeHandler::get()
+				.get_fee(T::DestDomainID::get(), &asset.id)
+				.ok_or(Error::<T>::MissingFeeConfig)?;
 
 			ensure!(amount > fee, Error::<T>::FeeTooExpensive);
 
@@ -946,6 +947,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					NativeLocation::get().into(),
 					fee
 				));
@@ -989,6 +991,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					UsdcLocation::get().into(),
 					fee
 				));
@@ -1042,6 +1045,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					unbounded_asset_location.clone().into(),
 					fee
 				));
@@ -1080,6 +1084,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1126,6 +1131,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1155,6 +1161,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1199,6 +1206,7 @@ pub mod pallet {
 				let amount = 100u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1282,6 +1290,7 @@ pub mod pallet {
 				let amount = 200u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
+					DestDomainID::get(),
 					NativeLocation::get().into(),
 					fee
 				));

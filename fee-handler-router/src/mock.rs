@@ -14,8 +14,8 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU128},
 };
 use frame_system::{self as system, EnsureRoot, EnsureSigned};
-use xcm::latest::{AssetId as XcmAssetId, MultiLocation};
 use sygma_traits::FeeHandler;
+use xcm::latest::{AssetId as XcmAssetId, MultiLocation};
 
 use crate as fee_handler_router;
 

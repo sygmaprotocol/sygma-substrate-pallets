@@ -36,7 +36,7 @@ pub trait ExtractRecipient {
 
 pub trait FeeHandler: DynClone {
 	// Return fee represent by a specific asset
-	fn get_fee(&self, asset_id: &AssetId) -> Option<u128>;
+	fn get_fee(&self, domain: DomainID, asset: &AssetId) -> Option<u128>;
 }
 
 // Generate an implementation of the standard library Clone for Box<dyn FeeHandler>
