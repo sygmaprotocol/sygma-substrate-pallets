@@ -396,7 +396,7 @@ parameter_types! {
 	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
 	// UsdcAssetId is the substrate assetID of USDC
-	pub UsdcAssetId: AssetId = 0;
+	pub UsdcAssetId: AssetId = 2000;
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 	// SygmaBridgePalletId is the palletID

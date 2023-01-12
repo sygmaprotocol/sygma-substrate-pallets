@@ -81,6 +81,109 @@ async function queryBridgePauseStatus(api) {
     return result.toJSON()
 }
 
+async function createAsset(api, id, admin, minBalance, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to create asset: (nonce: ${nonce}) ---`
+        );
+
+        const unsub = await api.tx.assets.create(id, admin, minBalance)
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
+async function setAssetMetadata(api, id, name, symbol, decimals, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to register asset metadata: (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.assets.setMetadata(id, name, symbol, decimals)
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
+async function mintAsset(api, id, recipient, amount, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to mint asset to ${recipient}: (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.assets.mint(id, recipient, amount)
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
 async function main() {
     const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9944');
     const api = await ApiPromise.create({
@@ -96,6 +199,17 @@ async function main() {
 
     await setMpcAddress(api, mpcAddr, true, sudo);
     await setFee(api, asset, basicFeeAmount, true, sudo);
+
+    // create USDC test asset
+    const usdcAssetID = 2000;
+    const usdcAdmin = sudo.address;
+    const usdcMinBalance = 100;
+    const usdcName = "USDC test asset";
+    const usdcSymbol = "USDC";
+    const usdcDecimal = 12;
+    await createAsset(api, usdcAssetID, usdcAdmin, usdcMinBalance, true, sudo);
+    await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
+    await mintAsset(api, usdcAssetID, usdcAdmin, 100000000000000, true, sudo); // mint 100 USDC to Alice
 
     // bridge should be unpaused by the end of the setup
     if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
