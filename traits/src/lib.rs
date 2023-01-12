@@ -22,14 +22,8 @@ pub enum TransferType {
 	GenericTransfer,
 }
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy)]
-pub struct MpcPubkey(pub [u8; 33]);
-
-impl Default for MpcPubkey {
-	fn default() -> Self {
-		MpcPubkey([0; 33])
-	}
-}
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy, Default)]
+pub struct MpcAddress(pub [u8; 20]);
 
 pub trait IsReserved {
 	fn is_reserved(asset_id: &AssetId) -> bool;

@@ -3,6 +3,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[macro_use]
+extern crate arrayref;
+
 extern crate alloc;
 
 pub use self::pallet::*;
@@ -28,7 +31,7 @@ pub mod pallet {
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
 	use sp_io::{
-		crypto::secp256k1_ecdsa_recover_compressed,
+		crypto::secp256k1_ecdsa_recover,
 		hashing::{blake2_256, keccak_256},
 	};
 	use sp_runtime::{
@@ -39,12 +42,11 @@ pub mod pallet {
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
+	use crate::eip712;
 	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcPubkey,
+		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcAddress,
 		ResourceId, TransferType, VerifyingContractAddress,
 	};
-
-	use crate::eip712;
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
@@ -170,10 +172,10 @@ pub mod pallet {
 		TransactFailed,
 		/// The withdrawn amount can not cover the fee payment
 		FeeTooExpensive,
-		/// MPC key not set
-		MissingMpcKey,
-		/// MPC key can not be updated
-		MpcKeyNotUpdatable,
+		/// MPC address not set
+		MissingMpcAddress,
+		/// MPC address can not be updated
+		MpcAddrNotUpdatable,
 		/// Bridge is paused
 		BridgePaused,
 		/// Bridge is unpaused
@@ -201,15 +203,15 @@ pub mod pallet {
 
 	/// Bridge Pause indicator
 	/// Bridge is unpaused initially, until pause
-	/// After MPC key setup, bridge should be paused until ready to unpause
+	/// After mpc address setup, bridge should be paused until ready to unpause
 	#[pallet::storage]
 	#[pallet::getter(fn is_paused)]
 	pub type IsPaused<T> = StorageValue<_, bool, ValueQuery>;
 
-	/// Pre-set MPC public key
+	/// Pre-set MPC address
 	#[pallet::storage]
-	#[pallet::getter(fn mpc_key)]
-	pub type MpcKey<T> = StorageValue<_, MpcPubkey, ValueQuery>;
+	#[pallet::getter(fn mpc_add)]
+	pub type MpcAdd<T> = StorageValue<_, MpcAddress, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -237,8 +239,8 @@ pub mod pallet {
 					Error::<T>::AccessDenied
 				);
 			}
-			// make sure MPC key is set up
-			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			// make sure MPC address is set up
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			// Mark as paused
 			IsPaused::<T>::set(true);
@@ -263,8 +265,8 @@ pub mod pallet {
 					Error::<T>::AccessDenied
 				);
 			}
-			// make sure MPC key is set up
-			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			// make sure MPC address is set up
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			// make sure the current status is paused
 			ensure!(IsPaused::<T>::get(), Error::<T>::BridgeUnpaused);
@@ -277,26 +279,26 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Mark an ECDSA public key as a MPC account.
+		/// Mark an ECDSA address as a MPC account.
 		#[pallet::weight(195_000_000)]
-		pub fn set_mpc_key(origin: OriginFor<T>, _key: MpcPubkey) -> DispatchResult {
+		pub fn set_mpc_address(origin: OriginFor<T>, addr: MpcAddress) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permisson to set mpc key
+				// Ensure bridge committee or the account that has permission to set mpc address
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
-						b"set_mpc_key".to_vec(),
+						b"set_mpc_address".to_vec(),
 						who
 					),
 					Error::<T>::AccessDenied
 				);
 			}
-			// Cannot set MPC key is it's already set
-			ensure!(MpcKey::<T>::get().is_clear(), Error::<T>::MpcKeyNotUpdatable);
+			// Cannot set MPC address as it's already set
+			ensure!(MpcAdd::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
 
-			// Set MPC account public key
-			MpcKey::<T>::set(_key);
+			// Set MPC account address
+			MpcAdd::<T>::set(addr);
 			Ok(())
 		}
 
@@ -310,7 +312,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
@@ -385,7 +387,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Emit retry event
@@ -405,11 +407,14 @@ pub mod pallet {
 			proposals: Vec<Proposal>,
 			signature: Vec<u8>,
 		) -> DispatchResult {
-			// Check MPC key and bridge status
-			ensure!(!MpcKey::<T>::get().is_clear(), Error::<T>::MissingMpcKey);
+			// Check MPC address and bridge status
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 			// Verify MPC signature
-			ensure!(Self::verify(&proposals, signature), Error::<T>::BadMpcSignature);
+			ensure!(
+				Self::verify_by_mpc_address(&proposals, signature),
+				Error::<T>::BadMpcSignature
+			);
 
 			// Execute proposals one by on.
 			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
@@ -455,7 +460,7 @@ pub mod pallet {
 	{
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
-		fn verify(proposals: &Vec<Proposal>, signature: Vec<u8>) -> bool {
+		fn verify_by_mpc_address(proposals: &Vec<Proposal>, signature: Vec<u8>) -> bool {
 			let sig = match signature.try_into() {
 				Ok(_sig) => _sig,
 				Err(error) => return false,
@@ -464,14 +469,24 @@ pub mod pallet {
 			// parse proposals and construct signing message
 			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
 
-			// recover the signing pubkey
+			// recover the signing address
 			if let Ok(pubkey) =
-				secp256k1_ecdsa_recover_compressed(&sig, &blake2_256(&final_message))
+				// recover the uncompressed pubkey
+				secp256k1_ecdsa_recover(&sig, &blake2_256(&final_message))
 			{
-				pubkey == MpcKey::<T>::get().0
+				let address = Self::public_key_to_address(&pubkey);
+
+				address == MpcAdd::<T>::get().0
 			} else {
 				false
 			}
+		}
+
+		/// convert the ECDSA 64-byte uncompressed pubkey to H160 address
+		pub fn public_key_to_address(public_key: &[u8]) -> [u8; 20] {
+			let hash = keccak_256(public_key);
+			let final_hash = array_ref![&hash, 12, 20];
+			*final_hash
 		}
 
 		/// Parse proposals and construct the original signing message
@@ -653,7 +668,7 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcKey, Proposal};
+		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
 			BridgePalletIndex, DestDomainID, PhaLocation, PhaResourceId, Runtime, RuntimeEvent,
@@ -662,60 +677,61 @@ pub mod pallet {
 		};
 		use codec::Encode;
 		use frame_support::{
-			assert_noop, assert_ok, traits::tokens::fungibles::Create as FungibleCerate,
+			assert_noop, assert_ok, crypto::ecdsa::ECDSAExt,
+			traits::tokens::fungibles::Create as FungibleCerate,
 		};
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
-		use sygma_traits::{MpcPubkey, TransferType};
+		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
 
 		#[test]
-		fn set_mpc_key() {
+		fn set_mpc_address() {
 			new_test_ext().execute_with(|| {
-				let default_key: MpcPubkey = MpcPubkey::default();
-				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
-				let test_mpc_key_b: MpcPubkey = MpcPubkey([2u8; 33]);
+				let default_addr: MpcAddress = MpcAddress::default();
+				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
+				let test_mpc_addr_b: MpcAddress = MpcAddress([2u8; 20]);
 
-				assert_eq!(MpcKey::<Runtime>::get(), default_key);
+				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
 
-				// set to test_key_a
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
+				// set to test_mpc_addr_a
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
 
-				// set to test_key_b: should be MpcKeyNotUpdatable error
+				// set to test_mpc_addr_b: should be MpcAddrNotUpdatable error
 				assert_noop!(
-					SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_b),
-					bridge::Error::<Runtime>::MpcKeyNotUpdatable
+					SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_b),
+					bridge::Error::<Runtime>::MpcAddrNotUpdatable
 				);
 
-				// permission test: unauthorized account should not be able to set mpc key
+				// permission test: unauthorized account should not be able to set mpc address
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
-					SygmaBridge::set_mpc_key(unauthorized_account, test_mpc_key_a),
+					SygmaBridge::set_mpc_address(unauthorized_account, test_mpc_addr_a),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
 			})
 		}
 
 		#[test]
 		fn pause_bridge() {
 			new_test_ext().execute_with(|| {
-				let default_key: MpcPubkey = MpcPubkey::default();
-				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
+				let default_addr = MpcAddress::default();
+				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-				assert_eq!(MpcKey::<Runtime>::get(), default_key);
+				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
 
-				// pause bridge when mpc key is not set, should be err
+				// pause bridge when mpc address is not set, should be err
 				assert_noop!(
 					SygmaBridge::pause_bridge(Origin::root()),
-					bridge::Error::<Runtime>::MissingMpcKey
+					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
-				// set mpc key to test_key_a
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
+				// set mpc address to test_key_a
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
 
 				// pause bridge again, should be ok
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
@@ -744,20 +760,20 @@ pub mod pallet {
 		#[test]
 		fn unpause_bridge() {
 			new_test_ext().execute_with(|| {
-				let default_key: MpcPubkey = MpcPubkey::default();
-				let test_mpc_key_a: MpcPubkey = MpcPubkey([1u8; 33]);
+				let default_addr: MpcAddress = MpcAddress::default();
+				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-				assert_eq!(MpcKey::<Runtime>::get(), default_key);
+				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
 
-				// unpause bridge when mpc key is not set, should be error
+				// unpause bridge when mpc address is not set, should be error
 				assert_noop!(
 					SygmaBridge::unpause_bridge(Origin::root()),
-					bridge::Error::<Runtime>::MissingMpcKey
+					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
-				// set mpc key to test_key_a and pause bridge
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key_a));
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key_a);
+				// set mpc address to test_key_a and pause bridge
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
 					dest_domain_id: 1,
@@ -810,7 +826,7 @@ pub mod pallet {
 				let proposals = vec![p1, p2];
 
 				// should be false
-				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
+				assert!(!SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
 			})
 		}
 
@@ -843,7 +859,7 @@ pub mod pallet {
 				let proposals = vec![p1, p2];
 
 				// verify non matched signature against proposal list, should be false
-				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
+				assert!(!SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
 			})
 		}
 
@@ -853,10 +869,10 @@ pub mod pallet {
 				// generate the signing keypair
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
 
-				// set mpc key to another random key
-				let test_mpc_key: MpcPubkey = MpcPubkey([7u8; 33]);
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+				// set mpc address to another random key
+				let test_mpc_addr: MpcAddress = MpcAddress([7u8; 20]);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
 
 				// dummy proposals
 				let p1 = Proposal {
@@ -878,8 +894,8 @@ pub mod pallet {
 				// sign final message using generated prikey
 				let signature = pair.sign(&final_message[..]);
 
-				// verify signature, should be false because the signing key != mpc key
-				assert!(!SygmaBridge::verify(&proposals, signature.encode()));
+				// verify signature, should be false because the signing address != mpc address
+				assert!(!SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
 			})
 		}
 
@@ -888,11 +904,11 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// generate mpc keypair
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
-				let test_mpc_key: MpcPubkey = MpcPubkey(pair.public().0);
+				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
 
-				// set mpc key to generated keypair's pubkey
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+				// set mpc address to generated keypair's address
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
 
 				// dummy proposals
 				let p1 = Proposal {
@@ -915,17 +931,17 @@ pub mod pallet {
 				let signature = pair.sign(&final_message[..]);
 
 				// verify signature, should be true
-				assert!(SygmaBridge::verify(&proposals, signature.encode()));
+				assert!(SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
 			})
 		}
 
 		#[test]
 		fn deposit_native_asset_should_work() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					PhaLocation::get().into(),
@@ -965,10 +981,10 @@ pub mod pallet {
 		#[test]
 		fn deposit_foreign_asset_should_work() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					UsdcLocation::get().into(),
@@ -1018,10 +1034,10 @@ pub mod pallet {
 		fn deposit_unbounded_asset_should_fail() {
 			new_test_ext().execute_with(|| {
 				let unbounded_asset_location = MultiLocation::new(1, X1(GeneralIndex(123)));
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					unbounded_asset_location.clone().into(),
@@ -1056,10 +1072,10 @@ pub mod pallet {
 						),
 					),
 				);
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					PhaLocation::get().into(),
@@ -1079,9 +1095,9 @@ pub mod pallet {
 		#[test]
 		fn deposit_without_fee_set_should_fail() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let amount = 200u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
@@ -1102,10 +1118,10 @@ pub mod pallet {
 		#[test]
 		fn deposit_less_than_fee_should_fail() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 200u128;
 				let amount = 100u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					PhaLocation::get().into(),
@@ -1131,10 +1147,10 @@ pub mod pallet {
 		#[test]
 		fn deposit_when_bridge_paused_should_fail() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					PhaLocation::get().into(),
@@ -1196,7 +1212,7 @@ pub mod pallet {
 						)
 							.into(),
 					),
-					bridge::Error::<Runtime>::MissingMpcKey
+					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 			})
 		}
@@ -1204,15 +1220,15 @@ pub mod pallet {
 		#[test]
 		fn retry_bridge() {
 			new_test_ext().execute_with(|| {
-				// mpc key is missing, should fail
+				// mpc address is missing, should fail
 				assert_noop!(
 					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
-					bridge::Error::<Runtime>::MissingMpcKey
+					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
-				// set mpc key
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				// set mpc address
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 
 				// pause bridge and retry, should fail
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
@@ -1238,18 +1254,18 @@ pub mod pallet {
 		#[test]
 		fn proposal_execution_should_work() {
 			new_test_ext().execute_with(|| {
-				// Mpc key is missing, should fail
+				// mpc address is missing, should fail
 				assert_noop!(
 					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
-					bridge::Error::<Runtime>::MissingMpcKey,
+					bridge::Error::<Runtime>::MissingMpcAddress,
 				);
-				// Set mpc key to generated keypair's pubkey
+				// set mpc address to generated keypair's address
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
-				let test_mpc_key: MpcPubkey = MpcPubkey(pair.public().0);
+				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
 				// Generate an evil key
 				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
-				assert_eq!(MpcKey::<Runtime>::get(), test_mpc_key);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
 
 				// Should failed if bridge paused
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
@@ -1366,7 +1382,10 @@ pub mod pallet {
 				);
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE);
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), 0);
-				assert!(SygmaBridge::verify(&proposals, proposals_with_valid_signature.encode()));
+				assert!(SygmaBridge::verify_by_mpc_address(
+					&proposals,
+					proposals_with_valid_signature.encode()
+				));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
 					proposals,
@@ -1382,9 +1401,9 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				assert!(!SygmaBridge::is_paused());
 
-				// set mpc key
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
-				assert_ok!(SygmaBridge::set_mpc_key(Origin::root(), test_mpc_key));
+				// set mpc address
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 
 				// pause bridge
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
@@ -1399,10 +1418,10 @@ pub mod pallet {
 		#[test]
 		fn access_control() {
 			new_test_ext().execute_with(|| {
-				let test_mpc_key: MpcPubkey = MpcPubkey([1u8; 33]);
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 
 				assert_noop!(
-					SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key),
+					SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				assert_noop!(
@@ -1414,11 +1433,11 @@ pub mod pallet {
 					bridge::Error::<Runtime>::AccessDenied
 				);
 
-				// Grant ALICE the access of `set_mpc_key`
+				// Grant ALICE the access of `set_mpc_address`
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					BridgePalletIndex::get(),
-					b"set_mpc_key".to_vec(),
+					b"set_mpc_address".to_vec(),
 					ALICE
 				));
 				// Grant BOB the access of `pause_bridge` and `unpause_bridge`
@@ -1435,13 +1454,13 @@ pub mod pallet {
 					BOB
 				));
 
-				// BOB set mpc key should still failed
+				// BOB set mpc address should still failed
 				assert_noop!(
-					SygmaBridge::set_mpc_key(Some(BOB).into(), test_mpc_key),
+					SygmaBridge::set_mpc_address(Some(BOB).into(), test_mpc_addr),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				// ALICE set mpc key should work
-				assert_ok!(SygmaBridge::set_mpc_key(Some(ALICE).into(), test_mpc_key));
+				// ALICE set mpc address should work
+				assert_ok!(SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr));
 
 				// ALICE pause&unpause bridge should still failed
 				assert_noop!(
