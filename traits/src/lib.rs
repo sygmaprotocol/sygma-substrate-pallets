@@ -37,3 +37,9 @@ pub trait FeeHandler {
 	// Return fee represent by a specific asset
 	fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128>;
 }
+
+impl FeeHandler for () {
+	fn get_fee(_domain: DomainID, _asset: &AssetId) -> Option<u128> {
+		None
+	}
+}
