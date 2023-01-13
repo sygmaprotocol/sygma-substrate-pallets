@@ -671,9 +671,10 @@ pub mod pallet {
 		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
-			BridgePalletIndex, DestDomainID, PhaLocation, PhaResourceId, Runtime, RuntimeEvent,
-			RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount,
-			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
+			BridgePalletIndex, DestDomainID, NativeLocation, NativeResourceId, Runtime,
+			RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge,
+			TreasuryAccount, UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB,
+			ENDOWED_BALANCE,
 		};
 		use codec::Encode;
 		use frame_support::{
@@ -944,12 +945,12 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					PhaLocation::get().into(),
+					NativeLocation::get().into(),
 					fee
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
 						X1(GeneralKey(
@@ -965,7 +966,7 @@ pub mod pallet {
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 					dest_domain_id: DestDomainID::get(),
-					resource_id: PhaResourceId::get(),
+					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
 					deposit_data: SygmaBridge::create_deposit_data(
@@ -1078,13 +1079,13 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					PhaLocation::get().into(),
+					NativeLocation::get().into(),
 					fee
 				));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						invalid_dest,
 					),
 					bridge::Error::<Runtime>::ExtractRecipientFailed
@@ -1101,7 +1102,7 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
 							X1(GeneralKey(
@@ -1124,13 +1125,13 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					PhaLocation::get().into(),
+					NativeLocation::get().into(),
 					fee
 				));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
 							X1(GeneralKey(
@@ -1153,7 +1154,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					PhaLocation::get().into(),
+					NativeLocation::get().into(),
 					fee
 				));
 				// Pause bridge
@@ -1162,7 +1163,7 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
 							X1(GeneralKey(
@@ -1178,7 +1179,7 @@ pub mod pallet {
 				// Should success
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
 						X1(GeneralKey(
@@ -1197,13 +1198,13 @@ pub mod pallet {
 				let amount = 100u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					PhaLocation::get().into(),
+					NativeLocation::get().into(),
 					fee
 				));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(PhaLocation::get()), Fungible(amount)).into(),
+						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
 							X1(GeneralKey(
@@ -1275,17 +1276,17 @@ pub mod pallet {
 				);
 				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
 
-				// Deposit some PHA in advance
+				// Deposit some native asset in advance
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					PhaLocation::get().into(),
+					NativeLocation::get().into(),
 					fee
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(PhaLocation::get()), Fungible(2 * amount)).into(),
+					(Concrete(NativeLocation::get()), Fungible(2 * amount)).into(),
 					(
 						0,
 						X1(GeneralKey(
@@ -1301,10 +1302,10 @@ pub mod pallet {
 				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
 
 				// Generate proposals
-				let valid_pha_transfer_proposal = Proposal {
+				let valid_native_transfer_proposal = Proposal {
 					origin_domain_id: DestDomainID::get(),
 					deposit_nonce: 1,
-					resource_id: PhaResourceId::get(),
+					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
 						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
@@ -1324,7 +1325,7 @@ pub mod pallet {
 				let invalid_depositnonce_proposal = Proposal {
 					origin_domain_id: DestDomainID::get(),
 					deposit_nonce: 2,
-					resource_id: PhaResourceId::get(),
+					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
 						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
@@ -1334,7 +1335,7 @@ pub mod pallet {
 				let invalid_domainid_proposal = Proposal {
 					origin_domain_id: 2,
 					deposit_nonce: 3,
-					resource_id: PhaResourceId::get(),
+					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
 						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
@@ -1354,12 +1355,12 @@ pub mod pallet {
 				let invalid_recipient_proposal = Proposal {
 					origin_domain_id: DestDomainID::get(),
 					deposit_nonce: 3,
-					resource_id: PhaResourceId::get(),
+					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(amount, b"invalid recipient".to_vec()),
 				};
 
 				let proposals = vec![
-					valid_pha_transfer_proposal,
+					valid_native_transfer_proposal,
 					valid_usdc_transfer_proposal,
 					invalid_depositnonce_proposal,
 					invalid_domainid_proposal,

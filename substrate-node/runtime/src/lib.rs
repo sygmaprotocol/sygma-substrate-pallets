@@ -392,7 +392,7 @@ parameter_types! {
 		),
 	);
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
-	pub NativeResourceId: ResourceId = hex_literal::hex!("1000000000000000000000000000000000000000000000000000000000000000");
+	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
 	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
 	// UsdcAssetId is the substrate assetID of USDC
