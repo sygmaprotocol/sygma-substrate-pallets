@@ -89,16 +89,8 @@ pub mod pallet {
 		}
 	}
 
-	#[derive(Clone)]
-	pub struct BasicFeeHandlerImpl<T>(PhantomData<T>);
-	impl<T: Config> BasicFeeHandlerImpl<T> {
-		pub fn new() -> Self {
-			Self(PhantomData)
-		}
-	}
-
-	impl<T: Config> FeeHandler for BasicFeeHandlerImpl<T> {
-		fn get_fee(&self, domain: DomainID, asset: &AssetId) -> Option<u128> {
+	impl<T: Config> FeeHandler for Pallet<T> {
+		fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128> {
 			AssetFees::<T>::get((domain, asset))
 		}
 	}
