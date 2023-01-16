@@ -184,6 +184,40 @@ async function mintAsset(api, id, recipient, amount, finalization, sudo) {
     });
 }
 
+function getUSDCAssetId(api) {
+    return api.createType('XcmV1MultiassetAssetId', {
+        Concrete: api.createType('XcmV1MultiLocation', {
+            parents: 1,
+            interior: api.createType('Junctions', {
+                X3: [
+                    api.createType('XcmV1Junction', {
+                        Parachain: api.createType('Compact<U32>', 2004)
+                    }),
+                    api.createType('XcmV1Junction', {
+                        // 0x7379676d61 is general key of USDC defined in sygma substrate pallet runtime for testing
+                        // see UsdcLocation defination in runtime.rs
+                        GeneralKey: '0x7379676d61'
+                    }),
+                    api.createType('XcmV1Junction', {
+                        // 0x75736463 is general key of USDC defined in sygma substrate pallet runtime for testing
+                        // see UsdcLocation defination in runtime.rs
+                        GeneralKey: '0x75736463'
+                    }),
+                ]
+            })
+        })
+    })
+}
+
+function getNativeAssetId(api) {
+    return api.createType('XcmV1MultiassetAssetId', {
+        Concrete: api.createType('XcmV1MultiLocation', {
+            parents: 0,
+            interior: api.createType('Junctions', 'Here')
+        })
+    })
+}
+
 async function main() {
     const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9944');
     const api = await ApiPromise.create({
@@ -199,24 +233,11 @@ async function main() {
 
     const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
 
-    // create native test asset
-    const nativeAssetID = 1000;
-    const nativeAdmin = sudo.address;
-    const nativeMinBalance = 100;
-    const nativeName = "Native test asset";
-    const nativeSymbol = "NATIVE";
-    const nativeDecimal = 12;
-    await createAsset(api, nativeAssetID, nativeAdmin, nativeMinBalance, true, sudo);
-    await setAssetMetadata(api, nativeAssetID, nativeName, nativeSymbol, nativeDecimal, true, sudo);
-    await mintAsset(api, nativeAssetID, nativeAdmin, 100000000000000, true, sudo); // mint 100 native to Alice
-
-    const nativeAsset = 0; // TODO: I suppose 0 means `Concrete(MultiLocation::new(0, Here);` ?
-                           // TODO: and how to link this nativeAsset with NativeLocation: MultiLocation that defined in the runtime?
-
-    // set fee for native currency
-    await setFee(api, nativeAsset, basicFeeAmount, true, sudo);
+    // set fee for native asset
+    await setFee(api, getNativeAssetId(api), basicFeeAmount, true, sudo);
 
     // create USDC test asset (foreign asset)
+    // UsdcAssetId: AssetId defined in runtime.rs
     const usdcAssetID = 2000;
     const usdcAdmin = sudo.address;
     const usdcMinBalance = 100;
@@ -227,10 +248,8 @@ async function main() {
     await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
     await mintAsset(api, usdcAssetID, usdcAdmin, 100000000000000, true, sudo); // mint 100 USDC to Alice
 
-    const usdcAsset = 1; // TODO: how to assign usdcAsset param here to represent the UsdcLocation: MultiLocation that defined in the runtime?
-                        //  TODO: and how to link this created usdcAsset with UsdcLocation: MultiLocation that defined in the runtime?
     // set fee for USDC
-    await setFee(api, usdcAsset, basicFeeAmount, true, sudo);
+    await setFee(api, getUSDCAssetId(api), basicFeeAmount, true, sudo);
 
     // bridge should be unpaused by the end of the setup
     if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
