@@ -511,7 +511,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeReserveAccount = TreasuryAccount;
 	type DestChainID = DestChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
-	type FeeHandler = sygma_basic_feehandler::BasicFeeHandlerImpl<Runtime>;
+	type FeeHandler = SygmaBasicFeeHandler;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
