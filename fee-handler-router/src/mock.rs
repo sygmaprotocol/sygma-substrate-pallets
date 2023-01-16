@@ -14,8 +14,8 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU128},
 };
 use frame_system::{self as system, EnsureRoot, EnsureSigned};
-use sygma_traits::{DomainID, FeeHandler};
-use xcm::latest::{AssetId as XcmAssetId, MultiLocation};
+use sygma_traits::DomainID;
+use xcm::latest::MultiLocation;
 
 use crate as fee_handler_router;
 
@@ -37,7 +37,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 3,
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 4,
-		FeeHandlerRouter: fee_handler_router::{Pallet, Storage, Event<T>} = 5,
+		FeeHandlerRouter: fee_handler_router::{Pallet, Call, Storage, Event<T>} = 5,
 	}
 );
 
@@ -130,12 +130,6 @@ parameter_types! {
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
 	].to_vec();
 	pub PhaLocation: MultiLocation = MultiLocation::here();
-	pub BasicFeeHandlerForEthereum: Box<dyn FeeHandler> = Box::new(sygma_basic_feehandler::BasicFeeHandlerImpl::<Test>::new());
-	pub BasicFeeHandlerForMoonbeam: Box<dyn FeeHandler> = Box::new(sygma_basic_feehandler::BasicFeeHandlerImpl::<Test>::new());
-	pub FeeHandlers: Vec<((DomainID, XcmAssetId), Box<dyn FeeHandler>)> = [
-		((EthereumDomainID::get(), PhaLocation::get().into()), BasicFeeHandlerForEthereum::get()),
-		((MoonbeamDomainID::get(), PhaLocation::get().into()), BasicFeeHandlerForMoonbeam::get()),
-	].to_vec();
 }
 
 impl sygma_basic_feehandler::Config for Test {
@@ -154,7 +148,9 @@ impl sygma_access_segregator::Config for Test {
 impl fee_handler_router::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
-	type FeeHandlers = FeeHandlers;
+	type BasicFeeHandler = SygmaBasicFeeHandler;
+	type DynamicFeeHandler = ();
+	type PalletIndex = FeeHandlerRouterPalletIndex;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

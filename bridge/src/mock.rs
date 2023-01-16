@@ -5,8 +5,7 @@
 
 use crate as sygma_bridge;
 use sygma_traits::{
-	ChainID, DomainID, ExtractRecipient, FeeHandler, IsReserved, ResourceId,
-	VerifyingContractAddress,
+	ChainID, DomainID, ExtractRecipient, IsReserved, ResourceId, VerifyingContractAddress,
 };
 
 use frame_support::{
@@ -195,7 +194,6 @@ parameter_types! {
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
-	pub BasicFeeHandler: Box<dyn FeeHandler> = Box::new(sygma_basic_feehandler::BasicFeeHandlerImpl::<Runtime>::new());
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -305,7 +303,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeReserveAccount = TreasuryAccount;
 	type DestChainID = DestChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
-	type FeeHandler = BasicFeeHandler;
+	type FeeHandler = SygmaBasicFeeHandler;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
