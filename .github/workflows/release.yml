@@ -6,12 +6,12 @@ name: Create Sygma substrate pallet release
 on:
   push:
     branches:
-      - mpetrun5/monorepo-release-workflow
+      - main
 jobs:
   release-please:
     name: release
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
 
       - uses: actions/checkout@v2
@@ -20,4 +20,4 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           command: manifest
-          default-branch: mpetrun5/monorepo-release-workflow
+          default-branch: main
