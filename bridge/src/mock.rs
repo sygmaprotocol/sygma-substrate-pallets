@@ -180,7 +180,7 @@ parameter_types! {
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
-	pub PhaLocation: MultiLocation = MultiLocation::here();
+	pub NativeLocation: MultiLocation = MultiLocation::here();
 	pub UsdcAssetId: AssetId = 0;
 	pub UsdcLocation: MultiLocation = MultiLocation::new(
 		1,
@@ -190,9 +190,9 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
-	pub PhaResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
+	pub NativeResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(PhaLocation::get().into(), PhaResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
@@ -213,7 +213,7 @@ pub type CurrencyTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
-	IsConcrete<PhaLocation>,
+	IsConcrete<NativeLocation>,
 	// Convert an XCM MultiLocation into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -279,7 +279,7 @@ pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 pub struct ReserveChecker;
 impl IsReserved for ReserveChecker {
 	fn is_reserved(asset_id: &XcmAssetId) -> bool {
-		asset_id == &PhaLocation::get().into()
+		asset_id == &NativeLocation::get().into()
 	}
 }
 
