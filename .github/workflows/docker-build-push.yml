@@ -4,9 +4,8 @@
 name: Build and publish Docker image
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
@@ -24,24 +23,24 @@ jobs:
         id: prep
         run: |
           # creates local variable of docker image
-          
+
           # creates local variable of commit hash that triggered workflow
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
-          
+
           # creates local variable to hold docker images
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          
+
           # check if branch/tag that triggered workflow was from tags
           if [[ $GITHUB_REF == refs/tags/* ]]; then
-          
+
             # set version
             VERSION=${GITHUB_REF#refs/tags/}
-          
+
             # append version to tags
             TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
-          
+
           fi
-          
+
           # sets output of step
           echo ::set-output name=tags::${TAGS}
 
