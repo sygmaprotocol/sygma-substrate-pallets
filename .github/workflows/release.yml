@@ -19,6 +19,5 @@ jobs:
         id: release
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
-          release-type: rust
-          package-name: sygma-substrate-pallet
-          changelog-types: '[{"type":"feat","section":"Features","hidden":false},{"type":"fix","section":"Bug Fixes","hidden":false},{"type":"chore","section":"Miscellaneous","hidden":false},{"type":"revert","hidden":true}]'
+          command: manifest
+          default-branch: main
