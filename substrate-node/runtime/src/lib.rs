@@ -335,6 +335,7 @@ parameter_types! {
 	pub const AccessSegregatorPalletIndex: u8 = 9;
 	pub const FeeHandlerPalletIndex: u8 = 10;
 	pub const BridgePalletIndex: u8 = 11;
+	pub const FeeHandlerRouterPalletIndex: u8 = 12;
 	// RegisteredExtrinsics here registers all valid (pallet index, extrinsic_name) paris
 	// make sure to update this when adding new access control extrinsic
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
@@ -357,6 +358,14 @@ impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
+}
+
+impl sygma_fee_handler_router::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type BasicFeeHandler = SygmaBasicFeeHandler;
+	type DynamicFeeHandler = ();
+	type PalletIndex = FeeHandlerRouterPalletIndex;
 }
 
 // This address is defined in the substrate E2E test of sygma-relayer
@@ -511,7 +520,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeReserveAccount = TreasuryAccount;
 	type DestChainID = DestChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
-	type FeeHandler = SygmaBasicFeeHandler;
+	type FeeHandler = FeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
@@ -540,6 +549,7 @@ construct_runtime!(
 		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
+		FeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
 	}
 );
 
