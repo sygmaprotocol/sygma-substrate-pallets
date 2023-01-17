@@ -6,7 +6,7 @@ name: Create Sygma substrate pallet release
 on:
   push:
     branches:
-      - main
+      - mpetrun5/monorepo-release-workflow
 jobs:
   release-please:
     name: release
@@ -19,6 +19,5 @@ jobs:
         id: release
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
-          release-type: rust
-          package-name: sygma-substrate-pallet
-          changelog-types: '[{"type":"feat","section":"Features","hidden":false},{"type":"fix","section":"Bug Fixes","hidden":false},{"type":"chore","section":"Miscellaneous","hidden":false},{"type":"revert","hidden":true}]'
+          command: manifest
+          default-branch: mpetrun5/monorepo-release-workflow
