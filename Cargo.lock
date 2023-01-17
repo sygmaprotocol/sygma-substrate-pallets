@@ -1643,26 +1643,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fee-handler-router"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-assets",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sygma-access-segregator",
- "sygma-basic-feehandler",
- "sygma-traits",
- "xcm",
- "xcm-builder",
-]
-
-[[package]]
 name = "ff"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3928,6 +3908,7 @@ dependencies = [
  "sygma-access-segregator",
  "sygma-basic-feehandler",
  "sygma-bridge",
+ "sygma-fee-handler-router",
  "sygma-traits",
  "xcm",
  "xcm-builder",
@@ -7688,6 +7669,26 @@ dependencies = [
  "xcm",
  "xcm-builder",
  "xcm-executor",
+]
+
+[[package]]
+name = "sygma-fee-handler-router"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sygma-access-segregator",
+ "sygma-basic-feehandler",
+ "sygma-traits",
+ "xcm",
+ "xcm-builder",
 ]
 
 [[package]]
