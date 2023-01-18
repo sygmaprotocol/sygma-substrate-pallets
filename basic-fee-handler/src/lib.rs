@@ -14,7 +14,7 @@ mod mock;
 pub mod pallet {
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
 	use frame_system::pallet_prelude::*;
-	use sygma_traits::FeeHandler;
+	use sygma_traits::{DomainID, FeeHandler};
 	use xcm::latest::AssetId;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
@@ -22,7 +22,7 @@ pub mod pallet {
 	/// Mapping fungible asset id to corresponding fee amount
 	#[pallet::storage]
 	#[pallet::getter(fn asset_fees)]
-	pub type AssetFees<T: Config> = StorageMap<_, Twox64Concat, AssetId, u128>;
+	pub type AssetFees<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u128>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -45,8 +45,8 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Fee set for a specific asset
-		/// args: [asset, amount]
-		FeeSet { asset: AssetId, amount: u128 },
+		/// args: [domain, asset, amount]
+		FeeSet { domain: DomainID, asset: AssetId, amount: u128 },
 	}
 
 	#[pallet::error]
@@ -61,7 +61,12 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Set bridge fee for a specific asset
 		#[pallet::weight(195_000_000)]
-		pub fn set_fee(origin: OriginFor<T>, asset: AssetId, amount: u128) -> DispatchResult {
+		pub fn set_fee(
+			origin: OriginFor<T>,
+			domain: DomainID,
+			asset: AssetId,
+			amount: u128,
+		) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to set fee
 				let who = ensure_signed(origin)?;
@@ -76,19 +81,17 @@ pub mod pallet {
 			}
 
 			// Update asset fee
-			AssetFees::<T>::insert(&asset, amount);
+			AssetFees::<T>::insert((domain, &asset), amount);
 
 			// Emit FeeSet event
-			Self::deposit_event(Event::FeeSet { asset, amount });
+			Self::deposit_event(Event::FeeSet { domain, asset, amount });
 			Ok(())
 		}
 	}
 
-	pub struct BasicFeeHandlerImpl<T>(PhantomData<T>);
-
-	impl<T: Config> FeeHandler for BasicFeeHandlerImpl<T> {
-		fn get_fee(asset: &AssetId) -> Option<u128> {
-			AssetFees::<T>::get(asset)
+	impl<T: Config> FeeHandler for Pallet<T> {
+		fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128> {
+			AssetFees::<T>::get((domain, asset))
 		}
 	}
 
@@ -101,44 +104,92 @@ pub mod pallet {
 			RuntimeEvent as Event, RuntimeOrigin as Origin, Test, ALICE,
 		};
 		use frame_support::{assert_noop, assert_ok};
+		use sygma_traits::DomainID;
 		use xcm::latest::{prelude::*, MultiLocation};
 
 		#[test]
 		fn set_get_fee() {
 			new_test_ext().execute_with(|| {
+				let dest_domain_id: DomainID = 0;
+				let another_dest_domain_id: DomainID = 1;
 				let asset_id_a = Concrete(MultiLocation::new(1, Here));
 				let amount_a = 100u128;
 
 				let asset_id_b = Concrete(MultiLocation::new(2, Here));
 				let amount_b = 101u128;
 
-				// set fee 100 with assetId asset_id_a
-				assert_ok!(BasicFeeHandler::set_fee(Origin::root(), asset_id_a.clone(), amount_a));
-				assert_eq!(AssetFees::<Test>::get(asset_id_a.clone()).unwrap(), amount_a);
+				// set fee 100 with assetId asset_id_a for one domain
+				assert_ok!(BasicFeeHandler::set_fee(
+					Origin::root(),
+					dest_domain_id,
+					asset_id_a.clone(),
+					amount_a
+				));
+				// set fee 200 with assetId asset_id_a for another domain
+				assert_ok!(BasicFeeHandler::set_fee(
+					Origin::root(),
+					another_dest_domain_id,
+					asset_id_a.clone(),
+					amount_a * 2
+				));
+				assert_eq!(
+					AssetFees::<Test>::get(&(dest_domain_id, asset_id_a.clone())).unwrap(),
+					amount_a
+				);
+				assert_eq!(
+					AssetFees::<Test>::get(&(another_dest_domain_id, asset_id_a.clone())).unwrap(),
+					amount_a * 2
+				);
 
 				// set fee 101 with assetId asset_id_b
-				assert_ok!(BasicFeeHandler::set_fee(Origin::root(), asset_id_b.clone(), amount_b));
-				assert_eq!(AssetFees::<Test>::get(asset_id_b.clone()).unwrap(), amount_b);
+				assert_ok!(BasicFeeHandler::set_fee(
+					Origin::root(),
+					dest_domain_id,
+					asset_id_b.clone(),
+					amount_b
+				));
+				assert_eq!(
+					AssetFees::<Test>::get(&(dest_domain_id, asset_id_b.clone())).unwrap(),
+					amount_b
+				);
 
 				// fee of asset_id_a should not be equal to amount_b
-				assert_ne!(AssetFees::<Test>::get(asset_id_a.clone()).unwrap(), amount_b);
+				assert_ne!(
+					AssetFees::<Test>::get(&(dest_domain_id, asset_id_a.clone())).unwrap(),
+					amount_b
+				);
 
 				// fee of asset_id_b should not be equal to amount_a
-				assert_ne!(AssetFees::<Test>::get(asset_id_b.clone()).unwrap(), amount_a);
+				assert_ne!(
+					AssetFees::<Test>::get(&(dest_domain_id, asset_id_b.clone())).unwrap(),
+					amount_a
+				);
 
 				// permission test: unauthorized account should not be able to set fee
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
-					BasicFeeHandler::set_fee(unauthorized_account, asset_id_a.clone(), amount_a),
+					BasicFeeHandler::set_fee(
+						unauthorized_account,
+						dest_domain_id,
+						asset_id_a.clone(),
+						amount_a
+					),
 					basic_fee_handler::Error::<Test>::AccessDenied
 				);
 
 				assert_events(vec![
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
-						asset: asset_id_a,
+						domain: dest_domain_id,
+						asset: asset_id_a.clone(),
 						amount: amount_a,
 					}),
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
+						domain: another_dest_domain_id,
+						asset: asset_id_a,
+						amount: amount_a * 2,
+					}),
+					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
+						domain: dest_domain_id,
 						asset: asset_id_b,
 						amount: amount_b,
 					}),
@@ -149,11 +200,22 @@ pub mod pallet {
 		#[test]
 		fn access_control() {
 			new_test_ext().execute_with(|| {
+				let dest_domain_id: DomainID = 0;
 				let asset_id = Concrete(MultiLocation::new(0, Here));
 
-				assert_ok!(BasicFeeHandler::set_fee(Origin::root(), asset_id.clone(), 100),);
+				assert_ok!(BasicFeeHandler::set_fee(
+					Origin::root(),
+					dest_domain_id,
+					asset_id.clone(),
+					100
+				),);
 				assert_noop!(
-					BasicFeeHandler::set_fee(Some(ALICE).into(), asset_id.clone(), 200),
+					BasicFeeHandler::set_fee(
+						Some(ALICE).into(),
+						dest_domain_id,
+						asset_id.clone(),
+						200
+					),
 					basic_fee_handler::Error::<Test>::AccessDenied
 				);
 				// (FeeHandlerPalletIndex:get(), b"set_fee") indicates extrinsic: `set_fee` of this
@@ -174,8 +236,13 @@ pub mod pallet {
 					b"set_fee".to_vec(),
 					ALICE
 				));
-				assert_ok!(BasicFeeHandler::set_fee(Some(ALICE).into(), asset_id.clone(), 200),);
-				assert_eq!(AssetFees::<Test>::get(asset_id).unwrap(), 200);
+				assert_ok!(BasicFeeHandler::set_fee(
+					Some(ALICE).into(),
+					dest_domain_id,
+					asset_id.clone(),
+					200
+				),);
+				assert_eq!(AssetFees::<Test>::get(&(dest_domain_id, asset_id)).unwrap(), 200);
 			})
 		}
 	}
