@@ -375,8 +375,10 @@ parameter_types! {
 	// DestDomainID is the EVM chain domainID that runtime is bridging with
 	pub DestDomainID: DomainID = 1;
 	// TreasuryAccount is an substrate account and currently used for substrate -> EVM bridging fee collection
+	// TreasuryAccount address: 5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	// BridgeAccount is an account for holding transferred asset collection
+	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	// DestDomainID is the EVM chainID that runtime is bridging with
 	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);

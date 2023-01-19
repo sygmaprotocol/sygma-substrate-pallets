@@ -17,6 +17,43 @@ const supportedDestDomains = {
     }
 }
 
+const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
+
+async function setBalance(api, who, value, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to set balance of ${who} to ${value}. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.sudo
+            .sudo(api.tx.balances.setBalance(who, value, 0))
+            .signAndSend(sudo, { nonce: nonce, era: 0 }, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
 async function setFeeHandler(api, domainID, asset, feeHandlerType, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
@@ -298,6 +335,9 @@ async function main() {
     // set fee for USDC
     await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
     await setFee(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+
+    // transfer some native asset to FeeReserveAccount as Existential Deposit(aka ED)
+    await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
     // bridge should be unpaused by the end of the setup
     if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
