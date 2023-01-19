@@ -1,0 +1,51 @@
+[package]
+name = "sygma-fee-handler-router"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-3.0"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "2.0", default-features = false, features = ["derive", "serde", "decode"] }
+
+# Substrate
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false }
+frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33", default-features = false }
+
+# Polkadot
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33", default-features = false }
+xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33", default-features = false }
+
+# Local
+sygma-traits = { path = "../traits", default-features = false }
+sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
+sygma-access-segregator = { path = "../access-segregator", default-features = false }
+
+[dev-dependencies]
+# Substrate
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+
+sygma-access-segregator = { path = "../access-segregator" }
+sygma-basic-feehandler = { path = "../basic-fee-handler" }
+sygma-traits = { path = "../traits" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+    "frame-support/std",
+    "frame-system/std",
+	"sp-std/std",
+	"xcm/std",
+	"xcm-builder/std",
+    "sygma-traits/std",
+	"sygma-basic-feehandler/std",
+	"sygma-access-segregator/std",
+]

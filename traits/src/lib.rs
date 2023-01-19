@@ -33,7 +33,13 @@ pub trait ExtractRecipient {
 	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>>;
 }
 
-pub trait FeeHandler: Sized {
+pub trait FeeHandler {
 	// Return fee represent by a specific asset
-	fn get_fee(asset_id: &AssetId) -> Option<u128>;
+	fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128>;
+}
+
+impl FeeHandler for () {
+	fn get_fee(_domain: DomainID, _asset: &AssetId) -> Option<u128> {
+		None
+	}
 }
