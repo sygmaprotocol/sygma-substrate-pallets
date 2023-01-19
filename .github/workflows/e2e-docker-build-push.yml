@@ -1,23 +1,27 @@
 # The Licensed Work is (c) 2022 Sygma
 # SPDX-License-Identifier: LGPL-3.0-only
 
-name: Build and publish Docker image
+name: Build and publish E2E Docker image
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  push_to_registry:
-    name: Push Docker image to GitHub Container Registry
+  push_e2e_to_registry:
+    name: Push E2E Docker image to GitHub Container Registry
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - uses: ./.github/actions/install_toolchain
 
       - name: Prepare
         id: prep
@@ -28,7 +32,7 @@ jobs:
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
 
           # creates local variable to hold docker images
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-latest"
 
           # check if branch/tag that triggered workflow was from tags
           if [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -36,13 +40,16 @@ jobs:
             # set version
             VERSION=${GITHUB_REF#refs/tags/}
 
-            # append version to tags
+            # append version and e2e testing name to tags
             TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
 
           fi
 
           # sets output of step
           echo ::set-output name=tags::${TAGS}
+
+      - name: Run build and setups
+        run: make setup-e2e-test
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -63,6 +70,7 @@ jobs:
         with:
           context: .
           push: true
+          file: ./Dockerfile_e2e
           tags: ${{ steps.prep.outputs.tags }}
 
       - name: Image digest

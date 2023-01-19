@@ -6,7 +6,90 @@ const BN = require('bn.js');
 
 const bn1e12 = new BN(10).pow(new BN(12));
 
-async function setFee(api, asset, amount, finalization, sudo) {
+const feeHandlerType = {
+    BasicFeeHandler: "BasicFeeHandler",
+    DynamicFeeHandler: "DynamicFeeHandler"
+}
+
+const supportedDestDomains = {
+    evmDomain1: {
+        domainID: 1,
+    }
+}
+
+const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
+
+async function setBalance(api, who, value, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to set balance of ${who} to ${value}. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.sudo
+            .sudo(api.tx.balances.setBalance(who, value, 0))
+            .signAndSend(sudo, { nonce: nonce, era: 0 }, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
+async function setFeeHandler(api, domainID, asset, feeHandlerType, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to set fee handler. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.sudo
+            .sudo(api.tx.feeHandlerRouter.setFeeHandler(domainID, asset, feeHandlerType))
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
+async function setFee(api, domainID, asset, amount, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
@@ -14,7 +97,7 @@ async function setFee(api, asset, amount, finalization, sudo) {
             `--- Submitting extrinsic to set basic fee. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
-            .sudo(api.tx.sygmaBasicFeeHandler.setFee(asset, amount))
+            .sudo(api.tx.sygmaBasicFeeHandler.setFee(domainID, asset, amount))
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
@@ -227,14 +310,15 @@ async function main() {
     await cryptoWaitReady();
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
-
+    const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
     const mpcAddr = process.env.MPCADDR || '0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4';
+
+    // set up MPC address
     await setMpcAddress(api, mpcAddr, true, sudo);
 
-    const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
-
     // set fee for native asset
-    await setFee(api, getNativeAssetId(api), basicFeeAmount, true, sudo);
+    await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+    await setFee(api, supportedDestDomains.evmDomain1.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
 
     // create USDC test asset (foreign asset)
     // UsdcAssetId: AssetId defined in runtime.rs
@@ -249,7 +333,11 @@ async function main() {
     await mintAsset(api, usdcAssetID, usdcAdmin, 100000000000000, true, sudo); // mint 100 USDC to Alice
 
     // set fee for USDC
-    await setFee(api, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+    await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+    await setFee(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+
+    // transfer some native asset to FeeReserveAccount as Existential Deposit(aka ED)
+    await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
     // bridge should be unpaused by the end of the setup
     if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
