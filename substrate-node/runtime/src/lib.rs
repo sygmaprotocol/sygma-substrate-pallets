@@ -372,16 +372,12 @@ impl sygma_fee_handler_router::Config for Runtime {
 const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
 
 parameter_types! {
-	// DestDomainID is the EVM chain domainID that runtime is bridging with
-	pub DestDomainID: DomainID = 1;
 	// TreasuryAccount is an substrate account and currently used for substrate -> EVM bridging fee collection
 	// TreasuryAccount address: 5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	// BridgeAccount is an account for holding transferred asset collection
 	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
-	// DestDomainID is the EVM chainID that runtime is bridging with
-	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
 	// When relayers signing, this address will be included in the EIP712Domain
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
@@ -517,10 +513,8 @@ impl ExtractRecipient for RecipientParser {
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type DestDomainID = DestDomainID;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
-	type DestChainID = DestChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = FeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;

@@ -28,6 +28,7 @@ pub mod pallet {
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
+	use log::Level::Error;
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
 	use sp_io::{
@@ -204,14 +205,14 @@ pub mod pallet {
 	/// Deposit counter of dest domain
 	#[pallet::storage]
 	#[pallet::getter(fn dest_counts)]
-	pub type DepositCounts<T> = StorageValue<_, DepositNonce, ValueQuery>;
+	pub type DepositCounts<T> = StorageMap<_, Twox64Concat, DomainID, DepositNonce, ValueQuery>;
 
 	/// Bridge Pause indicator
 	/// Bridge is unpaused initially, until pause
 	/// After mpc address setup, bridge should be paused until ready to unpause
 	#[pallet::storage]
 	#[pallet::getter(fn is_paused)]
-	pub type IsPaused<T> = StorageValue<_, bool, ValueQuery>;
+	pub type IsPaused<T> = StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
 
 	/// Pre-set MPC address
 	#[pallet::storage]
@@ -222,7 +223,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn used_nonces)]
 	pub type UsedNonces<T: Config> =
-		StorageMap<_, Twox64Concat, DepositNonce, DepositNonce, ValueQuery>;
+		StorageDoubleMap<_, Twox64Concat, DomainID, Twox64Concat, DepositNonce, DepositNonce, ValueQuery>;
 
 	/// Mark supported dest domainID
 	#[pallet::storage]
@@ -243,7 +244,7 @@ pub mod pallet {
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
 		#[pallet::weight(195_000_000)]
-		pub fn pause_bridge(origin: OriginFor<T>) -> DispatchResult {
+		pub fn pause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permission to pause bridge
 				let who = ensure_signed(origin)?;
@@ -259,17 +260,19 @@ pub mod pallet {
 			// make sure MPC address is set up
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
 			// Mark as paused
-			IsPaused::<T>::set(true);
+			IsPaused::<T>::insert(dest_domain_id, true);
 
 			// Emit BridgePause event
-			Self::deposit_event(Event::BridgePaused { dest_domain_id: T::DestDomainID::get() });
+			Self::deposit_event(Event::BridgePaused { dest_domain_id });
 			Ok(())
 		}
 
 		/// Unpause bridge.
 		#[pallet::weight(195_000_000)]
-		pub fn unpause_bridge(origin: OriginFor<T>) -> DispatchResult {
+		pub fn unpause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permission to unpause bridge
 				let who = ensure_signed(origin)?;
@@ -285,14 +288,16 @@ pub mod pallet {
 			// make sure MPC address is set up
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
 			// make sure the current status is paused
-			ensure!(IsPaused::<T>::get(), Error::<T>::BridgeUnpaused);
+			ensure!(IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgeUnpaused);
 
 			// Mark as unpaused
-			IsPaused::<T>::set(false);
+			IsPaused::<T>::insert(dest_domain_id, false);
 
 			// Emit BridgeUnpause event
-			Self::deposit_event(Event::BridgeUnpaused { dest_domain_id: T::DestDomainID::get() });
+			Self::deposit_event(Event::BridgeUnpaused { dest_domain_id });
 			Ok(())
 		}
 
