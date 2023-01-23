@@ -73,20 +73,9 @@ pub mod pallet {
 		/// Origin used to administer the pallet
 		type BridgeCommitteeOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// The identifier for this chain.
-		/// This must be unique and must not collide with existing IDs within a set of bridged
-		/// chains.
-		#[pallet::constant]
-		type DestDomainID: Get<DomainID>;
-
 		/// Bridge transfer reserve account
 		#[pallet::constant]
 		type TransferReserveAccount: Get<Self::AccountId>;
-
-		/// Pallet ChainID
-		/// This is used in EIP712 typed data domain
-		#[pallet::constant]
-		type DestChainID: Get<ChainID>;
 
 		/// EIP712 Verifying contract address
 		/// This is used in EIP712 typed data domain
@@ -156,6 +145,18 @@ pub mod pallet {
 		/// When bridge is unpaused
 		/// args: [dest_domain_id]
 		BridgeUnpaused { dest_domain_id: DomainID },
+		/// When registering a new dest domainID with its corresponding chainID
+		RegisterDestDomain {
+			sender: T::AccountId,
+			domain_id: DomainID,
+			chain_id: ChainID,
+		},
+		/// When unregistering a dest domainID with its corresponding chainID
+		UnregisterDestDomain {
+			sender: T::AccountId,
+			domain_id: DomainID,
+			chain_id: ChainID,
+		},
 	}
 
 	#[pallet::error]
@@ -192,6 +193,10 @@ pub mod pallet {
 		InvalidOriginDomainId,
 		/// Deposit data not correct
 		InvalidDepositData,
+		/// Dest domain not supported
+		DestDomainNotSupported,
+		/// Dest chain id not supported
+		DestChainIDNotSupported,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -219,6 +224,18 @@ pub mod pallet {
 	pub type UsedNonces<T: Config> =
 		StorageMap<_, Twox64Concat, DepositNonce, DepositNonce, ValueQuery>;
 
+	/// Mark supported dest domainID
+	#[pallet::storage]
+	#[pallet::getter(fn dest_domain_ids)]
+	pub type DestDomainIds<T: Config> =
+	StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
+
+	/// Mark the pairs for supported dest domainID with its corresponding chainID
+	#[pallet::storage]
+	#[pallet::getter(fn dest_chain_ids)]
+	pub type DestChainIds<T: Config> =
+	StorageMap<_, Twox64Concat, DomainID, ChainID, ValueQuery>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
@@ -228,7 +245,7 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		pub fn pause_bridge(origin: OriginFor<T>) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permisson to pause bridge
+				// Ensure bridge committee or the account that has permission to pause bridge
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -254,7 +271,7 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		pub fn unpause_bridge(origin: OriginFor<T>) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permisson to unpause bridge
+				// Ensure bridge committee or the account that has permission to unpause bridge
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -299,6 +316,66 @@ pub mod pallet {
 
 			// Set MPC account address
 			MpcAdd::<T>::set(addr);
+			Ok(())
+		}
+
+		/// Mark the give dest domainID with chainID to be enabled
+		#[pallet::weight(195_000_000)]
+		pub fn register_domain(origin: OriginFor<T>, dest_domain_id: DomainID, dest_chain_id: ChainID) -> DispatchResult {
+			let mut sender: T::AccountId = [0u8; 32].into();
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permission to register the dest domain
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"register_domain".to_vec(),
+						&who
+					),
+					Error::<T>::AccessDenied
+				);
+				sender = who;
+			}
+			// make sure MPC address is set up
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			DestDomainIds::<T>::insert(dest_domain_id, true);
+			DestChainIds::<T>::insert(dest_domain_id, dest_chain_id);
+
+			// Emit register dest domain event
+			Self::deposit_event(Event::RegisterDestDomain { sender, domain_id: dest_domain_id, chain_id: dest_chain_id });
+			Ok(())
+		}
+
+		#[pallet::weight(195_000_000)]
+		pub fn unregister_domain(origin: OriginFor<T>, dest_domain_id: DomainID, dest_chain_id: ChainID) -> DispatchResult {
+			let mut sender: T::AccountId = [0u8; 32].into();
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permission to unregister the dest domain
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"unregister_domain".to_vec(),
+						&who
+					),
+					Error::<T>::AccessDenied
+				);
+				sender = who;
+			}
+			// make sure MPC address is set up
+			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
+			let co_chain_id = DestChainIds::<T>::get(dest_domain_id);
+			ensure!(co_chain_id == dest_chain_id, Error::<T>::DestChainIDNotSupported);
+
+			DestDomainIds::<T>::remove(dest_domain_id);
+			DestChainIds::<T>::remove(dest_domain_id);
+
+			// Emit unregister dest domain event
+			Self::deposit_event(Event::UnregisterDestDomain { sender, domain_id: dest_domain_id, chain_id: dest_chain_id });
 			Ok(())
 		}
 

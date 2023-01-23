@@ -154,6 +154,8 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"register_domain".to_vec()),
+		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
 	].to_vec();
 }
 
@@ -171,9 +173,7 @@ impl sygma_basic_feehandler::Config for Runtime {
 }
 
 parameter_types! {
-	pub DestDomainID: DomainID = 1;
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
-	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
@@ -298,10 +298,8 @@ impl ExtractRecipient for RecipientParser {
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type DestDomainID = DestDomainID;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
-	type DestChainID = DestChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = SygmaBasicFeeHandler;
 	type AssetTransactor = AssetTransactors;
