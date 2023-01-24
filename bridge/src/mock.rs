@@ -6,7 +6,7 @@
 use crate as sygma_bridge;
 use funty::Fundamental;
 use sygma_traits::{
-	DomainID, ExtractDestDomainID, ExtractRecipient, IsReserved, ResourceId,
+	ChainID, DomainID, ExtractDestDomainID, ExtractRecipient, IsReserved, ResourceId,
 	VerifyingContractAddress,
 };
 
@@ -176,6 +176,7 @@ impl sygma_basic_feehandler::Config for Runtime {
 
 parameter_types! {
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
+	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
@@ -314,6 +315,7 @@ impl sygma_bridge::Config for Runtime {
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
+	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = SygmaBasicFeeHandler;
 	type AssetTransactor = AssetTransactors;

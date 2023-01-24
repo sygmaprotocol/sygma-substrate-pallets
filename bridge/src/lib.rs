@@ -82,6 +82,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type DestVerifyingContractAddress: Get<VerifyingContractAddress>;
 
+		/// Pallet ChainID
+		/// This is used in EIP712 typed data domain
+		#[pallet::constant]
+		type EIP712ChainID: Get<ChainID>;
+
 		/// Fee reserve account
 		#[pallet::constant]
 		type FeeReserveAccount: Get<Self::AccountId>;
@@ -526,7 +531,7 @@ pub mod pallet {
 				Error::<T>::BadMpcSignature
 			);
 
-			// Execute proposals one by on.
+			// Execute proposals one by one.
 			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
 			// than revert whole transaction
 			for proposal in proposals.iter() {
@@ -617,8 +622,6 @@ pub mod pallet {
 				return [0u8; 32]
 			}
 
-			let chain_id: ChainID = DestChainIds::<T>::get(proposals[0].origin_domain_id);
-
 			let mut keccak_data = Vec::new();
 			for prop in proposals {
 				let proposal_domain_id_token = Token::Uint(prop.origin_domain_id.into());
@@ -657,7 +660,7 @@ pub mod pallet {
 			let eip712_domain = eip712::EIP712Domain {
 				name: String::from("Bridge"),
 				version: String::from("3.1.0"),
-				chain_id,
+				chain_id: T::EIP712ChainID::get(),
 				verifying_contract: T::DestVerifyingContractAddress::get(),
 				salt: default_eip712_domain.salt,
 			};

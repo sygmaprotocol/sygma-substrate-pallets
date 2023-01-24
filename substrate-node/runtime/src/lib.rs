@@ -31,7 +31,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	DomainID, ExtractDestDomainID, ExtractRecipient, IsReserved, ResourceId,
+	ChainID, DomainID, ExtractDestDomainID, ExtractRecipient, IsReserved, ResourceId,
 	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
@@ -380,6 +380,8 @@ parameter_types! {
 	// BridgeAccount is an account for holding transferred asset collection
 	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	// EIP712ChainID is the chainID that pallet is assigned with, used in EIP712 typed data domain
+	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
 	// When relayers signing, this address will be included in the EIP712Domain
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
@@ -529,6 +531,7 @@ impl sygma_bridge::Config for Runtime {
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
+	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = FeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;
