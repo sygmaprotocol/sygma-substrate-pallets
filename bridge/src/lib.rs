@@ -28,7 +28,6 @@ pub mod pallet {
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
-	use log::Level::Error;
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
 	use sp_io::{
@@ -45,8 +44,8 @@ pub mod pallet {
 
 	use crate::eip712;
 	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcAddress,
-		ResourceId, TransferType, VerifyingContractAddress,
+		ChainID, DepositNonce, DomainID, ExtractDestDomainID, ExtractRecipient, FeeHandler,
+		IsReserved, MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
 	};
 
 	#[allow(dead_code)]
@@ -102,6 +101,9 @@ pub mod pallet {
 		/// Extract recipient from given MultiLocation
 		type ExtractRecipient: ExtractRecipient;
 
+		/// Extract dest domainID from given MultiLocation
+		type ExtractDestDomainID: ExtractDestDomainID;
+
 		/// Config ID for the current pallet instance
 		type PalletId: Get<PalletId>;
 
@@ -147,17 +149,9 @@ pub mod pallet {
 		/// args: [dest_domain_id]
 		BridgeUnpaused { dest_domain_id: DomainID },
 		/// When registering a new dest domainID with its corresponding chainID
-		RegisterDestDomain {
-			sender: T::AccountId,
-			domain_id: DomainID,
-			chain_id: ChainID,
-		},
+		RegisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
 		/// When unregistering a dest domainID with its corresponding chainID
-		UnregisterDestDomain {
-			sender: T::AccountId,
-			domain_id: DomainID,
-			chain_id: ChainID,
-		},
+		UnregisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
 	}
 
 	#[pallet::error]
@@ -190,14 +184,14 @@ pub mod pallet {
 		ProposalAlreadyComplete,
 		/// Transactor operation failed
 		TransactorFailed,
-		/// Origin domain id mismatch
-		InvalidOriginDomainId,
 		/// Deposit data not correct
 		InvalidDepositData,
 		/// Dest domain not supported
 		DestDomainNotSupported,
 		/// Dest chain id not supported
 		DestChainIDNotSupported,
+		/// Failed to extract dest domainID according to given DestDomainID parser
+		ExtractDestDomainIDFailed,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -222,20 +216,25 @@ pub mod pallet {
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn used_nonces)]
-	pub type UsedNonces<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, DomainID, Twox64Concat, DepositNonce, DepositNonce, ValueQuery>;
+	pub type UsedNonces<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		DomainID,
+		Twox64Concat,
+		DepositNonce,
+		DepositNonce,
+		ValueQuery,
+	>;
 
 	/// Mark supported dest domainID
 	#[pallet::storage]
 	#[pallet::getter(fn dest_domain_ids)]
-	pub type DestDomainIds<T: Config> =
-	StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
+	pub type DestDomainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
 
 	/// Mark the pairs for supported dest domainID with its corresponding chainID
 	#[pallet::storage]
 	#[pallet::getter(fn dest_chain_ids)]
-	pub type DestChainIds<T: Config> =
-	StorageMap<_, Twox64Concat, DomainID, ChainID, ValueQuery>;
+	pub type DestChainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, ChainID, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
@@ -326,16 +325,21 @@ pub mod pallet {
 
 		/// Mark the give dest domainID with chainID to be enabled
 		#[pallet::weight(195_000_000)]
-		pub fn register_domain(origin: OriginFor<T>, dest_domain_id: DomainID, dest_chain_id: ChainID) -> DispatchResult {
+		pub fn register_domain(
+			origin: OriginFor<T>,
+			dest_domain_id: DomainID,
+			dest_chain_id: ChainID,
+		) -> DispatchResult {
 			let mut sender: T::AccountId = [0u8; 32].into();
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to register the dest domain
+				// Ensure bridge committee or the account that has permission to register the dest
+				// domain
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
 						b"register_domain".to_vec(),
-						&who
+						who.clone()
 					),
 					Error::<T>::AccessDenied
 				);
@@ -348,21 +352,30 @@ pub mod pallet {
 			DestChainIds::<T>::insert(dest_domain_id, dest_chain_id);
 
 			// Emit register dest domain event
-			Self::deposit_event(Event::RegisterDestDomain { sender, domain_id: dest_domain_id, chain_id: dest_chain_id });
+			Self::deposit_event(Event::RegisterDestDomain {
+				sender,
+				domain_id: dest_domain_id,
+				chain_id: dest_chain_id,
+			});
 			Ok(())
 		}
 
 		#[pallet::weight(195_000_000)]
-		pub fn unregister_domain(origin: OriginFor<T>, dest_domain_id: DomainID, dest_chain_id: ChainID) -> DispatchResult {
+		pub fn unregister_domain(
+			origin: OriginFor<T>,
+			dest_domain_id: DomainID,
+			dest_chain_id: ChainID,
+		) -> DispatchResult {
 			let mut sender: T::AccountId = [0u8; 32].into();
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to unregister the dest domain
+				// Ensure bridge committee or the account that has permission to unregister the dest
+				// domain
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
 						<T as Config>::PalletIndex::get(),
 						b"unregister_domain".to_vec(),
-						&who
+						who.clone()
 					),
 					Error::<T>::AccessDenied
 				);
@@ -380,7 +393,11 @@ pub mod pallet {
 			DestChainIds::<T>::remove(dest_domain_id);
 
 			// Emit unregister dest domain event
-			Self::deposit_event(Event::UnregisterDestDomain { sender, domain_id: dest_domain_id, chain_id: dest_chain_id });
+			Self::deposit_event(Event::UnregisterDestDomain {
+				sender,
+				domain_id: dest_domain_id,
+				chain_id: dest_chain_id,
+			});
 			Ok(())
 		}
 
@@ -395,7 +412,14 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+
+			// Extract dest (MultiLocation) to get corresponding dest domainID
+			let dest_domain_id = T::ExtractDestDomainID::extract_dest_domain_id(&dest)
+				.ok_or(Error::<T>::ExtractDestDomainIDFailed)?;
+
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
+			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
 			// transfer type
@@ -405,7 +429,7 @@ pub mod pallet {
 			let recipient = T::ExtractRecipient::extract_recipient(&dest)
 				.ok_or(Error::<T>::ExtractRecipientFailed)?;
 			// Return error if no fee handler set
-			let fee = T::FeeHandler::get_fee(T::DestDomainID::get(), &asset.id)
+			let fee = T::FeeHandler::get_fee(dest_domain_id, &asset.id)
 				.ok_or(Error::<T>::MissingFeeConfig)?;
 
 			ensure!(amount > fee, Error::<T>::FeeTooExpensive);
@@ -444,12 +468,12 @@ pub mod pallet {
 			}
 
 			// Bump deposit nonce
-			let deposit_nonce = DepositCounts::<T>::get();
-			DepositCounts::<T>::put(deposit_nonce + 1);
+			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
+			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce + 1);
 
 			// Emit Deposit event
 			Self::deposit_event(Event::Deposit {
-				dest_domain_id: T::DestDomainID::get(),
+				dest_domain_id,
 				resource_id,
 				deposit_nonce,
 				sender,
@@ -468,11 +492,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			deposit_on_block_height: u128,
 			deposit_extrinsic_index: u128,
+			dest_domain_id: DomainID,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Emit retry event
 			Self::deposit_event(Event::<T>::Retry {
@@ -493,7 +519,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			// Check MPC address and bridge status
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+
 			// Verify MPC signature
 			ensure!(
 				Self::verify_by_mpc_address(&proposals, signature),
@@ -516,7 +542,10 @@ pub mod pallet {
 					},
 					|_| {
 						// Update proposal status
-						Self::set_proposal_executed(proposal.deposit_nonce);
+						Self::set_proposal_executed(
+							proposal.deposit_nonce,
+							proposal.origin_domain_id,
+						);
 
 						// Emit ProposalExecution
 						Self::deposit_event(Event::ProposalExecution {
@@ -550,6 +579,10 @@ pub mod pallet {
 				Err(error) => return false,
 			};
 
+			if proposals.is_empty() {
+				return false
+			}
+
 			// parse proposals and construct signing message
 			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
 
@@ -579,6 +612,12 @@ pub mod pallet {
 				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
 			);
+
+			if proposals.is_empty() {
+				return [0u8; 32]
+			}
+
+			let chain_id: ChainID = DestChainIds::<T>::get(proposals[0].origin_domain_id);
 
 			let mut keccak_data = Vec::new();
 			for prop in proposals {
@@ -618,7 +657,7 @@ pub mod pallet {
 			let eip712_domain = eip712::EIP712Domain {
 				name: String::from("Bridge"),
 				version: String::from("3.1.0"),
-				chain_id: T::DestChainID::get(),
+				chain_id,
 				verifying_contract: T::DestVerifyingContractAddress::get(),
 				salt: default_eip712_domain.salt,
 			};
@@ -697,28 +736,30 @@ pub mod pallet {
 		}
 
 		/// Return true if deposit nonce has been used
-		fn is_proposal_executed(nonce: DepositNonce) -> bool {
-			(UsedNonces::<T>::get(nonce / 256) & (1 << (nonce % 256))) != 0
+		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
+			(UsedNonces::<T>::get(domain_id, nonce / 256) & (1 << (nonce % 256))) != 0
 		}
 
 		/// Set bit mask for specific nonce as used
-		fn set_proposal_executed(nonce: DepositNonce) {
-			let mut current_nonces = UsedNonces::<T>::get(nonce / 256);
+		fn set_proposal_executed(nonce: DepositNonce, domain_id: DomainID) {
+			let mut current_nonces = UsedNonces::<T>::get(domain_id, nonce / 256);
 			current_nonces |= 1 << (nonce % 256);
-			UsedNonces::<T>::insert(nonce / 256, current_nonces);
+			UsedNonces::<T>::insert(domain_id, nonce / 256, current_nonces);
 		}
 
 		/// Execute a single proposal
 		fn execute_proposal_internal(proposal: &Proposal) -> DispatchResult {
+			// Check if domain is supported
+			ensure!(
+				DestDomainIds::<T>::get(proposal.origin_domain_id),
+				Error::<T>::DestDomainNotSupported
+			);
+			// Check if dest domain bridge is paused
+			ensure!(!IsPaused::<T>::get(proposal.origin_domain_id), Error::<T>::BridgePaused);
 			// Check if proposal has executed
 			ensure!(
-				!Self::is_proposal_executed(proposal.deposit_nonce),
+				!Self::is_proposal_executed(proposal.deposit_nonce, proposal.origin_domain_id),
 				Error::<T>::ProposalAlreadyComplete
-			);
-			// Check if the dest domain id is correct
-			ensure!(
-				proposal.origin_domain_id == T::DestDomainID::get(),
-				Error::<T>::InvalidOriginDomainId
 			);
 			// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
 			let asset_id =
@@ -755,10 +796,9 @@ pub mod pallet {
 		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
-			BridgePalletIndex, DestDomainID, NativeLocation, NativeResourceId, Runtime,
-			RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge,
-			TreasuryAccount, UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB,
-			ENDOWED_BALANCE,
+			BridgePalletIndex, NativeLocation, NativeResourceId, Runtime, RuntimeEvent,
+			RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount,
+			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
 		};
 		use codec::Encode;
 		use frame_support::{

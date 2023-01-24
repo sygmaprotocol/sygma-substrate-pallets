@@ -10,6 +10,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::{pallet_prelude::*, PalletId};
+use funty::Fundamental;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -30,7 +31,8 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DomainID, ExtractRecipient, IsReserved, ResourceId, VerifyingContractAddress,
+	DomainID, ExtractDestDomainID, ExtractRecipient, IsReserved, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -504,7 +506,19 @@ impl ExtractRecipient for RecipientParser {
 	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
 		// For example, we force a dest location should be represented by following format.
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X1(GeneralKey(recipient))) => Some(recipient.to_vec()),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(_dest_domain_id))) =>
+				Some(recipient.to_vec()),
+			_ => None,
+		}
+	}
+}
+
+pub struct DestDomainIDParser;
+impl ExtractDestDomainID for DestDomainIDParser {
+	fn extract_dest_domain_id(dest: &MultiLocation) -> Option<DomainID> {
+		match (dest.parents, &dest.interior) {
+			(0, Junctions::X2(GeneralKey(_recipient), GeneralIndex(dest_domain_id))) =>
+				Some(dest_domain_id.as_u8()),
 			_ => None,
 		}
 	}
@@ -521,6 +535,7 @@ impl sygma_bridge::Config for Runtime {
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
 	type ExtractRecipient = RecipientParser;
+	type ExtractDestDomainID = DestDomainIDParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 }
