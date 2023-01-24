@@ -538,7 +538,7 @@ pub mod pallet {
 				Self::execute_proposal_internal(proposal).map_or_else(
 					|e| {
 						let err_msg: &'static str = e.into();
-						// Emit FailedHandlerExecution
+						// Any error during proposal list execution will emit FailedHandlerExecution
 						Self::deposit_event(Event::FailedHandlerExecution {
 							error: err_msg.as_bytes().to_vec(),
 							origin_domain_id: proposal.origin_domain_id,
@@ -795,6 +795,7 @@ pub mod pallet {
 
 	#[cfg(test)]
 	mod test {
+		use alloc::vec;
 		use crate as bridge;
 		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
 		use bridge::mock::{
@@ -1092,9 +1093,10 @@ pub mod pallet {
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
+						X2(GeneralKey(
 							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						),
+						GeneralIndex(1))
 					)
 						.into(),
 				));
@@ -1148,9 +1150,9 @@ pub mod pallet {
 					(Concrete(UsdcLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
+						X2(GeneralKey(
 							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						), GeneralIndex(1))
 					)
 						.into(),
 				));
@@ -1197,9 +1199,9 @@ pub mod pallet {
 						(Concrete(unbounded_asset_location), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
+							X2(GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							), GeneralIndex(1))
 						)
 							.into(),
 					),
@@ -1239,7 +1241,7 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						invalid_dest,
 					),
-					bridge::Error::<Runtime>::ExtractRecipientFailed
+					bridge::Error::<Runtime>::ExtractDestDomainIDFailed
 				);
 			})
 		}
@@ -1250,15 +1252,16 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
+							X2(GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							), GeneralIndex(1))
 						)
 							.into(),
 					),
@@ -1288,9 +1291,9 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
+							X2(GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							), GeneralIndex(1))
 						)
 							.into(),
 					),
@@ -1325,9 +1328,9 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
+							X2(GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							), GeneralIndex(1))
 						)
 							.into(),
 					),
@@ -1341,9 +1344,9 @@ pub mod pallet {
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
+						X2(GeneralKey(
 							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						), GeneralIndex(1))
 					)
 						.into(),
 				));
@@ -1369,9 +1372,9 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
+							X2(GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							), GeneralIndex(1))
 						)
 							.into(),
 					),
@@ -1434,14 +1437,6 @@ pub mod pallet {
 				// Generate an evil key
 				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 
-				// Should failed if bridge paused
-				// assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
-				// assert_noop!(
-				// 	SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
-				// 	bridge::Error::<Runtime>::BridgePaused,
-				// );
-				// assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
-
 				// Deposit some native asset in advance
 				let fee = 100u128;
 				let amount = 200u128;
@@ -1456,9 +1451,9 @@ pub mod pallet {
 					(Concrete(NativeLocation::get()), Fungible(2 * amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
+						X2(GeneralKey(
 							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						), GeneralIndex(1))
 					)
 						.into(),
 				));
@@ -1539,6 +1534,22 @@ pub mod pallet {
 					pair.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
 				let proposals_with_bad_signature = evil_pair
 					.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+
+				// Should failed if dest domain 1 bridge paused
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
+				assert_ok!(SygmaBridge::execute_proposal(
+						Origin::signed(ALICE),
+						proposals.clone(),
+						proposals_with_valid_signature.encode())
+				);
+				// should emit FailedHandlerExecution event
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FailedHandlerExecution {
+				 	error: vec![66, 114, 105, 100, 103, 101, 80, 97, 117, 115, 101, 100],
+					origin_domain_id: 1,
+					deposit_nonce: 3,
+				})]);
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 
 				assert_noop!(
 					SygmaBridge::execute_proposal(

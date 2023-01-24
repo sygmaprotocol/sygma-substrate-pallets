@@ -292,7 +292,7 @@ impl ExtractRecipient for RecipientParser {
 	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
 		// For example, we force a dest location should be represented by following format.
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(_dest_domain_id))) =>
+			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(_dest_domain_id))) =>
 				Some(recipient.to_vec()),
 			_ => None,
 		}
