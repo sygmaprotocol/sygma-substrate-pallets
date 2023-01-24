@@ -11,11 +11,13 @@ const feeHandlerType = {
     DynamicFeeHandler: "DynamicFeeHandler"
 }
 
-const supportedDestDomains = {
-    evmDomain1: {
-        domainID: 1,
+const supportedDestDomains = [
+    {
+        evmDomain: {
+            domainID: 1
+        }
     }
-}
+]
 
 const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
 
@@ -28,7 +30,7 @@ async function setBalance(api, who, value, finalization, sudo) {
         );
         const unsub = await api.tx.sudo
             .sudo(api.tx.balances.setBalance(who, value, 0))
-            .signAndSend(sudo, { nonce: nonce, era: 0 }, (result) => {
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
                     console.log(
@@ -159,8 +161,8 @@ async function setMpcAddress(api, mpcAddr, finalization, sudo) {
     });
 }
 
-async function queryBridgePauseStatus(api) {
-    let result = await api.query.sygmaBridge.isPaused();
+async function queryBridgePauseStatus(api, domainID) {
+    let result = await api.query.sygmaBridge.isPaused(domainID);
     return result.toJSON()
 }
 
@@ -316,9 +318,9 @@ async function main() {
     // set up MPC address
     await setMpcAddress(api, mpcAddr, true, sudo);
 
-    // set fee for native asset
-    await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-    await setFee(api, supportedDestDomains.evmDomain1.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
+    // set fee for native asset for domain 1
+    await setFeeHandler(api, supportedDestDomains[0].evmDomain.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+    await setFee(api, supportedDestDomains[0].evmDomain.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
 
     // create USDC test asset (foreign asset)
     // UsdcAssetId: AssetId defined in runtime.rs
@@ -332,15 +334,19 @@ async function main() {
     await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
     await mintAsset(api, usdcAssetID, usdcAdmin, 100000000000000, true, sudo); // mint 100 USDC to Alice
 
-    // set fee for USDC
-    await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-    await setFee(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+    // set fee for USDC for domain 1
+    await setFeeHandler(api, supportedDestDomains[0].evmDomain.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+    await setFee(api, supportedDestDomains[0].evmDomain.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
 
     // transfer some native asset to FeeReserveAccount as Existential Deposit(aka ED)
     await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
     // bridge should be unpaused by the end of the setup
-    if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
+    for (const domain of supportedDestDomains) {
+        if (!await queryBridgePauseStatus(api, domain.evmDomain.domainID)) console.log(`DestDomainID: ${domain.evmDomain.domainID} is ready✅`);
+    }
+
+    console.log('🚀 Sygma substrate pallet setup is done! 🚀');
 
     // It is unnecessary to set up access segregator here since ALICE will be the sudo account and all methods with access control logic are already setup in this script.
     // so that on Relayer, E2E test cases are only about public extrinsic such as deposit, executionProposal, retry .etc

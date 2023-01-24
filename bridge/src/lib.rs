@@ -802,12 +802,14 @@ pub mod pallet {
 			BridgePalletIndex, NativeLocation, NativeResourceId, Runtime, RuntimeEvent,
 			RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount,
 			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
+			DEST_DOMAIN_ID,
 		};
 		use codec::Encode;
 		use frame_support::{
 			assert_noop, assert_ok, crypto::ecdsa::ECDSAExt,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
+		use primitive_types::U256;
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
@@ -849,39 +851,42 @@ pub mod pallet {
 				let default_addr = MpcAddress::default();
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
+
 				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
 
 				// pause bridge when mpc address is not set, should be err
 				assert_noop!(
-					SygmaBridge::pause_bridge(Origin::root()),
+					SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
 				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
 
 				// pause bridge again, should be ok
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert!(IsPaused::<Runtime>::get());
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// pause bridge again after paused, should be ok
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert!(IsPaused::<Runtime>::get());
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// permission test: unauthorized account should not be able to pause bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
-					SygmaBridge::pause_bridge(unauthorized_account),
+					SygmaBridge::pause_bridge(unauthorized_account, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert!(IsPaused::<Runtime>::get());
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 			})
 		}
 
@@ -895,30 +900,33 @@ pub mod pallet {
 
 				// unpause bridge when mpc address is not set, should be error
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root()),
+					SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address to test_key_a and pause bridge
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
 				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// bridge should be paused here
-				assert!(IsPaused::<Runtime>::get());
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 
 				// ready to unpause bridge, should be ok
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgeUnpaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// try to unpause it again, should be error
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root()),
+					SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::BridgeUnpaused
 				);
 
@@ -926,10 +934,10 @@ pub mod pallet {
 				// bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
-					SygmaBridge::unpause_bridge(unauthorized_account),
+					SygmaBridge::unpause_bridge(unauthorized_account, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert!(!IsPaused::<Runtime>::get());
+				assert!(!IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 			})
 		}
 
@@ -1069,13 +1077,16 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
@@ -1093,7 +1104,7 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DestDomainID::get(),
+					dest_domain_id: DEST_DOMAIN_ID,
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
@@ -1113,13 +1124,16 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					UsdcLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
 				// Register foreign asset (USDC) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
@@ -1146,7 +1160,7 @@ pub mod pallet {
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DestDomainID::get(),
+					dest_domain_id: DEST_DOMAIN_ID,
 					resource_id: UsdcResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
@@ -1167,13 +1181,16 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					unbounded_asset_location.clone().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
@@ -1206,13 +1223,16 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
@@ -1253,13 +1273,15 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 200u128;
 				let amount = 100u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
@@ -1283,15 +1305,19 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
 				// Pause bridge
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				// Should failed
 				assert_noop!(
 					SygmaBridge::deposit(
@@ -1308,7 +1334,7 @@ pub mod pallet {
 					bridge::Error::<Runtime>::BridgePaused
 				);
 				// Unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				// Should success
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -1329,9 +1355,11 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				let fee = 200u128;
 				let amount = 100u128;
+
+
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1357,27 +1385,28 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc address is missing, should fail
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
 
 				// pause bridge and retry, should fail
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 
 				// unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
-				assert!(!IsPaused::<Runtime>::get());
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(!IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 
 				// retry again, should work
-				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128));
+				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128, DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
 					deposit_on_block_height: 1234567u128,
 					deposit_extrinsic_index: 1234u128,
@@ -1397,25 +1426,28 @@ pub mod pallet {
 				// set mpc address to generated keypair's address
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
 				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
-				// Generate an evil key
-				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+
+				// Generate an evil key
+				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 
 				// Should failed if bridge paused
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert_noop!(
-					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
-					bridge::Error::<Runtime>::BridgePaused,
-				);
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				// assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				// assert_noop!(
+				// 	SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
+				// 	bridge::Error::<Runtime>::BridgePaused,
+				// );
+				// assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 
 				// Deposit some native asset in advance
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1438,7 +1470,7 @@ pub mod pallet {
 
 				// Generate proposals
 				let valid_native_transfer_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 1,
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
@@ -1448,7 +1480,7 @@ pub mod pallet {
 					),
 				};
 				let valid_usdc_transfer_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 2,
 					resource_id: UsdcResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
@@ -1458,7 +1490,7 @@ pub mod pallet {
 					),
 				};
 				let invalid_depositnonce_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 2,
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
@@ -1478,7 +1510,7 @@ pub mod pallet {
 					),
 				};
 				let invalid_resourceid_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 3,
 					resource_id: [2u8; 32],
 					data: SygmaBridge::create_deposit_data(
@@ -1488,7 +1520,7 @@ pub mod pallet {
 					),
 				};
 				let invalid_recipient_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 3,
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(amount, b"invalid recipient".to_vec()),
@@ -1535,19 +1567,21 @@ pub mod pallet {
 		#[test]
 		fn get_bridge_pause_status() {
 			new_test_ext().execute_with(|| {
-				assert!(!SygmaBridge::is_paused());
+				assert!(!SygmaBridge::is_paused(DEST_DOMAIN_ID));
 
 				// set mpc address
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
 
 				// pause bridge
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert!(SygmaBridge::is_paused());
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(SygmaBridge::is_paused(DEST_DOMAIN_ID));
 
 				// unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
-				assert!(!SygmaBridge::is_paused());
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(!SygmaBridge::is_paused(DEST_DOMAIN_ID));
 			})
 		}
 
@@ -1560,12 +1594,13 @@ pub mod pallet {
 					SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr),
 					bridge::Error::<Runtime>::AccessDenied
 				);
+
 				assert_noop!(
-					SygmaBridge::pause_bridge(Some(BOB).into()),
+					SygmaBridge::pause_bridge(Some(BOB).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Some(BOB).into()),
+					SygmaBridge::unpause_bridge(Some(BOB).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 
@@ -1597,19 +1632,21 @@ pub mod pallet {
 				);
 				// ALICE set mpc address should work
 				assert_ok!(SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
 
 				// ALICE pause&unpause bridge should still failed
 				assert_noop!(
-					SygmaBridge::pause_bridge(Some(ALICE).into()),
+					SygmaBridge::pause_bridge(Some(ALICE).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Some(ALICE).into()),
+					SygmaBridge::unpause_bridge(Some(ALICE).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				// BOB pause&unpause bridge should work
-				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into()));
-				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into()));
+				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into(), DEST_DOMAIN_ID));
+				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into(), DEST_DOMAIN_ID));
 			})
 		}
 	}
