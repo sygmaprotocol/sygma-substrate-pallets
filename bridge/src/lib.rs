@@ -795,15 +795,15 @@ pub mod pallet {
 
 	#[cfg(test)]
 	mod test {
-		use alloc::vec;
 		use crate as bridge;
 		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
+		use alloc::vec;
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
 			BridgePalletIndex, NativeLocation, NativeResourceId, Runtime, RuntimeEvent,
 			RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount,
-			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
-			DEST_DOMAIN_ID,
+			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID,
+			ENDOWED_BALANCE,
 		};
 		use codec::Encode;
 		use frame_support::{
@@ -852,7 +852,6 @@ pub mod pallet {
 				let default_addr = MpcAddress::default();
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-
 				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
 
 				// pause bridge when mpc address is not set, should be err
@@ -865,7 +864,11 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
 				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
 				// register domain
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// pause bridge again, should be ok
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
@@ -909,7 +912,11 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
 				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
 				// register domain
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
@@ -1086,17 +1093,23 @@ pub mod pallet {
 					NativeLocation::get().into(),
 					fee
 				));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X2(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						),
-						GeneralIndex(1))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1134,7 +1147,11 @@ pub mod pallet {
 					UsdcLocation::get().into(),
 					fee
 				));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// Register foreign asset (USDC) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
@@ -1150,9 +1167,12 @@ pub mod pallet {
 					(Concrete(UsdcLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X2(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						), GeneralIndex(1))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1191,7 +1211,11 @@ pub mod pallet {
 					unbounded_asset_location.clone().into(),
 					fee
 				));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				assert_noop!(
 					SygmaBridge::deposit(
@@ -1199,9 +1223,13 @@ pub mod pallet {
 						(Concrete(unbounded_asset_location), Fungible(amount)).into(),
 						(
 							0,
-							X2(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							), GeneralIndex(1))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1233,7 +1261,11 @@ pub mod pallet {
 					NativeLocation::get().into(),
 					fee
 				));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				assert_noop!(
 					SygmaBridge::deposit(
@@ -1252,16 +1284,24 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X2(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							), GeneralIndex(1))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1284,16 +1324,24 @@ pub mod pallet {
 					NativeLocation::get().into(),
 					fee
 				));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X2(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							), GeneralIndex(1))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1317,7 +1365,11 @@ pub mod pallet {
 					fee
 				));
 				// register domain
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// Pause bridge
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
@@ -1328,9 +1380,13 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X2(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							), GeneralIndex(1))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1344,9 +1400,12 @@ pub mod pallet {
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X2(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						), GeneralIndex(1))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1358,7 +1417,6 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				let fee = 200u128;
 				let amount = 100u128;
-
 
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
@@ -1372,9 +1430,13 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X2(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							), GeneralIndex(1))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1388,19 +1450,33 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc address is missing, should fail
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128, DEST_DOMAIN_ID),
+					SygmaBridge::retry(
+						Origin::signed(ALICE),
+						1234567u128,
+						1234u128,
+						DEST_DOMAIN_ID
+					),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// pause bridge and retry, should fail
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128, DEST_DOMAIN_ID),
+					SygmaBridge::retry(
+						Origin::signed(ALICE),
+						1234567u128,
+						1234u128,
+						DEST_DOMAIN_ID
+					),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 
@@ -1409,7 +1485,12 @@ pub mod pallet {
 				assert!(!IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 
 				// retry again, should work
-				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128, DEST_DOMAIN_ID));
+				assert_ok!(SygmaBridge::retry(
+					Origin::signed(ALICE),
+					1234567u128,
+					1234u128,
+					DEST_DOMAIN_ID
+				));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
 					deposit_on_block_height: 1234567u128,
 					deposit_extrinsic_index: 1234u128,
@@ -1432,7 +1513,11 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
 				// register domain
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// Generate an evil key
 				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
@@ -1451,9 +1536,12 @@ pub mod pallet {
 					(Concrete(NativeLocation::get()), Fungible(2 * amount)).into(),
 					(
 						0,
-						X2(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						), GeneralIndex(1))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1539,16 +1627,18 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_ok!(SygmaBridge::execute_proposal(
-						Origin::signed(ALICE),
-						proposals.clone(),
-						proposals_with_valid_signature.encode())
-				);
+					Origin::signed(ALICE),
+					proposals.clone(),
+					proposals_with_valid_signature.encode()
+				));
 				// should emit FailedHandlerExecution event
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FailedHandlerExecution {
-				 	error: vec![66, 114, 105, 100, 103, 101, 80, 97, 117, 115, 101, 100],
-					origin_domain_id: 1,
-					deposit_nonce: 3,
-				})]);
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::FailedHandlerExecution {
+						error: vec![66, 114, 105, 100, 103, 101, 80, 97, 117, 115, 101, 100],
+						origin_domain_id: 1,
+						deposit_nonce: 3,
+					},
+				)]);
 				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 
 				assert_noop!(
@@ -1584,7 +1674,11 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				// register domain
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// pause bridge
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
@@ -1644,7 +1738,11 @@ pub mod pallet {
 				// ALICE set mpc address should work
 				assert_ok!(SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr));
 				// register domain
-				assert_ok!(SygmaBridge::register_domain(Origin::root(), DEST_DOMAIN_ID, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// ALICE pause&unpause bridge should still failed
 				assert_noop!(
