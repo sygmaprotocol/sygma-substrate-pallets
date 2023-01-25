@@ -193,8 +193,8 @@ pub mod pallet {
 		InvalidDepositData,
 		/// Dest domain not supported
 		DestDomainNotSupported,
-		/// Dest chain id not supported
-		DestChainIDNotSupported,
+		/// Dest chain id not match
+		DestChainIDNotMatch,
 		/// Failed to extract dest domainID according to given DestDomainID parser
 		ExtractDestDomainIDFailed,
 		/// Function unimplemented
@@ -237,6 +237,8 @@ pub mod pallet {
 	pub type DestDomainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
 
 	/// Mark the pairs for supported dest domainID with its corresponding chainID
+	/// The chainID is not directly used in pallet, this map is designed more about rechecking the
+	/// domainID
 	#[pallet::storage]
 	#[pallet::getter(fn dest_chain_ids)]
 	pub type DestChainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, ChainID, ValueQuery>;
@@ -365,6 +367,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Mark the give dest domainID with chainID to be disabled
 		#[pallet::weight(195_000_000)]
 		pub fn unregister_domain(
 			origin: OriginFor<T>,
@@ -392,7 +395,7 @@ pub mod pallet {
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			let co_chain_id = DestChainIds::<T>::get(dest_domain_id);
-			ensure!(co_chain_id == dest_chain_id, Error::<T>::DestChainIDNotSupported);
+			ensure!(co_chain_id == dest_chain_id, Error::<T>::DestChainIDNotMatch);
 
 			DestDomainIds::<T>::remove(dest_domain_id);
 			DestChainIds::<T>::remove(dest_domain_id);
@@ -796,7 +799,10 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
+		use crate::{
+			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAdd,
+			Proposal,
+		};
 		use alloc::vec;
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
@@ -1756,6 +1762,96 @@ pub mod pallet {
 				// BOB pause&unpause bridge should work
 				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into(), DEST_DOMAIN_ID));
 				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into(), DEST_DOMAIN_ID));
+			})
+		}
+
+		#[test]
+		fn multi_domain_test() {
+			new_test_ext().execute_with(|| {
+				// root register domainID 1 with chainID 1, should raise error MissingMpcAddress
+				assert_noop!(
+					SygmaBridge::register_domain(Origin::root(), 1u8, U256::from(0)),
+					Error::<Runtime>::MissingMpcAddress
+				);
+
+				// set mpc address
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// alice register domainID 1 with chainID 1, should raise error AccessDenied
+				assert_noop!(
+					SygmaBridge::register_domain(Origin::from(Some(ALICE)), 1u8, U256::from(1)),
+					Error::<Runtime>::AccessDenied
+				);
+				// Grant ALICE the access of `register_domain`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"register_domain".to_vec(),
+					ALICE
+				));
+				// alice register domainID 1 with chainID 1, should be ok
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::from(Some(ALICE)),
+					1u8,
+					U256::from(1)
+				));
+				// should emit RegisterDestDomain event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::RegisterDestDomain {
+						sender: ALICE,
+						domain_id: 1,
+						chain_id: U256::from(1),
+					},
+				)]);
+				// storage check
+				assert!(DestDomainIds::<Runtime>::get(1u8));
+				assert_eq!(DestChainIds::<Runtime>::get(1u8), U256::from(1));
+
+				// alice unregister domainID 1 with chainID 1, should raise error AccessDenied
+				assert_noop!(
+					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 1u8, U256::from(0)),
+					Error::<Runtime>::AccessDenied
+				);
+				// Grant ALICE the access of `unregister_domain`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"unregister_domain".to_vec(),
+					ALICE
+				));
+				// alice unregister domainID 1 with chainID 2, should raise error
+				// DestChainIDNotMatch
+				assert_noop!(
+					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 1u8, U256::from(2)),
+					Error::<Runtime>::DestChainIDNotMatch
+				);
+				// alice unregister domainID 2 with chainID 2, should raise error
+				// DestDomainNotSupported
+				assert_noop!(
+					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 2u8, U256::from(2)),
+					Error::<Runtime>::DestDomainNotSupported
+				);
+				// alice unregister domainID 1 with chainID 1, should success
+				assert_ok!(SygmaBridge::unregister_domain(
+					Origin::from(Some(ALICE)),
+					1u8,
+					U256::from(1)
+				));
+				// should emit UnregisterDestDomain event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::UnregisterDestDomain {
+						sender: ALICE,
+						domain_id: 1,
+						chain_id: U256::from(1),
+					},
+				)]);
+
+				// storage check
+				// DomainID 1 should not support anymore
+				assert!(!DestDomainIds::<Runtime>::get(1u8));
+				// corresponding chainID should be 0 since kv not exist anymore
+				assert_eq!(DestChainIds::<Runtime>::get(1u8), U256::from(0));
 			})
 		}
 	}

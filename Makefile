@@ -1,16 +1,21 @@
+# run cargo clippy and cargo fmt
 lint: fmt
 	cargo fmt --all --check
 	cargo clippy --all-targets -- -D warnings
 
+# run cargo fmt
 fmt:
 	cargo fmt --all
 
+# run unit test
 test:
 	cargo test
 
+# build the binary locally
 build:
 	cargo build --release
 
+# launch the local node in dev mode
 start-dev:
 	./target/release/node-template --dev --ws-external
 
