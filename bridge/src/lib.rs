@@ -124,16 +124,16 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
-		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
-		/// handler_response, transfer_type]
+		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, transfer_type,
+		/// deposit_data, handler_response, ]
 		Deposit {
 			dest_domain_id: DomainID,
 			resource_id: ResourceId,
 			deposit_nonce: DepositNonce,
 			sender: T::AccountId,
+			transfer_type: TransferType,
 			deposit_data: Vec<u8>,
 			handler_response: Vec<u8>,
-			transfer_type: TransferType,
 		},
 		/// When proposal was executed successfully
 		ProposalExecution {
@@ -972,12 +972,12 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
-					transfer_type: TransferType::FungibleTransfer,
 				})]);
 			})
 		}
@@ -1025,12 +1025,12 @@ pub mod pallet {
 					resource_id: UsdcResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
-					transfer_type: TransferType::FungibleTransfer,
 				})]);
 			})
 		}
