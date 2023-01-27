@@ -584,10 +584,10 @@ pub mod pallet {
 			if data.len() < 64 {
 				return None
 			}
-			let amount: u128 = U256::from_little_endian(&data[0..32])
+			let amount: u128 = U256::from_big_endian(&data[0..32])
 				.try_into()
 				.expect("Amount convert failed. qed.");
-			let recipient_len: usize = U256::from_little_endian(&data[32..64])
+			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
 				.expect("Length convert failed. qed.");
 			if data.len() != (64 + recipient_len) {
@@ -670,7 +670,7 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
+		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAddr, Proposal};
 		use alloc::string::String;
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
@@ -697,11 +697,11 @@ pub mod pallet {
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 				let test_mpc_addr_b: MpcAddress = MpcAddress([2u8; 20]);
 
-				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), default_addr);
 
 				// set to test_mpc_addr_a
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 
 				// set to test_mpc_addr_b: should be MpcAddrNotUpdatable error
 				assert_noop!(
@@ -715,7 +715,7 @@ pub mod pallet {
 					SygmaBridge::set_mpc_address(unauthorized_account, test_mpc_addr_a),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 			})
 		}
 
@@ -725,7 +725,7 @@ pub mod pallet {
 				let default_addr = MpcAddress::default();
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), default_addr);
 
 				// pause bridge when mpc address is not set, should be err
 				assert_noop!(
@@ -735,7 +735,7 @@ pub mod pallet {
 
 				// set mpc address to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 
 				// pause bridge again, should be ok
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
@@ -767,7 +767,7 @@ pub mod pallet {
 				let default_addr: MpcAddress = MpcAddress::default();
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), default_addr);
 
 				// unpause bridge when mpc address is not set, should be error
 				assert_noop!(
@@ -777,7 +777,7 @@ pub mod pallet {
 
 				// set mpc address to test_key_a and pause bridge
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
 					dest_domain_id: 1,
@@ -876,7 +876,7 @@ pub mod pallet {
 				// set mpc address to another random key
 				let test_mpc_addr: MpcAddress = MpcAddress([7u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 
 				// dummy proposals
 				let p1 = Proposal {
@@ -912,7 +912,7 @@ pub mod pallet {
 
 				// set mpc address to generated keypair's address
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 
 				// dummy proposals
 				let p1 = Proposal {
@@ -1317,7 +1317,7 @@ pub mod pallet {
 				// Generate an evil key
 				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 
 				// Should failed if bridge paused
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
