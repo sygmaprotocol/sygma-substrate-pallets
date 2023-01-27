@@ -211,7 +211,7 @@ pub mod pallet {
 	/// Pre-set MPC address
 	#[pallet::storage]
 	#[pallet::getter(fn mpc_add)]
-	pub type MpcAdd<T> = StorageValue<_, MpcAddress, ValueQuery>;
+	pub type MpcAddr<T> = StorageValue<_, MpcAddress, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -240,7 +240,7 @@ pub mod pallet {
 				);
 			}
 			// make sure MPC address is set up
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			// Mark as paused
 			IsPaused::<T>::set(true);
@@ -266,7 +266,7 @@ pub mod pallet {
 				);
 			}
 			// make sure MPC address is set up
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			// make sure the current status is paused
 			ensure!(IsPaused::<T>::get(), Error::<T>::BridgeUnpaused);
@@ -295,10 +295,10 @@ pub mod pallet {
 				);
 			}
 			// Cannot set MPC address as it's already set
-			ensure!(MpcAdd::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
+			ensure!(MpcAddr::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
 
 			// Set MPC account address
-			MpcAdd::<T>::set(addr);
+			MpcAddr::<T>::set(addr);
 			Ok(())
 		}
 
@@ -312,7 +312,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
@@ -389,7 +389,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 
 			// Emit retry event
@@ -410,7 +410,7 @@ pub mod pallet {
 			signature: Vec<u8>,
 		) -> DispatchResult {
 			// Check MPC address and bridge status
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
 			// Verify MPC signature
 			ensure!(
@@ -478,7 +478,7 @@ pub mod pallet {
 			{
 				let address = Self::public_key_to_address(&pubkey);
 
-				address == MpcAdd::<T>::get().0
+				address == MpcAddr::<T>::get().0
 			} else {
 				false
 			}
@@ -610,7 +610,7 @@ pub mod pallet {
 
 		fn hex_zero_padding_32(i: u128) -> [u8; 32] {
 			let mut result = [0u8; 32];
-			U256::from(i).to_little_endian(&mut result);
+			U256::from(i).to_big_endian(&mut result);
 			result
 		}
 
@@ -671,6 +671,7 @@ pub mod pallet {
 	mod test {
 		use crate as bridge;
 		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAdd, Proposal};
+		use alloc::string::String;
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
 			BridgePalletIndex, DestDomainID, NativeLocation, NativeResourceId, Runtime,
@@ -979,6 +980,47 @@ pub mod pallet {
 					),
 					handler_response: vec![],
 				})]);
+			})
+		}
+
+		#[test]
+		fn hex_zero_padding_32_test() {
+			new_test_ext().execute_with(|| {
+				assert_eq!(
+					SygmaBridge::hex_zero_padding_32(100).to_vec(),
+					vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 100
+					]
+				);
+				let recipient = String::from("0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4");
+				assert_eq!(
+					SygmaBridge::hex_zero_padding_32(recipient.len() as u128).to_vec(),
+					vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 42
+					]
+				);
+			})
+		}
+
+		#[test]
+		fn create_deposit_data_test() {
+			new_test_ext().execute_with(|| {
+				let recipient = b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec();
+				let data = SygmaBridge::create_deposit_data(100, recipient);
+				// 32 + 32 + 42
+				assert_eq!(data.len(), 106);
+				assert_eq!(
+					data.to_vec(),
+					vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70,
+						53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51,
+						97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52
+					]
+				);
 			})
 		}
 
