@@ -982,6 +982,74 @@ pub mod pallet {
 					),
 					handler_response: vec![],
 				})]);
+
+				// TODO: for event data parsing purpose, remove before open the PR
+				let event: SygmaBridgeEvent<Runtime> = SygmaBridgeEvent::Deposit {
+					dest_domain_id: 255,
+					resource_id: NativeResourceId::get(),
+					deposit_nonce: 4,
+					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer.encode(),
+					deposit_data: SygmaBridge::create_deposit_data(
+						amount - fee,
+						b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec(),
+					),
+					handler_response: vec![],
+				};
+
+				println!("DestDomainID {:?}", 255u8.encode()); // [0, 255]
+				println!("NativeResourceId {:?}", NativeResourceId::get().encode()); // [0, 230, 223, ...]
+				println!("NativeResourceId length {:?}", NativeResourceId::get().encode().len()); // 32
+				println!("deposit_nonce {:?}", 4u64.encode()); // [4, 0, 0, 0, 0, 0, 0, 0]
+				println!("sender {:?}", ALICE.encode()); // [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+				println!("sender length {:?}", ALICE.encode().len()); // 32
+				println!("TransferType {:?}", TransferType::FungibleTransfer); // [0] without encode on pallet, [4, 0] with encode on pallet
+				println!("depositData {:?}", SygmaBridge::create_deposit_data( // [169, 1, ...]
+					amount - fee,
+					b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec(),
+				).encode());
+				println!("depositData length {:?}", SygmaBridge::create_deposit_data(
+					amount - fee,
+					b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec(),
+				).encode().len()); // 108
+				println!("recipient {:?}", b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec());// [48, 120, 57, 53, 69, 67, 70, 53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51, 97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52]
+
+				println!("event data length {:?}", event.encode().len()); // 185(2 + 32 + 8 + 32 + 2 + 108 + 1)
+				println!("event encoded data {:?}", event.encode());
+
+// TransferType without encode
+
+// this is event encode data:
+//[0, 255, 0, 230, 223, 182, 26, 47, 185, 3, 223, 72, 124, 64, 22, 99, 130, 86, 67, 187, 130, 93, 65, 105, 94, 99, 223, 138, 246, 22, 42, 177, 69, 166, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 169, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70, 53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51, 97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52, 0]
+// this is each part of the encode data in the order of [dest_domain_id][resource_id][deposit_nonce][sender][transfer_type][deposit_data][handler_response]:
+//[0, 255][0, 230, 223, 182, 26, 47, 185, 3, 223, 72, 124, 64, 22, 99, 130, 86, 67, 187, 130, 93, 65, 105, 94, 99, 223, 138, 246, 22, 42, 177, 69, 166][4, 0, 0, 0, 0, 0, 0, 0][0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][0][169, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70, 53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51, 97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52][0]
+// as you can see, TransferType here is just 1 byte, which is 0	(FungibleTransfer)
+
+
+// encode TransferType
+
+// This is my encoded event data:
+//[0, 255, 0, 230, 223, 182, 26, 47, 185, 3, 223, 72, 124, 64, 22, 99, 130, 86, 67, 187, 130, 93, 65, 105, 94, 99, 223, 138, 246, 22, 42, 177, 69, 166, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 169, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70, 53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51, 97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52, 0]
+// this is each part of my encoded data in the order of [dest_domain_id][resource_id][deposit_nonce][sender][transfer_type][deposit_data][handler_response]:
+//[0, 255][0, 230, 223, 182, 26, 47, 185, 3, 223, 72, 124, 64, 22, 99, 130, 86, 67, 187, 130, 93, 65, 105, 94, 99, 223, 138, 246, 22, 42, 177, 69, 166][4, 0, 0, 0, 0, 0, 0, 0][0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][0, 0][169, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70, 53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51, 97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52][0]
+// As you can see, each part matches with event data EXCEPT TransferType, for some reason it's two bytes and always with 4 as prefix
+
+
+// This is the event data that relayer got(when TransferType is not encoded on pallet):
+// [28 0 0 0 0 0 0 0 194 50 31 62 0 2 0 0 0 1 0 0 0 5 8 212 53 147 199 21 253 211 28 97 20 26 189 4 169 159 214 130 44 133 88 133 76 205 227 154 86 132 231 165 109 162 125 163 176 133 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 8 3 208 7 0 0 212 53 147 199 21 253 211 28 97 20 26 189 4 169 159 214 130 44 133 88 133 76 205 227 154 86 132 231 165 109 162 125 0 64 229 156 48 18 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 8 1 208 7 0 0 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 0 16 165 212 232 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 11 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 212 53 147 199 21 253 211 28 97 20 26 189 4 169 159 214 130 44 133 88 133 76 205 227 154 86 132 231 165 109 162 125 0      169 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 17 71 200 64 48 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 48 120 57 53 69 67 70 53 97 101 48 48 48 101 48 102 101 48 101 48 100 69 54 51 97 68 69 57 98 55 68 56 50 97 51 55 50 48 51 56 98 52 0 0 0 1 0 0 0 6 0 212 53 147 199 21 253 211 28 97 20 26 189 4 169 159 214 130 44 133 88 133 76 205 227 154 86 132 231 165 109 162 125 163 176 133 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 194 191 22 70 0 0 0 0]
+
+// below is amount + recipient part of data that relayer got, amount + recipient length is 66, [169 1] is sort of the prefix which I haven't figured out why
+// 169 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0 17 71 200 64 48 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42 (length is 64+2=66)
+// below is recipient part of data that relayer got, recipient address is 0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4, which is 42 long including 0x prefix
+// 48 120 57 53 69 67 70 53 97 101 48 48 48 101 48 102 101 48 101 48 100 69 54 51 97 68 69 57 98 55 68 56 50 97 51 55 50 48 51 56 98 52 （length is 42）
+// so that the deposit data length in relayer data is 108(66+42), which matches my encoded data(below) length
+// [48, 120, 57, 53, 69, 67, 70, 53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51, 97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52]
+
+// Given the proof above, now, in my encoded data, there are two numbers together represent the TransferType
+//[4, 0] is FungibleTransfer, [4, 1] is NonFungibleTransfer and [4, 2] is GenericTransfer, I dont know why there is a 4 yet, but if you try with my latest changes, you should be able to get a [4, 0] as the TransferType
+
+// Summary, if we dont encode TransferType on pallet, you should only parse 1 byte on relayer side; if we encode TransferType on pallet, then you should parse 2 bytes
+
 			})
 		}
 
