@@ -29,12 +29,8 @@ pub trait IsReserved {
 	fn is_reserved(asset_id: &AssetId) -> bool;
 }
 
-pub trait ExtractRecipient {
-	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>>;
-}
-
-pub trait ExtractDestDomainID {
-	fn extract_dest_domain_id(dest: &MultiLocation) -> Option<DomainID>;
+pub trait ExtractDestinationData {
+	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)>;
 }
 
 pub trait FeeHandler {

@@ -6,8 +6,7 @@
 use crate as sygma_bridge;
 use funty::Fundamental;
 use sygma_traits::{
-	ChainID, DomainID, ExtractDestDomainID, ExtractRecipient, IsReserved, ResourceId,
-	VerifyingContractAddress,
+	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress,
 };
 
 use frame_support::{
@@ -287,24 +286,12 @@ impl IsReserved for ReserveChecker {
 }
 
 // Project can have it's own implementation to adapt their own spec design.
-pub struct RecipientParser;
-impl ExtractRecipient for RecipientParser {
-	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
-		// For example, we force a dest location should be represented by following format.
+pub struct DestinationDataParser;
+impl ExtractDestinationData for DestinationDataParser {
+	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(_dest_domain_id))) =>
-				Some(recipient.to_vec()),
-			_ => None,
-		}
-	}
-}
-
-pub struct DestDomainIDParser;
-impl ExtractDestDomainID for DestDomainIDParser {
-	fn extract_dest_domain_id(dest: &MultiLocation) -> Option<DomainID> {
-		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(_recipient), GeneralIndex(dest_domain_id))) =>
-				Some(dest_domain_id.as_u8()),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
+				Some((recipient.to_vec(), dest_domain_id.as_u8())),
 			_ => None,
 		}
 	}
@@ -321,8 +308,7 @@ impl sygma_bridge::Config for Runtime {
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
-	type ExtractDestDomainID = DestDomainIDParser;
-	type ExtractRecipient = RecipientParser;
+	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 }

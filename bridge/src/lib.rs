@@ -44,8 +44,8 @@ pub mod pallet {
 
 	use crate::eip712;
 	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractDestDomainID, ExtractRecipient, FeeHandler,
-		IsReserved, MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
+		ChainID, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, IsReserved,
+		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
 	};
 
 	#[allow(dead_code)]
@@ -103,11 +103,8 @@ pub mod pallet {
 		/// Return if asset reserved on current chain
 		type ReserveChecker: IsReserved;
 
-		/// Extract recipient from given MultiLocation
-		type ExtractRecipient: ExtractRecipient;
-
-		/// Extract dest domainID from given MultiLocation
-		type ExtractDestDomainID: ExtractDestDomainID;
+		/// Extract dest data from given MultiLocation
+		type ExtractDestData: ExtractDestinationData;
 
 		/// Config ID for the current pallet instance
 		type PalletId: Get<PalletId>;
@@ -167,8 +164,6 @@ pub mod pallet {
 		BadMpcSignature,
 		/// Insufficient balance on sender account
 		InsufficientBalance,
-		/// Failed to extract EVM receipient address according to given recipient parser
-		ExtractRecipientFailed,
 		/// Asset transactor execution failed
 		TransactFailed,
 		/// The withdrawn amount can not cover the fee payment
@@ -195,15 +190,15 @@ pub mod pallet {
 		DestDomainNotSupported,
 		/// Dest chain id not match
 		DestChainIDNotMatch,
-		/// Failed to extract dest domainID according to given DestDomainID parser
-		ExtractDestDomainIDFailed,
+		/// Failed to extract destination data
+		ExtractDestDataFailed,
 		/// Function unimplemented
 		Unimplemented,
 	}
 
 	/// Deposit counter of dest domain
 	#[pallet::storage]
-	#[pallet::getter(fn dest_counts)]
+	#[pallet::getter(fn deposit_counts)]
 	pub type DepositCounts<T> = StorageMap<_, Twox64Concat, DomainID, DepositNonce, ValueQuery>;
 
 	/// Bridge Pause indicator
@@ -241,7 +236,7 @@ pub mod pallet {
 	/// domainID
 	#[pallet::storage]
 	#[pallet::getter(fn dest_chain_ids)]
-	pub type DestChainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, ChainID, ValueQuery>;
+	pub type DestChainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, ChainID>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
@@ -392,9 +387,13 @@ pub mod pallet {
 			// make sure MPC address is set up
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
-			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+			ensure!(
+				DestDomainIds::<T>::get(dest_domain_id) &&
+					DestChainIds::<T>::get(dest_domain_id).is_some(),
+				Error::<T>::DestDomainNotSupported
+			);
 
-			let co_chain_id = DestChainIds::<T>::get(dest_domain_id);
+			let co_chain_id = DestChainIds::<T>::get(dest_domain_id).unwrap();
 			ensure!(co_chain_id == dest_chain_id, Error::<T>::DestChainIDNotMatch);
 
 			DestDomainIds::<T>::remove(dest_domain_id);
@@ -421,9 +420,10 @@ pub mod pallet {
 
 			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
-			// Extract dest (MultiLocation) to get corresponding dest domainID
-			let dest_domain_id = T::ExtractDestDomainID::extract_dest_domain_id(&dest)
-				.ok_or(Error::<T>::ExtractDestDomainIDFailed)?;
+			// Extract dest (MultiLocation) to get corresponding dest domainID and Ethereum
+			// recipient address
+			let (recipient, dest_domain_id) =
+				T::ExtractDestData::extract_dest(&dest).ok_or(Error::<T>::ExtractDestDataFailed)?;
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
@@ -433,9 +433,6 @@ pub mod pallet {
 			// transfer type
 			let (resource_id, amount, transfer_type) =
 				Self::extract_asset(&asset).ok_or(Error::<T>::AssetNotBound)?;
-			// Extract dest (MultiLocation) to get corresponding Ethereum recipient address
-			let recipient = T::ExtractRecipient::extract_recipient(&dest)
-				.ok_or(Error::<T>::ExtractRecipientFailed)?;
 			// Return error if no fee handler set
 			let fee = T::FeeHandler::get_fee(dest_domain_id, &asset.id)
 				.ok_or(Error::<T>::MissingFeeConfig)?;
@@ -1279,7 +1276,7 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						invalid_dest,
 					),
-					bridge::Error::<Runtime>::ExtractDestDomainIDFailed
+					bridge::Error::<Runtime>::ExtractDestDataFailed
 				);
 			})
 		}
@@ -1768,7 +1765,7 @@ pub mod pallet {
 		#[test]
 		fn multi_domain_test() {
 			new_test_ext().execute_with(|| {
-				// root register domainID 1 with chainID 1, should raise error MissingMpcAddress
+				// root register domainID 1 with chainID 0, should raise error MissingMpcAddress
 				assert_noop!(
 					SygmaBridge::register_domain(Origin::root(), 1u8, U256::from(0)),
 					Error::<Runtime>::MissingMpcAddress
@@ -1806,9 +1803,9 @@ pub mod pallet {
 				)]);
 				// storage check
 				assert!(DestDomainIds::<Runtime>::get(1u8));
-				assert_eq!(DestChainIds::<Runtime>::get(1u8), U256::from(1));
+				assert_eq!(DestChainIds::<Runtime>::get(1u8).unwrap(), U256::from(1));
 
-				// alice unregister domainID 1 with chainID 1, should raise error AccessDenied
+				// alice unregister domainID 1 with chainID 0, should raise error AccessDenied
 				assert_noop!(
 					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 1u8, U256::from(0)),
 					Error::<Runtime>::AccessDenied
@@ -1850,8 +1847,8 @@ pub mod pallet {
 				// storage check
 				// DomainID 1 should not support anymore
 				assert!(!DestDomainIds::<Runtime>::get(1u8));
-				// corresponding chainID should be 0 since kv not exist anymore
-				assert_eq!(DestChainIds::<Runtime>::get(1u8), U256::from(0));
+				// corresponding chainID should be None since kv not exist anymore
+				assert!(DestChainIds::<Runtime>::get(1u8).is_none());
 			})
 		}
 	}
