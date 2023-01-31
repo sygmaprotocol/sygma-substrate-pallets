@@ -3915,6 +3915,7 @@ dependencies = [
  "sygma-access-segregator",
  "sygma-basic-feehandler",
  "sygma-bridge",
+ "sygma-bridge-runtime-api",
  "sygma-fee-handler-router",
  "sygma-traits",
  "xcm",
@@ -7677,6 +7678,14 @@ dependencies = [
  "xcm",
  "xcm-builder",
  "xcm-executor",
+]
+
+[[package]]
+name = "sygma-bridge-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "sp-api",
+ "sygma-bridge",
 ]
 
 [[package]]

@@ -1,0 +1,15 @@
+[package]
+name = "sygma-bridge-runtime-api"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-3.0"
+
+[dependencies]
+sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false }
+sygma-bridge = { path = "../../bridge", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"sp-api/std",
+]
