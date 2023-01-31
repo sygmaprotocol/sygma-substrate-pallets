@@ -131,7 +131,7 @@ pub mod pallet {
 			resource_id: ResourceId,
 			deposit_nonce: DepositNonce,
 			sender: T::AccountId,
-			transfer_type: Vec<u8>,
+			transfer_type: TransferType,
 			deposit_data: Vec<u8>,
 			handler_response: Vec<u8>,
 		},
@@ -365,15 +365,13 @@ pub mod pallet {
 			let deposit_nonce = DepositCounts::<T>::get();
 			DepositCounts::<T>::put(deposit_nonce + 1);
 
-			let t_type: Vec<u8> = transfer_type.encode();
-
 			// Emit Deposit event
 			Self::deposit_event(Event::Deposit {
 				dest_domain_id: T::DestDomainID::get(),
 				resource_id,
 				deposit_nonce,
 				sender,
-				transfer_type: t_type,
+				transfer_type,
 				deposit_data: Self::create_deposit_data(amount - fee, recipient),
 				handler_response: vec![],
 			});
@@ -975,7 +973,7 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer.encode(),
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"ethereum recipient".to_vec(),
@@ -989,7 +987,7 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 4,
 					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer.encode(),
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec(),
@@ -1137,7 +1135,7 @@ pub mod pallet {
 					resource_id: UsdcResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer.encode(),
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"ethereum recipient".to_vec(),
