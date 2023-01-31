@@ -4,17 +4,13 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
-use funty::Fundamental;
-use sygma_traits::{
-	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress,
-};
-
 use frame_support::{
 	parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, PalletInfoAccess},
 	PalletId,
 };
 use frame_system::{self as system, EnsureSigned};
+use funty::Fundamental;
 use polkadot_parachain::primitives::Sibling;
 use sp_core::hash::H256;
 use sp_runtime::{
@@ -23,12 +19,17 @@ use sp_runtime::{
 	AccountId32, Perbill,
 };
 use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
+use sygma_traits::{
+	ChainID, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
+};
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
 	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
+use xcm_executor::traits::{
+	Convert, Error as ExecutionError, FilterAssetLocation, MatchesFungibles,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -278,10 +279,61 @@ pub type FungiblesTransactor = FungiblesAdapter<
 /// Means for transacting assets on this chain.
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
+pub struct ConcrateSygmaAsset;
+impl ConcrateSygmaAsset {
+	pub fn id(asset: &MultiAsset) -> Option<MultiLocation> {
+		match (&asset.id, &asset.fun) {
+			// So far our native asset is concrete
+			(Concrete(id), Fungible(_)) => Some(id.clone()),
+			_ => None,
+		}
+	}
+
+	pub fn origin(asset: &MultiAsset) -> Option<MultiLocation> {
+		Self::id(asset).and_then(|id| {
+			match (id.parents, id.first_interior()) {
+				// Sibling parachain
+				(1, Some(Parachain(id))) => {
+					// Assume current parachain id is 2004, for production, you should always get
+					// your it from parachain info
+					if *id == 2004 {
+						// The registered foreign assets actually reserved on EVM chains, so when
+						// transfer back to EVM chains, they should be treated as non-reserve assets
+						// relative to current chain.
+						Some(MultiLocation::new(
+							0,
+							X1(GeneralKey(
+								b"sygma".to_vec().try_into().expect("less than length limit; qed"),
+							)),
+						))
+					} else {
+						// Other parachain assets should be treat as reserve asset when transfered
+						// to outside EVM chains
+						Some(MultiLocation::here())
+					}
+				},
+				// Parent assets should be treat as reserve asset when transfered to outside EVM
+				// chains
+				(1, _) => Some(MultiLocation::here()),
+				// Children parachain
+				(0, Some(Parachain(id))) => Some(MultiLocation::new(0, X1(Parachain(*id)))),
+				// Local: (0, Here)
+				(0, None) => Some(id),
+				_ => None,
+			}
+		})
+	}
+}
+
 pub struct ReserveChecker;
-impl IsReserved for ReserveChecker {
-	fn is_reserved(asset_id: &XcmAssetId) -> bool {
-		asset_id == &NativeLocation::get().into()
+impl FilterAssetLocation for ReserveChecker {
+	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
+		if let Some(ref id) = ConcrateSygmaAsset::origin(asset) {
+			if id == origin {
+				return true
+			}
+		}
+		false
 	}
 }
 
@@ -307,7 +359,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = SygmaBasicFeeHandler;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
-	type ReserveChecker = ReserveChecker;
+	type IsReserve = ReserveChecker;
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;

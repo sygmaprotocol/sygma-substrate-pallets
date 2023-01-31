@@ -25,10 +25,6 @@ pub enum TransferType {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy, Default)]
 pub struct MpcAddress(pub [u8; 20]);
 
-pub trait IsReserved {
-	fn is_reserved(asset_id: &AssetId) -> bool;
-}
-
 pub trait ExtractDestinationData {
 	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)>;
 }
