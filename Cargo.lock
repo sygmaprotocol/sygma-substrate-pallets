@@ -443,7 +443,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
- "funty",
+ "funty 2.0.0",
  "radium",
  "tap",
  "wyz",
@@ -2010,6 +2010,12 @@ name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
+
+[[package]]
+name = "funty"
+version = "3.0.0-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d938e9fbe98b5b9d7064e363900acbd810c0a56898480d90837a7e9947b10ef8"
 
 [[package]]
 name = "futures"
@@ -3877,6 +3883,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
+ "funty 3.0.0-rc1",
  "hex",
  "hex-literal",
  "pallet-assets",
@@ -7648,6 +7655,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "funty 3.0.0-rc1",
  "hex-literal",
  "log",
  "pallet-assets",

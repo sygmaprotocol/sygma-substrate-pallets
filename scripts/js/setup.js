@@ -11,11 +11,16 @@ const feeHandlerType = {
     DynamicFeeHandler: "DynamicFeeHandler"
 }
 
-const supportedDestDomains = {
-    evmDomain1: {
+const supportedDestDomains = [
+    {
         domainID: 1,
+        chainID: 1
+    },
+    {
+        domainID: 2,
+        chainID: 2
     }
-}
+]
 
 const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
 
@@ -28,7 +33,7 @@ async function setBalance(api, who, value, finalization, sudo) {
         );
         const unsub = await api.tx.sudo
             .sudo(api.tx.balances.setBalance(who, value, 0))
-            .signAndSend(sudo, { nonce: nonce, era: 0 }, (result) => {
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
                     console.log(
@@ -59,7 +64,7 @@ async function setFeeHandler(api, domainID, asset, feeHandlerType, finalization,
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
         console.log(
-            `--- Submitting extrinsic to set fee handler. (nonce: ${nonce}) ---`
+            `--- Submitting extrinsic to set fee handler on domainID ${domainID}. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
             .sudo(api.tx.feeHandlerRouter.setFeeHandler(domainID, asset, feeHandlerType))
@@ -94,7 +99,7 @@ async function setFee(api, domainID, asset, amount, finalization, sudo) {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
         console.log(
-            `--- Submitting extrinsic to set basic fee. (nonce: ${nonce}) ---`
+            `--- Submitting extrinsic to set basic fee on domainID ${domainID}. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
             .sudo(api.tx.sygmaBasicFeeHandler.setFee(domainID, asset, amount))
@@ -159,8 +164,8 @@ async function setMpcAddress(api, mpcAddr, finalization, sudo) {
     });
 }
 
-async function queryBridgePauseStatus(api) {
-    let result = await api.query.sygmaBridge.isPaused();
+async function queryBridgePauseStatus(api, domainID) {
+    let result = await api.query.sygmaBridge.isPaused(domainID);
     return result.toJSON()
 }
 
@@ -267,6 +272,41 @@ async function mintAsset(api, id, recipient, amount, finalization, sudo) {
     });
 }
 
+async function registerDomain(api, domainID, chainID, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to register domainID ${domainID} with chainID ${chainID}. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.sudo
+            .sudo(api.tx.sygmaBridge.registerDomain(domainID, chainID))
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
 function getUSDCAssetId(api) {
     return api.createType('XcmV1MultiassetAssetId', {
         Concrete: api.createType('XcmV1MultiLocation', {
@@ -316,9 +356,16 @@ async function main() {
     // set up MPC address
     await setMpcAddress(api, mpcAddr, true, sudo);
 
-    // set fee for native asset
-    await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-    await setFee(api, supportedDestDomains.evmDomain1.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
+    // register dest domains
+    for (const domain of supportedDestDomains) {
+        await registerDomain(api, domain.domainID, domain.chainID, true, sudo);
+    }
+
+    // set fee for native asset for domains
+    for (const domain of supportedDestDomains) {
+        await setFeeHandler(api, domain.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        await setFee(api, domain.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
+    }
 
     // create USDC test asset (foreign asset)
     // UsdcAssetId: AssetId defined in runtime.rs
@@ -332,18 +379,24 @@ async function main() {
     await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
     await mintAsset(api, usdcAssetID, usdcAdmin, 100000000000000, true, sudo); // mint 100 USDC to Alice
 
-    // set fee for USDC
-    await setFeeHandler(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-    await setFee(api, supportedDestDomains.evmDomain1.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+    // set fee for USDC for domains
+    for (const domain of supportedDestDomains) {
+        await setFeeHandler(api, domain.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        await setFee(api, domain.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+    }
 
     // transfer some native asset to FeeReserveAccount as Existential Deposit(aka ED)
     await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
     // bridge should be unpaused by the end of the setup
-    if (!await queryBridgePauseStatus(api)) console.log('🚀 Sygma substrate pallet setup is done! 🚀');
+    for (const domain of supportedDestDomains) {
+        if (!await queryBridgePauseStatus(api, domain.domainID)) console.log(`DestDomainID: ${domain.domainID} is ready✅`);
+    }
+
+    console.log('🚀 Sygma substrate pallet setup is done! 🚀');
 
     // It is unnecessary to set up access segregator here since ALICE will be the sudo account and all methods with access control logic are already setup in this script.
-    // so that on Relayer, E2E test cases are only about public extrinsic such as deposit, executionProposal, retry .etc
+    // so that on Relayer, E2E test only cases about public extrinsic such as deposit, executionProposal, retry .etc
 }
 
 main().catch(console.error).finally(() => process.exit());

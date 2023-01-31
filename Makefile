@@ -1,16 +1,21 @@
+# run cargo clippy and cargo fmt
 lint: fmt
 	cargo fmt --all --check
 	cargo clippy --all-targets -- -D warnings
 
+# run cargo fmt
 fmt:
 	cargo fmt --all
 
+# run unit test
 test:
 	cargo test
 
+# build the binary locally
 build:
 	cargo build --release
 
+# launch the local node in dev mode
 start-dev:
 	./target/release/node-template --dev --ws-external
 
@@ -37,3 +42,8 @@ build-e2e-test-docker-image:
 # run the preconfigured e2e docker image
 start-e2e-image:
 	 docker run -p 9944:9944 -it sygma_substrate_pallets_e2e_preconfigured
+
+# run setup js script to setup the local substrate node
+# substrate node is required, run make start-dev first
+run-setup:
+	node ./scripts/js/setup.js
