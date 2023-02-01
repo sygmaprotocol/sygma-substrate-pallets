@@ -48,8 +48,8 @@ section, we are going to make some clarification and explanation.
 
 ### MultiLocation
 `MultiLocation` is a substrate type. It is introduced by XCM, and it is used to identify any single entity location that exists within the world of Polkadot consensus.
-`MultiLocation` always expresses a **relative** location to the **current location**. Practically, `MultiLocations` are used to identify places to send XCM messages, 
-in Sygma pallets, it is used to identify the destination when depositing, the deposit extrinsic signature is shown below:
+`MultiLocation` always expresses a **relative** location to the **current location**. Practically, `MultiLocations` are used to identify places to send XCM messages. 
+In Sygma pallets, it is used to identify the destination when depositing, the deposit extrinsic signature is shown below:
 ```rust
 pub fn deposit(origin: OriginFor<T>, asset: MultiAsset, dest: MultiLocation) -> DispatchResult
 ```
@@ -118,8 +118,10 @@ type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 As mentioned in the `MultiAsset` section, the `AssetId` contains the asset's MultiLocation, so that one asset with its `MultiLocation` is able to link with `ResouceID`, 
 
 ### SCALE codec in substrate
-When sending and receiving over the network, substrate uses an encoding and decoding program called SCALE codec. The SCALE codec is not self-describing in any way. It assumes the decoding context has all type knowledge about the encoded data. In general, each data type has its own rule when encoding by SCALE, so when decoding, they will follow their own rule based its data type.  
-It is **not** recommended to do the manual decoding, however, it is important to understand the underline mechanism.
+When sending and receiving over the network, substrate uses an encoding and decoding program called SCALE codec. The SCALE codec is not self-describing. It assumes the decoding context has all type knowledge about the encoded data. In general, each data type has its own rule when encoding by SCALE, so when decoding, they will follow their own rule based on its data type.  
 
-The substrate reference table for this encoding/decoding rules can be found [here](https://docs.substrate.io/reference/scale-codec/)  
+It is **not** recommended to do the manual decoding; however, it is important to understand the underline mechanism.
+
+The substrate reference table for this `encoding/decoding` rules can be found [here](https://docs.substrate.io/reference/scale-codec/).  
+
 There are other language lib that has implemented SCALE codec can be used when interacting with substrate node which can also be found in the link above.
