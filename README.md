@@ -117,6 +117,24 @@ type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 ```
 As mentioned in the `MultiAsset` section, the `AssetId` contains the asset's MultiLocation, so that one asset with its `MultiLocation` is able to link with `ResouceID`, 
 
+### AssetId of u32 vs AssetId of xcm
+**AssetID of u32**: When creating an asset in substrate, a `u32` number has to be assigned as the `assetID` and this number will be displayed in the assets
+ page on Polkadot JS App. This `assetID` is used when transferring this asset between different accounts within the parachain. It is normally used
+in `assets` pallet.  
+
+**AssetID of xcm**: This is the xcm type of AssetID. It is the first parameter of `MultiAsset`. In Sygma pallets, it has an alise as `XcmAssetId`. `XcmAssetId` is the asset identifier within the entire Polkdaot world,
+because under the hood, it is a `MultiLocation`(see definition above).  
+
+It is also important to understand the relationship between an `asset`, the `u32 assetID`, the `XcmAssetID`, the `MultiLocation` of the asset, the basic fee associated with the asset,
+and how the asset is binding with a `ResourceID`:
+
+![img.png](diagram.png)  
+In Sygma pallets, `u32` AssetID is binding with Asset MultiLocation by the implementation of `SimpleForeignAssetConverter` struct, it implements the `xcm-exectuor::Convert` trait. Since `XcmAssetID` contains the Asset MultiLocation, it can now associate with basic fee together with the fee amount(`u128`).
+Similarly, Asset MultiLocation can also map with `ResouceID` in the `ResourcePairs: Vec<(XcmAssetId, ResourceId)>`.  
+In summary, `MultiLocation` of an `Asset` is the key in this relationship.
+
+  
+
 ### SCALE codec in substrate
 When sending and receiving over the network, substrate uses an encoding and decoding program called SCALE codec. The SCALE codec is not self-describing. It assumes the decoding context has all type knowledge about the encoded data. In general, each data type has its own rule when encoding by SCALE, so when decoding, they will follow their own rule based on its data type.  
 
