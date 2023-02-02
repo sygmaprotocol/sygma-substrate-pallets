@@ -44,8 +44,8 @@ pub mod pallet {
 
 	use crate::eip712;
 	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractRecipient, FeeHandler, IsReserved, MpcAddress,
-		ResourceId, TransferType, VerifyingContractAddress,
+		ChainID, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, IsReserved,
+		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
 	};
 
 	#[allow(dead_code)]
@@ -73,25 +73,19 @@ pub mod pallet {
 		/// Origin used to administer the pallet
 		type BridgeCommitteeOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// The identifier for this chain.
-		/// This must be unique and must not collide with existing IDs within a set of bridged
-		/// chains.
-		#[pallet::constant]
-		type DestDomainID: Get<DomainID>;
-
 		/// Bridge transfer reserve account
 		#[pallet::constant]
 		type TransferReserveAccount: Get<Self::AccountId>;
-
-		/// Pallet ChainID
-		/// This is used in EIP712 typed data domain
-		#[pallet::constant]
-		type DestChainID: Get<ChainID>;
 
 		/// EIP712 Verifying contract address
 		/// This is used in EIP712 typed data domain
 		#[pallet::constant]
 		type DestVerifyingContractAddress: Get<VerifyingContractAddress>;
+
+		/// Pallet ChainID
+		/// This is used in EIP712 typed data domain
+		#[pallet::constant]
+		type EIP712ChainID: Get<ChainID>;
 
 		/// Fee reserve account
 		#[pallet::constant]
@@ -109,8 +103,8 @@ pub mod pallet {
 		/// Return if asset reserved on current chain
 		type ReserveChecker: IsReserved;
 
-		/// Extract recipient from given MultiLocation
-		type ExtractRecipient: ExtractRecipient;
+		/// Extract dest data from given MultiLocation
+		type ExtractDestData: ExtractDestinationData;
 
 		/// Config ID for the current pallet instance
 		type PalletId: Get<PalletId>;
@@ -156,6 +150,10 @@ pub mod pallet {
 		/// When bridge is unpaused
 		/// args: [dest_domain_id]
 		BridgeUnpaused { dest_domain_id: DomainID },
+		/// When registering a new dest domainID with its corresponding chainID
+		RegisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
+		/// When unregistering a dest domainID with its corresponding chainID
+		UnregisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
 	}
 
 	#[pallet::error]
@@ -166,8 +164,6 @@ pub mod pallet {
 		BadMpcSignature,
 		/// Insufficient balance on sender account
 		InsufficientBalance,
-		/// Failed to extract EVM receipient address according to given recipient parser
-		ExtractRecipientFailed,
 		/// Asset transactor execution failed
 		TransactFailed,
 		/// The withdrawn amount can not cover the fee payment
@@ -188,25 +184,29 @@ pub mod pallet {
 		ProposalAlreadyComplete,
 		/// Transactor operation failed
 		TransactorFailed,
-		/// Origin domain id mismatch
-		InvalidOriginDomainId,
 		/// Deposit data not correct
 		InvalidDepositData,
+		/// Dest domain not supported
+		DestDomainNotSupported,
+		/// Dest chain id not match
+		DestChainIDNotMatch,
+		/// Failed to extract destination data
+		ExtractDestDataFailed,
 		/// Function unimplemented
 		Unimplemented,
 	}
 
 	/// Deposit counter of dest domain
 	#[pallet::storage]
-	#[pallet::getter(fn dest_counts)]
-	pub type DepositCounts<T> = StorageValue<_, DepositNonce, ValueQuery>;
+	#[pallet::getter(fn deposit_counts)]
+	pub type DepositCounts<T> = StorageMap<_, Twox64Concat, DomainID, DepositNonce, ValueQuery>;
 
 	/// Bridge Pause indicator
 	/// Bridge is unpaused initially, until pause
 	/// After mpc address setup, bridge should be paused until ready to unpause
 	#[pallet::storage]
 	#[pallet::getter(fn is_paused)]
-	pub type IsPaused<T> = StorageValue<_, bool, ValueQuery>;
+	pub type IsPaused<T> = StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
 
 	/// Pre-set MPC address
 	#[pallet::storage]
@@ -216,8 +216,27 @@ pub mod pallet {
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn used_nonces)]
-	pub type UsedNonces<T: Config> =
-		StorageMap<_, Twox64Concat, DepositNonce, DepositNonce, ValueQuery>;
+	pub type UsedNonces<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		DomainID,
+		Twox64Concat,
+		DepositNonce,
+		DepositNonce,
+		ValueQuery,
+	>;
+
+	/// Mark supported dest domainID
+	#[pallet::storage]
+	#[pallet::getter(fn dest_domain_ids)]
+	pub type DestDomainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, bool, ValueQuery>;
+
+	/// Mark the pairs for supported dest domainID with its corresponding chainID
+	/// The chainID is not directly used in pallet, this map is designed more about rechecking the
+	/// domainID
+	#[pallet::storage]
+	#[pallet::getter(fn dest_chain_ids)]
+	pub type DestChainIds<T: Config> = StorageMap<_, Twox64Concat, DomainID, ChainID>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
@@ -226,9 +245,9 @@ pub mod pallet {
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
 		#[pallet::weight(195_000_000)]
-		pub fn pause_bridge(origin: OriginFor<T>) -> DispatchResult {
+		pub fn pause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permisson to pause bridge
+				// Ensure bridge committee or the account that has permission to pause bridge
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -242,19 +261,21 @@ pub mod pallet {
 			// make sure MPC address is set up
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
 			// Mark as paused
-			IsPaused::<T>::set(true);
+			IsPaused::<T>::insert(dest_domain_id, true);
 
 			// Emit BridgePause event
-			Self::deposit_event(Event::BridgePaused { dest_domain_id: T::DestDomainID::get() });
+			Self::deposit_event(Event::BridgePaused { dest_domain_id });
 			Ok(())
 		}
 
 		/// Unpause bridge.
 		#[pallet::weight(195_000_000)]
-		pub fn unpause_bridge(origin: OriginFor<T>) -> DispatchResult {
+		pub fn unpause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permisson to unpause bridge
+				// Ensure bridge committee or the account that has permission to unpause bridge
 				let who = ensure_signed(origin)?;
 				ensure!(
 					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -268,14 +289,16 @@ pub mod pallet {
 			// make sure MPC address is set up
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
 			// make sure the current status is paused
-			ensure!(IsPaused::<T>::get(), Error::<T>::BridgeUnpaused);
+			ensure!(IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgeUnpaused);
 
 			// Mark as unpaused
-			IsPaused::<T>::set(false);
+			IsPaused::<T>::insert(dest_domain_id, false);
 
 			// Emit BridgeUnpause event
-			Self::deposit_event(Event::BridgeUnpaused { dest_domain_id: T::DestDomainID::get() });
+			Self::deposit_event(Event::BridgeUnpaused { dest_domain_id });
 			Ok(())
 		}
 
@@ -302,6 +325,89 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Mark the give dest domainID with chainID to be enabled
+		#[pallet::weight(195_000_000)]
+		pub fn register_domain(
+			origin: OriginFor<T>,
+			dest_domain_id: DomainID,
+			dest_chain_id: ChainID,
+		) -> DispatchResult {
+			let mut sender: T::AccountId = [0u8; 32].into();
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permission to register the dest
+				// domain
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"register_domain".to_vec(),
+						who.clone()
+					),
+					Error::<T>::AccessDenied
+				);
+				sender = who;
+			}
+			// make sure MPC address is set up
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			DestDomainIds::<T>::insert(dest_domain_id, true);
+			DestChainIds::<T>::insert(dest_domain_id, dest_chain_id);
+
+			// Emit register dest domain event
+			Self::deposit_event(Event::RegisterDestDomain {
+				sender,
+				domain_id: dest_domain_id,
+				chain_id: dest_chain_id,
+			});
+			Ok(())
+		}
+
+		/// Mark the give dest domainID with chainID to be disabled
+		#[pallet::weight(195_000_000)]
+		pub fn unregister_domain(
+			origin: OriginFor<T>,
+			dest_domain_id: DomainID,
+			dest_chain_id: ChainID,
+		) -> DispatchResult {
+			let mut sender: T::AccountId = [0u8; 32].into();
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permission to unregister the dest
+				// domain
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"unregister_domain".to_vec(),
+						who.clone()
+					),
+					Error::<T>::AccessDenied
+				);
+				sender = who;
+			}
+			// make sure MPC address is set up
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			ensure!(
+				DestDomainIds::<T>::get(dest_domain_id) &&
+					DestChainIds::<T>::get(dest_domain_id).is_some(),
+				Error::<T>::DestDomainNotSupported
+			);
+
+			let co_chain_id = DestChainIds::<T>::get(dest_domain_id).unwrap();
+			ensure!(co_chain_id == dest_chain_id, Error::<T>::DestChainIDNotMatch);
+
+			DestDomainIds::<T>::remove(dest_domain_id);
+			DestChainIds::<T>::remove(dest_domain_id);
+
+			// Emit unregister dest domain event
+			Self::deposit_event(Event::UnregisterDestDomain {
+				sender,
+				domain_id: dest_domain_id,
+				chain_id: dest_chain_id,
+			});
+			Ok(())
+		}
+
 		/// Initiates a transfer.
 		#[pallet::weight(195_000_000)]
 		#[transactional]
@@ -313,17 +419,22 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+
+			// Extract dest (MultiLocation) to get corresponding dest domainID and Ethereum
+			// recipient address
+			let (recipient, dest_domain_id) =
+				T::ExtractDestData::extract_dest(&dest).ok_or(Error::<T>::ExtractDestDataFailed)?;
+
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+
+			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
 			// transfer type
 			let (resource_id, amount, transfer_type) =
 				Self::extract_asset(&asset).ok_or(Error::<T>::AssetNotBound)?;
-			// Extract dest (MultiLocation) to get corresponding Ethereum recipient address
-			let recipient = T::ExtractRecipient::extract_recipient(&dest)
-				.ok_or(Error::<T>::ExtractRecipientFailed)?;
 			// Return error if no fee handler set
-			let fee = T::FeeHandler::get_fee(T::DestDomainID::get(), &asset.id)
+			let fee = T::FeeHandler::get_fee(dest_domain_id, &asset.id)
 				.ok_or(Error::<T>::MissingFeeConfig)?;
 
 			ensure!(amount > fee, Error::<T>::FeeTooExpensive);
@@ -362,12 +473,12 @@ pub mod pallet {
 			}
 
 			// Bump deposit nonce
-			let deposit_nonce = DepositCounts::<T>::get();
-			DepositCounts::<T>::put(deposit_nonce + 1);
+			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
+			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce + 1);
 
 			// Emit Deposit event
 			Self::deposit_event(Event::Deposit {
-				dest_domain_id: T::DestDomainID::get(),
+				dest_domain_id,
 				resource_id,
 				deposit_nonce,
 				sender,
@@ -386,11 +497,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			deposit_on_block_height: u128,
 			deposit_extrinsic_index: u128,
+			dest_domain_id: DomainID,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
+			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Emit retry event
 			Self::deposit_event(Event::<T>::Retry {
@@ -411,21 +524,21 @@ pub mod pallet {
 		) -> DispatchResult {
 			// Check MPC address and bridge status
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(), Error::<T>::BridgePaused);
+
 			// Verify MPC signature
 			ensure!(
 				Self::verify_by_mpc_address(&proposals, signature),
 				Error::<T>::BadMpcSignature
 			);
 
-			// Execute proposals one by on.
+			// Execute proposals one by one.
 			// Note if one proposal failed to execute, we emit `FailedHandlerExecution` rather
 			// than revert whole transaction
 			for proposal in proposals.iter() {
 				Self::execute_proposal_internal(proposal).map_or_else(
 					|e| {
 						let err_msg: &'static str = e.into();
-						// Emit FailedHandlerExecution
+						// Any error during proposal list execution will emit FailedHandlerExecution
 						Self::deposit_event(Event::FailedHandlerExecution {
 							error: err_msg.as_bytes().to_vec(),
 							origin_domain_id: proposal.origin_domain_id,
@@ -434,7 +547,10 @@ pub mod pallet {
 					},
 					|_| {
 						// Update proposal status
-						Self::set_proposal_executed(proposal.deposit_nonce);
+						Self::set_proposal_executed(
+							proposal.deposit_nonce,
+							proposal.origin_domain_id,
+						);
 
 						// Emit ProposalExecution
 						Self::deposit_event(Event::ProposalExecution {
@@ -468,6 +584,10 @@ pub mod pallet {
 				Err(error) => return false,
 			};
 
+			if proposals.is_empty() {
+				return false
+			}
+
 			// parse proposals and construct signing message
 			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
 
@@ -497,6 +617,10 @@ pub mod pallet {
 				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
 			);
+
+			if proposals.is_empty() {
+				return [0u8; 32]
+			}
 
 			let mut keccak_data = Vec::new();
 			for prop in proposals {
@@ -536,7 +660,7 @@ pub mod pallet {
 			let eip712_domain = eip712::EIP712Domain {
 				name: String::from("Bridge"),
 				version: String::from("3.1.0"),
-				chain_id: T::DestChainID::get(),
+				chain_id: T::EIP712ChainID::get(),
 				verifying_contract: T::DestVerifyingContractAddress::get(),
 				salt: default_eip712_domain.salt,
 			};
@@ -615,28 +739,30 @@ pub mod pallet {
 		}
 
 		/// Return true if deposit nonce has been used
-		fn is_proposal_executed(nonce: DepositNonce) -> bool {
-			(UsedNonces::<T>::get(nonce / 256) & (1 << (nonce % 256))) != 0
+		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
+			(UsedNonces::<T>::get(domain_id, nonce / 256) & (1 << (nonce % 256))) != 0
 		}
 
 		/// Set bit mask for specific nonce as used
-		fn set_proposal_executed(nonce: DepositNonce) {
-			let mut current_nonces = UsedNonces::<T>::get(nonce / 256);
+		fn set_proposal_executed(nonce: DepositNonce, domain_id: DomainID) {
+			let mut current_nonces = UsedNonces::<T>::get(domain_id, nonce / 256);
 			current_nonces |= 1 << (nonce % 256);
-			UsedNonces::<T>::insert(nonce / 256, current_nonces);
+			UsedNonces::<T>::insert(domain_id, nonce / 256, current_nonces);
 		}
 
 		/// Execute a single proposal
 		fn execute_proposal_internal(proposal: &Proposal) -> DispatchResult {
+			// Check if domain is supported
+			ensure!(
+				DestDomainIds::<T>::get(proposal.origin_domain_id),
+				Error::<T>::DestDomainNotSupported
+			);
+			// Check if dest domain bridge is paused
+			ensure!(!IsPaused::<T>::get(proposal.origin_domain_id), Error::<T>::BridgePaused);
 			// Check if proposal has executed
 			ensure!(
-				!Self::is_proposal_executed(proposal.deposit_nonce),
+				!Self::is_proposal_executed(proposal.deposit_nonce, proposal.origin_domain_id),
 				Error::<T>::ProposalAlreadyComplete
-			);
-			// Check if the dest domain id is correct
-			ensure!(
-				proposal.origin_domain_id == T::DestDomainID::get(),
-				Error::<T>::InvalidOriginDomainId
 			);
 			// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
 			let asset_id =
@@ -670,13 +796,16 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use crate as bridge;
-		use crate::{Event as SygmaBridgeEvent, IsPaused, MpcAddr, Proposal};
-		use alloc::string::String;
+		use crate::{
+			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
+			Proposal,
+		};
+		use alloc::vec;
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
-			BridgePalletIndex, DestDomainID, NativeLocation, NativeResourceId, Runtime,
-			RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge,
-			TreasuryAccount, UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB,
+			BridgePalletIndex, NativeLocation, NativeResourceId, Runtime, RuntimeEvent,
+			RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge, TreasuryAccount,
+			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID,
 			ENDOWED_BALANCE,
 		};
 		use codec::Encode;
@@ -684,6 +813,7 @@ pub mod pallet {
 			assert_noop, assert_ok, crypto::ecdsa::ECDSAExt,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
+		use primitive_types::U256;
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
@@ -729,35 +859,41 @@ pub mod pallet {
 
 				// pause bridge when mpc address is not set, should be err
 				assert_noop!(
-					SygmaBridge::pause_bridge(Origin::root()),
+					SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
 				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// pause bridge again, should be ok
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert!(IsPaused::<Runtime>::get());
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// pause bridge again after paused, should be ok
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert!(IsPaused::<Runtime>::get());
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// permission test: unauthorized account should not be able to pause bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
-					SygmaBridge::pause_bridge(unauthorized_account),
+					SygmaBridge::pause_bridge(unauthorized_account, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert!(IsPaused::<Runtime>::get());
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 			})
 		}
 
@@ -771,30 +907,37 @@ pub mod pallet {
 
 				// unpause bridge when mpc address is not set, should be error
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root()),
+					SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address to test_key_a and pause bridge
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
 				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgePaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// bridge should be paused here
-				assert!(IsPaused::<Runtime>::get());
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 
 				// ready to unpause bridge, should be ok
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::BridgeUnpaused {
-					dest_domain_id: 1,
+					dest_domain_id: DEST_DOMAIN_ID,
 				})]);
 
 				// try to unpause it again, should be error
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Origin::root()),
+					SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::BridgeUnpaused
 				);
 
@@ -802,10 +945,10 @@ pub mod pallet {
 				// bridge
 				let unauthorized_account = Origin::from(Some(ALICE));
 				assert_noop!(
-					SygmaBridge::unpause_bridge(unauthorized_account),
+					SygmaBridge::unpause_bridge(unauthorized_account, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert!(!IsPaused::<Runtime>::get());
+				assert!(!IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 			})
 		}
 
@@ -945,21 +1088,31 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -969,7 +1122,7 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DestDomainID::get(),
+					dest_domain_id: DEST_DOMAIN_ID,
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
@@ -1030,13 +1183,20 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					UsdcLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
 				// Register foreign asset (USDC) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
@@ -1051,9 +1211,12 @@ pub mod pallet {
 					(Concrete(UsdcLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1063,7 +1226,7 @@ pub mod pallet {
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DestDomainID::get(),
+					dest_domain_id: DEST_DOMAIN_ID,
 					resource_id: UsdcResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
@@ -1084,22 +1247,33 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					unbounded_asset_location.clone().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						(Concrete(unbounded_asset_location), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1123,20 +1297,27 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						invalid_dest,
 					),
-					bridge::Error::<Runtime>::ExtractRecipientFailed
+					bridge::Error::<Runtime>::ExtractDestDataFailed
 				);
 			})
 		}
@@ -1147,15 +1328,24 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let amount = 200u128;
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1170,12 +1360,18 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 200u128;
 				let amount = 100u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
+				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
 				));
 				assert_noop!(
 					SygmaBridge::deposit(
@@ -1183,9 +1379,13 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1200,15 +1400,23 @@ pub mod pallet {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
+
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
 				// Pause bridge
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				// Should failed
 				assert_noop!(
 					SygmaBridge::deposit(
@@ -1216,25 +1424,32 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 				// Unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				// Should success
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1246,9 +1461,10 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				let fee = 200u128;
 				let amount = 100u128;
+
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1258,9 +1474,13 @@ pub mod pallet {
 						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 						(
 							0,
-							X1(GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							))
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
 						)
 							.into(),
 					),
@@ -1274,27 +1494,47 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc address is missing, should fail
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
+					SygmaBridge::retry(
+						Origin::signed(ALICE),
+						1234567u128,
+						1234u128,
+						DEST_DOMAIN_ID
+					),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
 				// set mpc address
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// pause bridge and retry, should fail
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_noop!(
-					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128),
+					SygmaBridge::retry(
+						Origin::signed(ALICE),
+						1234567u128,
+						1234u128,
+						DEST_DOMAIN_ID
+					),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 
 				// unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
-				assert!(!IsPaused::<Runtime>::get());
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(!IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 
 				// retry again, should work
-				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, 1234u128));
+				assert_ok!(SygmaBridge::retry(
+					Origin::signed(ALICE),
+					1234567u128,
+					1234u128,
+					DEST_DOMAIN_ID
+				));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
 					deposit_on_block_height: 1234567u128,
 					deposit_extrinsic_index: 1234u128,
@@ -1314,25 +1554,24 @@ pub mod pallet {
 				// set mpc address to generated keypair's address
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
 				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
-				// Generate an evil key
-				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
-				// Should failed if bridge paused
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert_noop!(
-					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
-					bridge::Error::<Runtime>::BridgePaused,
-				);
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
+				// Generate an evil key
+				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 
 				// Deposit some native asset in advance
 				let fee = 100u128;
 				let amount = 200u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
-					DestDomainID::get(),
+					DEST_DOMAIN_ID,
 					NativeLocation::get().into(),
 					fee
 				));
@@ -1341,9 +1580,12 @@ pub mod pallet {
 					(Concrete(NativeLocation::get()), Fungible(2 * amount)).into(),
 					(
 						0,
-						X1(GeneralKey(
-							WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-						))
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
 					)
 						.into(),
 				));
@@ -1355,7 +1597,7 @@ pub mod pallet {
 
 				// Generate proposals
 				let valid_native_transfer_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 1,
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
@@ -1365,7 +1607,7 @@ pub mod pallet {
 					),
 				};
 				let valid_usdc_transfer_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 2,
 					resource_id: UsdcResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
@@ -1375,7 +1617,7 @@ pub mod pallet {
 					),
 				};
 				let invalid_depositnonce_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 2,
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
@@ -1395,7 +1637,7 @@ pub mod pallet {
 					),
 				};
 				let invalid_resourceid_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 3,
 					resource_id: [2u8; 32],
 					data: SygmaBridge::create_deposit_data(
@@ -1405,7 +1647,7 @@ pub mod pallet {
 					),
 				};
 				let invalid_recipient_proposal = Proposal {
-					origin_domain_id: DestDomainID::get(),
+					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 3,
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(amount, b"invalid recipient".to_vec()),
@@ -1424,6 +1666,24 @@ pub mod pallet {
 					pair.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
 				let proposals_with_bad_signature = evil_pair
 					.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+
+				// Should failed if dest domain 1 bridge paused
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals.clone(),
+					proposals_with_valid_signature.encode()
+				));
+				// should emit FailedHandlerExecution event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::FailedHandlerExecution {
+						error: vec![66, 114, 105, 100, 103, 101, 80, 97, 117, 115, 101, 100],
+						origin_domain_id: 1,
+						deposit_nonce: 3,
+					},
+				)]);
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
 
 				assert_noop!(
 					SygmaBridge::execute_proposal(
@@ -1452,19 +1712,25 @@ pub mod pallet {
 		#[test]
 		fn get_bridge_pause_status() {
 			new_test_ext().execute_with(|| {
-				assert!(!SygmaBridge::is_paused());
+				assert!(!SygmaBridge::is_paused(DEST_DOMAIN_ID));
 
 				// set mpc address
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// pause bridge
-				assert_ok!(SygmaBridge::pause_bridge(Origin::root()));
-				assert!(SygmaBridge::is_paused());
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(SygmaBridge::is_paused(DEST_DOMAIN_ID));
 
 				// unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root()));
-				assert!(!SygmaBridge::is_paused());
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				assert!(!SygmaBridge::is_paused(DEST_DOMAIN_ID));
 			})
 		}
 
@@ -1477,12 +1743,13 @@ pub mod pallet {
 					SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr),
 					bridge::Error::<Runtime>::AccessDenied
 				);
+
 				assert_noop!(
-					SygmaBridge::pause_bridge(Some(BOB).into()),
+					SygmaBridge::pause_bridge(Some(BOB).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Some(BOB).into()),
+					SygmaBridge::unpause_bridge(Some(BOB).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 
@@ -1514,19 +1781,115 @@ pub mod pallet {
 				);
 				// ALICE set mpc address should work
 				assert_ok!(SygmaBridge::set_mpc_address(Some(ALICE).into(), test_mpc_addr));
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 
 				// ALICE pause&unpause bridge should still failed
 				assert_noop!(
-					SygmaBridge::pause_bridge(Some(ALICE).into()),
+					SygmaBridge::pause_bridge(Some(ALICE).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				assert_noop!(
-					SygmaBridge::unpause_bridge(Some(ALICE).into()),
+					SygmaBridge::unpause_bridge(Some(ALICE).into(), DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::AccessDenied
 				);
 				// BOB pause&unpause bridge should work
-				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into()));
-				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into()));
+				assert_ok!(SygmaBridge::pause_bridge(Some(BOB).into(), DEST_DOMAIN_ID));
+				assert_ok!(SygmaBridge::unpause_bridge(Some(BOB).into(), DEST_DOMAIN_ID));
+			})
+		}
+
+		#[test]
+		fn multi_domain_test() {
+			new_test_ext().execute_with(|| {
+				// root register domainID 1 with chainID 0, should raise error MissingMpcAddress
+				assert_noop!(
+					SygmaBridge::register_domain(Origin::root(), 1u8, U256::from(0)),
+					Error::<Runtime>::MissingMpcAddress
+				);
+
+				// set mpc address
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// alice register domainID 1 with chainID 1, should raise error AccessDenied
+				assert_noop!(
+					SygmaBridge::register_domain(Origin::from(Some(ALICE)), 1u8, U256::from(1)),
+					Error::<Runtime>::AccessDenied
+				);
+				// Grant ALICE the access of `register_domain`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"register_domain".to_vec(),
+					ALICE
+				));
+				// alice register domainID 1 with chainID 1, should be ok
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::from(Some(ALICE)),
+					1u8,
+					U256::from(1)
+				));
+				// should emit RegisterDestDomain event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::RegisterDestDomain {
+						sender: ALICE,
+						domain_id: 1,
+						chain_id: U256::from(1),
+					},
+				)]);
+				// storage check
+				assert!(DestDomainIds::<Runtime>::get(1u8));
+				assert_eq!(DestChainIds::<Runtime>::get(1u8).unwrap(), U256::from(1));
+
+				// alice unregister domainID 1 with chainID 0, should raise error AccessDenied
+				assert_noop!(
+					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 1u8, U256::from(0)),
+					Error::<Runtime>::AccessDenied
+				);
+				// Grant ALICE the access of `unregister_domain`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"unregister_domain".to_vec(),
+					ALICE
+				));
+				// alice unregister domainID 1 with chainID 2, should raise error
+				// DestChainIDNotMatch
+				assert_noop!(
+					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 1u8, U256::from(2)),
+					Error::<Runtime>::DestChainIDNotMatch
+				);
+				// alice unregister domainID 2 with chainID 2, should raise error
+				// DestDomainNotSupported
+				assert_noop!(
+					SygmaBridge::unregister_domain(Origin::from(Some(ALICE)), 2u8, U256::from(2)),
+					Error::<Runtime>::DestDomainNotSupported
+				);
+				// alice unregister domainID 1 with chainID 1, should success
+				assert_ok!(SygmaBridge::unregister_domain(
+					Origin::from(Some(ALICE)),
+					1u8,
+					U256::from(1)
+				));
+				// should emit UnregisterDestDomain event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::UnregisterDestDomain {
+						sender: ALICE,
+						domain_id: 1,
+						chain_id: U256::from(1),
+					},
+				)]);
+
+				// storage check
+				// DomainID 1 should not support anymore
+				assert!(!DestDomainIds::<Runtime>::get(1u8));
+				// corresponding chainID should be None since kv not exist anymore
+				assert!(DestChainIds::<Runtime>::get(1u8).is_none());
 			})
 		}
 	}

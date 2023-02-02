@@ -15,9 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-hex-literal = "0.3"
+hex-literal = { version = "0.3", default-features = false }
 primitive-types = { version = "0.12", default-features = false, features = ["scale-info", "serde_no_std"] }
-hex = "0.4.3"
+hex = { version = "0.4.3", default-features = false }
+funty = { version = "3.0.0-rc1", default-features = false }
 
 pallet-assets = { default-features = false, git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 pallet-aura = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }

@@ -4,8 +4,9 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
+use funty::Fundamental;
 use sygma_traits::{
-	ChainID, DomainID, ExtractRecipient, IsReserved, ResourceId, VerifyingContractAddress,
+	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress,
 };
 
 use frame_support::{
@@ -154,6 +155,8 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"register_domain".to_vec()),
+		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
 	].to_vec();
 }
 
@@ -171,9 +174,8 @@ impl sygma_basic_feehandler::Config for Runtime {
 }
 
 parameter_types! {
-	pub DestDomainID: DomainID = 1;
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
-	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
+	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
@@ -284,12 +286,12 @@ impl IsReserved for ReserveChecker {
 }
 
 // Project can have it's own implementation to adapt their own spec design.
-pub struct RecipientParser;
-impl ExtractRecipient for RecipientParser {
-	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
-		// For example, we force a dest location should be represented by following format.
+pub struct DestinationDataParser;
+impl ExtractDestinationData for DestinationDataParser {
+	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X1(GeneralKey(recipient))) => Some(recipient.to_vec()),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
+				Some((recipient.to_vec(), dest_domain_id.as_u8())),
 			_ => None,
 		}
 	}
@@ -298,16 +300,15 @@ impl ExtractRecipient for RecipientParser {
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type DestDomainID = DestDomainID;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
-	type DestChainID = DestChainID;
+	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = SygmaBasicFeeHandler;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
-	type ExtractRecipient = RecipientParser;
+	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 }
@@ -316,6 +317,7 @@ pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const ASSET_OWNER: AccountId32 = AccountId32::new([1u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const ENDOWED_BALANCE: Balance = 100_000_000;
+pub const DEST_DOMAIN_ID: DomainID = 1;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();

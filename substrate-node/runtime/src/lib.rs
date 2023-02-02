@@ -10,6 +10,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::{pallet_prelude::*, PalletId};
+use funty::Fundamental;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -30,7 +31,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DomainID, ExtractRecipient, IsReserved, ResourceId, VerifyingContractAddress,
+	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -372,16 +373,14 @@ impl sygma_fee_handler_router::Config for Runtime {
 const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
 
 parameter_types! {
-	// DestDomainID is the EVM chain domainID that runtime is bridging with
-	pub DestDomainID: DomainID = 1;
 	// TreasuryAccount is an substrate account and currently used for substrate -> EVM bridging fee collection
 	// TreasuryAccount address: 5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	// BridgeAccount is an account for holding transferred asset collection
 	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
-	// DestDomainID is the EVM chainID that runtime is bridging with
-	pub DestChainID: ChainID = primitive_types::U256([1u64; 4]);
+	// EIP712ChainID is the chainID that pallet is assigned with, used in EIP712 typed data domain
+	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
 	// When relayers signing, this address will be included in the EIP712Domain
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
@@ -503,12 +502,12 @@ impl IsReserved for ReserveChecker {
 }
 
 // Project can have it's own implementation to adapt their own spec design.
-pub struct RecipientParser;
-impl ExtractRecipient for RecipientParser {
-	fn extract_recipient(dest: &MultiLocation) -> Option<Vec<u8>> {
-		// For example, we force a dest location should be represented by following format.
+pub struct DestinationDataParser;
+impl ExtractDestinationData for DestinationDataParser {
+	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X1(GeneralKey(recipient))) => Some(recipient.to_vec()),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
+				Some((recipient.to_vec(), dest_domain_id.as_u8())),
 			_ => None,
 		}
 	}
@@ -517,16 +516,15 @@ impl ExtractRecipient for RecipientParser {
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type DestDomainID = DestDomainID;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
-	type DestChainID = DestChainID;
+	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = FeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type ReserveChecker = ReserveChecker;
-	type ExtractRecipient = RecipientParser;
+	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 }
