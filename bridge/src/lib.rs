@@ -210,7 +210,7 @@ pub mod pallet {
 
 	/// Pre-set MPC address
 	#[pallet::storage]
-	#[pallet::getter(fn mpc_add)]
+	#[pallet::getter(fn mpc_addr)]
 	pub type MpcAddr<T> = StorageValue<_, MpcAddress, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
