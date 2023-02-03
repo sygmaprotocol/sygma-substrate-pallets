@@ -67,6 +67,8 @@ As a developer who needs to construct `dest: MultiLocation` and then call `depos
 (parents: 0, interior: X2(GeneralKey("ethereum recipient"), GeneralIndex(destDomainID)))
 ```
 
+***
+
 ### MultiAsset
 `MultiAsset` is also a substrate type. Asset can be divided into different types from different point of view, such as fungible and non-fungible assets, 
 native asset and foreign asset ,etc. `MultiAsset` is the concept to handler multiple assets in the Polkadot world.
@@ -100,6 +102,8 @@ As a developer who needs to construct `asset: MultiAsset` and then call `deposit
     Fungible(amount)
 )
 ```
+ 
+***
 
 ### DomainID & ChainID
 In sygma pallets, multiple destination domain is supported in one single pallet instance. There are DestDomain management extrinsics to register/unregister domainID with its corresponding ChainID.
@@ -110,6 +114,8 @@ This information is stored in the chain storage:
 
 ChainID is not explicitly used in the pallet logic, but they are registered with DomainID. By querying the getter method of `dest_chain_ids`, it would be easy to find out which domainID is binding with which chainID.
 
+***
+
 ### ResourceID
 ResourceID the identifier of the asset in sygma system. To link it with XCM asset, there is `ResourcePairs` defined in the runtime which is the mapping between `AssetId` and `ResourceID`.
 ```rust
@@ -117,7 +123,9 @@ type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 ```
 As mentioned in the `MultiAsset` section, the `AssetId` contains the asset's MultiLocation, so that one asset with its `MultiLocation` is able to link with `ResouceID`, 
 
-### AssetId of u32 vs AssetId of xcm
+***
+
+### AssetId of u32 vs AssetId of XCM
 **AssetID of u32**: When creating an asset in substrate, a `u32` number has to be assigned as the `assetID` and this number will be displayed in the assets
  page on Polkadot JS App. This `assetID` is used when transferring this asset between different accounts within the parachain. It is normally used
 in `assets` pallet.  
@@ -133,7 +141,11 @@ In Sygma pallets, `u32` AssetID is binding with Asset MultiLocation by the imple
 Similarly, Asset MultiLocation can also map with `ResouceID` in the `ResourcePairs: Vec<(XcmAssetId, ResourceId)>`.  
 In summary, `MultiLocation` of an `Asset` is the key in this relationship.
 
-  
+Please note, `AssetID` does not necessarily have to be `u32`, it could be defined as `u8` or `u128`, etc. as well. In Sygma pallet, we defined it as `u32` for the demo purpose because 
+sygma pallets use `pallet-assets` to manage foreign assets in the demo runtime. Other substrate chain developers could config their own implementation, for example, some parachains use `orml` token,
+which will have its own concept. 
+
+***
 
 ### SCALE codec in substrate
 When sending and receiving over the network, substrate uses an encoding and decoding program called SCALE codec. The SCALE codec is not self-describing. It assumes the decoding context has all type knowledge about the encoded data. In general, each data type has its own rule when encoding by SCALE, so when decoding, they will follow their own rule based on its data type.  
