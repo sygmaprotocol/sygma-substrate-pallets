@@ -118,16 +118,16 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// When initial bridge transfer send to dest domain
-		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, deposit_data,
-		/// handler_response, transfer_type]
+		/// args: [dest_domain_id, resource_id, deposit_nonce, sender, transfer_type,
+		/// deposit_data, handler_response, ]
 		Deposit {
 			dest_domain_id: DomainID,
 			resource_id: ResourceId,
 			deposit_nonce: DepositNonce,
 			sender: T::AccountId,
+			transfer_type: TransferType,
 			deposit_data: Vec<u8>,
 			handler_response: Vec<u8>,
-			transfer_type: TransferType,
 		},
 		/// When proposal was executed successfully
 		ProposalExecution {
@@ -211,7 +211,7 @@ pub mod pallet {
 	/// Pre-set MPC address
 	#[pallet::storage]
 	#[pallet::getter(fn mpc_add)]
-	pub type MpcAdd<T> = StorageValue<_, MpcAddress, ValueQuery>;
+	pub type MpcAddr<T> = StorageValue<_, MpcAddress, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
 	#[pallet::storage]
@@ -259,7 +259,9 @@ pub mod pallet {
 				);
 			}
 			// make sure MPC address is set up
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
@@ -287,7 +289,9 @@ pub mod pallet {
 				);
 			}
 			// make sure MPC address is set up
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
@@ -318,10 +322,10 @@ pub mod pallet {
 				);
 			}
 			// Cannot set MPC address as it's already set
-			ensure!(MpcAdd::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
+			ensure!(MpcAddr::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
 
 			// Set MPC account address
-			MpcAdd::<T>::set(addr);
+			MpcAddr::<T>::set(addr);
 			Ok(())
 		}
 
@@ -348,7 +352,7 @@ pub mod pallet {
 				sender = who;
 			}
 			// make sure MPC address is set up
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			DestDomainIds::<T>::insert(dest_domain_id, true);
 			DestChainIds::<T>::insert(dest_domain_id, dest_chain_id);
@@ -385,7 +389,7 @@ pub mod pallet {
 				sender = who;
 			}
 			// make sure MPC address is set up
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			ensure!(
 				DestDomainIds::<T>::get(dest_domain_id) &&
@@ -418,7 +422,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			// Extract dest (MultiLocation) to get corresponding dest domainID and Ethereum
 			// recipient address
@@ -482,9 +486,9 @@ pub mod pallet {
 				resource_id,
 				deposit_nonce,
 				sender,
+				transfer_type,
 				deposit_data: Self::create_deposit_data(amount - fee, recipient),
 				handler_response: vec![],
-				transfer_type,
 			});
 
 			Ok(())
@@ -501,7 +505,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
@@ -523,7 +527,7 @@ pub mod pallet {
 			signature: Vec<u8>,
 		) -> DispatchResult {
 			// Check MPC address and bridge status
-			ensure!(!MpcAdd::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			// Verify MPC signature
 			ensure!(
@@ -602,7 +606,7 @@ pub mod pallet {
 			{
 				let address = Self::public_key_to_address(&pubkey);
 
-				address == MpcAdd::<T>::get().0
+				address == MpcAddr::<T>::get().0
 			} else {
 				false
 			}
@@ -712,10 +716,10 @@ pub mod pallet {
 			if data.len() < 64 {
 				return None
 			}
-			let amount: u128 = U256::from_little_endian(&data[0..32])
+			let amount: u128 = U256::from_big_endian(&data[0..32])
 				.try_into()
 				.expect("Amount convert failed. qed.");
-			let recipient_len: usize = U256::from_little_endian(&data[32..64])
+			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
 				.expect("Length convert failed. qed.");
 			if data.len() != (64 + recipient_len) {
@@ -738,7 +742,7 @@ pub mod pallet {
 
 		fn hex_zero_padding_32(i: u128) -> [u8; 32] {
 			let mut result = [0u8; 32];
-			U256::from(i).to_little_endian(&mut result);
+			U256::from(i).to_big_endian(&mut result);
 			result
 		}
 
@@ -801,7 +805,7 @@ pub mod pallet {
 	mod test {
 		use crate as bridge;
 		use crate::{
-			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAdd,
+			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
 			Proposal,
 		};
 		use alloc::vec;
@@ -831,11 +835,11 @@ pub mod pallet {
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 				let test_mpc_addr_b: MpcAddress = MpcAddress([2u8; 20]);
 
-				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), default_addr);
 
 				// set to test_mpc_addr_a
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 
 				// set to test_mpc_addr_b: should be MpcAddrNotUpdatable error
 				assert_noop!(
@@ -849,7 +853,7 @@ pub mod pallet {
 					SygmaBridge::set_mpc_address(unauthorized_account, test_mpc_addr_a),
 					bridge::Error::<Runtime>::AccessDenied
 				);
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 			})
 		}
 
@@ -859,7 +863,7 @@ pub mod pallet {
 				let default_addr = MpcAddress::default();
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), default_addr);
 
 				// pause bridge when mpc address is not set, should be err
 				assert_noop!(
@@ -869,7 +873,7 @@ pub mod pallet {
 
 				// set mpc address to test_key_a
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 				// register domain
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
@@ -907,7 +911,7 @@ pub mod pallet {
 				let default_addr: MpcAddress = MpcAddress::default();
 				let test_mpc_addr_a: MpcAddress = MpcAddress([1u8; 20]);
 
-				assert_eq!(MpcAdd::<Runtime>::get(), default_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), default_addr);
 
 				// unpause bridge when mpc address is not set, should be error
 				assert_noop!(
@@ -917,7 +921,7 @@ pub mod pallet {
 
 				// set mpc address to test_key_a and pause bridge
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr_a));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr_a);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr_a);
 				// register domain
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
@@ -1023,7 +1027,7 @@ pub mod pallet {
 				// set mpc address to another random key
 				let test_mpc_addr: MpcAddress = MpcAddress([7u8; 20]);
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 
 				// dummy proposals
 				let p1 = Proposal {
@@ -1059,7 +1063,7 @@ pub mod pallet {
 
 				// set mpc address to generated keypair's address
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 
 				// dummy proposals
 				let p1 = Proposal {
@@ -1130,13 +1134,54 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
-					transfer_type: TransferType::FungibleTransfer,
 				})]);
+			})
+		}
+
+		#[test]
+		fn hex_zero_padding_32_test() {
+			new_test_ext().execute_with(|| {
+				assert_eq!(
+					SygmaBridge::hex_zero_padding_32(100).to_vec(),
+					vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 100
+					]
+				);
+				let recipient = String::from("0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4");
+				assert_eq!(
+					SygmaBridge::hex_zero_padding_32(recipient.len() as u128).to_vec(),
+					vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 42
+					]
+				);
+			})
+		}
+
+		#[test]
+		fn create_deposit_data_test() {
+			new_test_ext().execute_with(|| {
+				let recipient = b"0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4".to_vec();
+				let data = SygmaBridge::create_deposit_data(100, recipient);
+				// 32 + 32 + 42
+				assert_eq!(data.len(), 106);
+				assert_eq!(
+					data.to_vec(),
+					vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70,
+						53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51,
+						97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52
+					]
+				);
 			})
 		}
 
@@ -1193,12 +1238,12 @@ pub mod pallet {
 					resource_id: UsdcResourceId::get(),
 					deposit_nonce: 0,
 					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
 						amount - fee,
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
-					transfer_type: TransferType::FungibleTransfer,
 				})]);
 			})
 		}
@@ -1518,7 +1563,7 @@ pub mod pallet {
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
 				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-				assert_eq!(MpcAdd::<Runtime>::get(), test_mpc_addr);
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 				// register domain
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),

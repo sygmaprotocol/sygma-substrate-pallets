@@ -644,8 +644,8 @@ impl_runtime_apis! {
 
 	impl sygma_runtime_api::SumStorageApi<Block> for Runtime {
 		fn get_sum() -> u32 {
-            SygmaBridge::get_sum()
-        }
+			SygmaBridge::get_sum()
+		}
 	}
 
 	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
