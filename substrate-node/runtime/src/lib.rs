@@ -642,9 +642,9 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sygma_bridge_runtime_api::SumStorageApi<Block> for Runtime {
+	impl sygma_runtime_api::SumStorageApi<Block> for Runtime {
 		fn get_sum() -> u32 {
-            sygma_bridge::get_sum()
+            SygmaBridge::get_sum()
         }
 	}
 
