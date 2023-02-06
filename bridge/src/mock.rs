@@ -173,10 +173,12 @@ impl sygma_basic_feehandler::Config for Runtime {
 	type PalletIndex = FeeHandlerPalletIndex;
 }
 
+const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
+
 parameter_types! {
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
-	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
+	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160::from_slice(hex::decode(DEST_VERIFYING_CONTRACT_ADDRESS).ok().unwrap().as_slice());
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;

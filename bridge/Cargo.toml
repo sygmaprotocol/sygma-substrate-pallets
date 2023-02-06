@@ -13,6 +13,7 @@ ethabi = { version = "18.0.0", default-features = false }
 primitive-types = { version = "0.12", default-features = false, features = ["scale-info", "serde_no_std"] }
 arrayref = { version = "0.3.6", default-features = false }
 funty = { version = "3.0.0-rc1", default-features = false }
+hex = { version = "0.4.3", default-features = false }
 
 # Substrate
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false, features = ["disable_panic_handler", "disable_oom", "disable_allocator"] }

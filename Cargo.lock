@@ -7656,6 +7656,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "funty 3.0.0-rc1",
+ "hex",
  "hex-literal",
  "log",
  "pallet-assets",
