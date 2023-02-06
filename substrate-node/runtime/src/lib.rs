@@ -31,7 +31,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress,
+	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress, DepositNonce,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -645,6 +645,10 @@ impl_runtime_apis! {
 	impl sygma_runtime_api::SumStorageApi<Block> for Runtime {
 		fn get_sum() -> u32 {
 			SygmaBridge::get_sum()
+		}
+
+		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
+			SygmaBridge::is_proposal_executed(nonce, domain_id)
 		}
 	}
 

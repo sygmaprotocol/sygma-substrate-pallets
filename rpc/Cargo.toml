@@ -17,3 +17,5 @@ sc-client-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/su
 sc-rpc = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }
 
 sygma-runtime-api = { path = "../runtime-api", default-features = false }
+sygma-traits = { path = "../traits", default-features = false }
+

@@ -3,8 +3,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sygma_traits::{DepositNonce, DomainID};
+
 sp_api::decl_runtime_apis! {
 	pub trait SumStorageApi {
 		fn get_sum() -> u32;
+		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool;
 	}
 }

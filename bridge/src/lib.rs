@@ -743,7 +743,7 @@ pub mod pallet {
 		}
 
 		/// Return true if deposit nonce has been used
-		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
+		pub fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
 			(UsedNonces::<T>::get(domain_id, nonce / 256) & (1 << (nonce % 256))) != 0
 		}
 

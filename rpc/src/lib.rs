@@ -9,6 +9,7 @@ use jsonrpsee::{
 use sp_api::{BlockId, BlockT, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sygma_runtime_api::SumStorageApi;
+use sygma_traits::{DepositNonce, DomainID};
 
 pub struct SumStorage<Block: BlockT, C> {
 	client: Arc<C>,
@@ -26,6 +27,14 @@ impl<Block: BlockT, C> SumStorage<Block, C> {
 pub trait SumStorageRpc<BlockHash> {
 	#[method(name = "getSum")]
 	fn get_sum(&self, at: Option<BlockHash>) -> RpcResult<u32>;
+
+	#[method(name = "isProposalExecuted")]
+	fn is_proposal_executed(
+		&self,
+		nonce: DepositNonce,
+		domain_id: DomainID,
+		at: Option<BlockHash>
+	) -> RpcResult<bool>;
 }
 
 #[async_trait]
@@ -42,6 +51,14 @@ where
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
 		let runtime_api_result = api.get_sum(&at);
+		runtime_api_result.map_err(|e| JsonRpseeError::Custom(format!("runtime error: {e:?}")))
+	}
+
+	fn is_proposal_executed(&self, nonce: DepositNonce, domain_id: DomainID, at: Option<<Block as BlockT>::Hash>) -> RpcResult<bool> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+
+		let runtime_api_result = api.is_proposal_executed(&at, nonce, domain_id);
 		runtime_api_result.map_err(|e| JsonRpseeError::Custom(format!("runtime error: {e:?}")))
 	}
 }

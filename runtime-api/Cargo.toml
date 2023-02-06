@@ -9,6 +9,7 @@ license = "LGPL-3.0"
 sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33", default-features = false }
 
 sygma-bridge = { path = "../bridge", default-features = false }
+sygma-traits = { path = "../traits", default-features = false }
 
 [features]
 default = ["std"]
