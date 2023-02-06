@@ -263,8 +263,6 @@ pub mod pallet {
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
-			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
-
 			// Mark as paused
 			IsPaused::<T>::insert(dest_domain_id, true);
 
@@ -290,8 +288,6 @@ pub mod pallet {
 			}
 			// make sure MPC address is set up
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-
-			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
