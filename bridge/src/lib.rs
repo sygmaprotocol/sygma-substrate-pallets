@@ -581,7 +581,7 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
 		pub fn get_sum() -> u32 {
-			2u32
+			4u32
 		}
 
 		/// Verifies that proposal data is signed by MPC address.

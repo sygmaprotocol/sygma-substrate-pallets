@@ -7,7 +7,7 @@ license = "LGPL-3.0"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0" }
 scale-info = { version = "2.0" }
-jsonrpsee = { version = "0.16.2", features = ["server"] }
+jsonrpsee = { version = "0.15.1", features = ["server"] }
 
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
 sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }
