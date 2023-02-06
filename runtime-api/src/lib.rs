@@ -6,8 +6,7 @@
 use sygma_traits::{DepositNonce, DomainID};
 
 sp_api::decl_runtime_apis! {
-	pub trait SumStorageApi {
-		fn get_sum() -> u32;
+	pub trait SygmaBridgeApi {
 		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool;
 	}
 }

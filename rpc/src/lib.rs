@@ -8,53 +8,47 @@ use jsonrpsee::{
 };
 use sp_api::{BlockId, BlockT, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
-use sygma_runtime_api::SumStorageApi;
+use sygma_runtime_api::SygmaBridgeApi;
 use sygma_traits::{DepositNonce, DomainID};
 
-pub struct SumStorage<Block: BlockT, C> {
+pub struct SygmaBridgeStorage<Block: BlockT, C> {
 	client: Arc<C>,
 	_marker: PhantomData<Block>,
 }
 
-impl<Block: BlockT, C> SumStorage<Block, C> {
-	/// Create new `SumStorage` instance with the given reference to the client.
+impl<Block: BlockT, C> SygmaBridgeStorage<Block, C> {
+	/// Create new `SygmaBridgeStorage` instance with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
 	}
 }
 
-#[rpc(server, namespace = "sygma_bridge_rpc")]
-pub trait SumStorageRpc<BlockHash> {
-	#[method(name = "getSum")]
-	fn get_sum(&self, at: Option<BlockHash>) -> RpcResult<u32>;
-
+#[rpc(server, namespace = "sygma")]
+pub trait SygmaBridgeRpc<BlockHash> {
 	#[method(name = "isProposalExecuted")]
 	fn is_proposal_executed(
 		&self,
 		nonce: DepositNonce,
 		domain_id: DomainID,
-		at: Option<BlockHash>
+		at: Option<BlockHash>,
 	) -> RpcResult<bool>;
 }
 
 #[async_trait]
-impl<Block, C> SumStorageRpcServer<<Block as BlockT>::Hash> for SumStorage<Block, C>
+impl<Block, C> SygmaBridgeRpcServer<<Block as BlockT>::Hash> for SygmaBridgeStorage<Block, C>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static,
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
-	C::Api: SumStorageApi<Block>,
+	C::Api: SygmaBridgeApi<Block>,
 {
-	fn get_sum(&self, at: Option<<Block as BlockT>::Hash>) -> RpcResult<u32> {
-		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-
-		let runtime_api_result = api.get_sum(&at);
-		runtime_api_result.map_err(|e| JsonRpseeError::Custom(format!("runtime error: {e:?}")))
-	}
-
-	fn is_proposal_executed(&self, nonce: DepositNonce, domain_id: DomainID, at: Option<<Block as BlockT>::Hash>) -> RpcResult<bool> {
+	fn is_proposal_executed(
+		&self,
+		nonce: DepositNonce,
+		domain_id: DomainID,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 

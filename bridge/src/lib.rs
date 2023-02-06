@@ -576,10 +576,6 @@ pub mod pallet {
 	where
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
-		pub fn get_sum() -> u32 {
-			4u32
-		}
-
 		/// Verifies that proposal data is signed by MPC address.
 		#[allow(dead_code)]
 		fn verify_by_mpc_address(proposals: &Vec<Proposal>, signature: Vec<u8>) -> bool {
