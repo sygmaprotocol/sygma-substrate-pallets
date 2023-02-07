@@ -1,0 +1,31 @@
+[package]
+name = "sygma-rpc"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-3.0"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0" }
+scale-info = { version = "2.0" }
+jsonrpsee = { version = "0.15.1", features = ["server"] }
+
+# Substrate
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }
+sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }
+sp-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }
+sc-client-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }
+sc-rpc = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.33" }
+
+sygma-runtime-api = { path = "../runtime-api", default-features = false }
+sygma-traits = { path = "../traits", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+    "codec/std",
+    "scale-info/std",
+    "sp-runtime/std",
+    "sp-api/std",
+    "sygma-runtime-api/std",
+    "sygma-traits/std",
+]

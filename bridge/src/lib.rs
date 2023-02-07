@@ -210,7 +210,7 @@ pub mod pallet {
 
 	/// Pre-set MPC address
 	#[pallet::storage]
-	#[pallet::getter(fn mpc_add)]
+	#[pallet::getter(fn mpc_addr)]
 	pub type MpcAddr<T> = StorageValue<_, MpcAddress, ValueQuery>;
 
 	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
@@ -739,7 +739,7 @@ pub mod pallet {
 		}
 
 		/// Return true if deposit nonce has been used
-		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
+		pub fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
 			(UsedNonces::<T>::get(domain_id, nonce / 256) & (1 << (nonce % 256))) != 0
 		}
 
