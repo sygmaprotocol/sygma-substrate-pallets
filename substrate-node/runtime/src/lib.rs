@@ -32,7 +32,8 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DomainID, ExtractDestinationData, IsReserved, ResourceId, VerifyingContractAddress,
+	ChainID, DepositNonce, DomainID, ExtractDestinationData, IsReserved, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -640,6 +641,12 @@ impl_runtime_apis! {
 			data: sp_inherents::InherentData,
 		) -> sp_inherents::CheckInherentsResult {
 			data.check_extrinsics(&block)
+		}
+	}
+
+	impl sygma_runtime_api::SygmaBridgeApi<Block> for Runtime {
+		fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
+			SygmaBridge::is_proposal_executed(nonce, domain_id)
 		}
 	}
 
