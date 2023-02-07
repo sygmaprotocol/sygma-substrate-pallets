@@ -15,4 +15,6 @@ sygma-traits = { path = "../traits", default-features = false }
 default = ["std"]
 std = [
 	"sp-api/std",
+	"sygma-traits/std",
+	"sygma-bridge/std",
 ]
