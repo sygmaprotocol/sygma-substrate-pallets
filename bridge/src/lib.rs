@@ -613,8 +613,12 @@ pub mod pallet {
 
 		/// Parse proposals and construct the original signing message
 		pub fn construct_ecdsa_signing_proposals_data(proposals: &Vec<Proposal>) -> [u8; 32] {
-			let proposal_typehash = keccak_256(
+			let proposals_typehash = keccak_256(
 				"Proposals(Proposal[] proposals)Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
+					.as_bytes(),
+			);
+			let proposal_typehash = keccak_256(
+				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
 			);
 
@@ -651,7 +655,7 @@ pub mod pallet {
 			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
 			let struct_hash = keccak_256(&abi_encode(&[
-				Token::FixedBytes(proposal_typehash.to_vec()),
+				Token::FixedBytes(proposals_typehash.to_vec()),
 				Token::FixedBytes(hashed_keccak_data.to_vec()),
 			]));
 
@@ -664,9 +668,7 @@ pub mod pallet {
 				verifying_contract: T::DestVerifyingContractAddress::get(),
 				salt: default_eip712_domain.salt,
 			};
-			println!("eip712_domain {:?}", eip712_domain);
 			let domain_separator = eip712_domain.separator();
-			println!("domain_separator {:?}", domain_separator);
 
 			let typed_data_hash_input = &vec![
 				SolidityDataType::String("\x19\x01"),
@@ -821,7 +823,6 @@ pub mod pallet {
 		use sp_std::convert::TryFrom;
 		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
-		use crate::mock::{DestVerifyingContractAddress, EIP712ChainID};
 
 		#[test]
 		fn set_mpc_address() {
@@ -1082,25 +1083,6 @@ pub mod pallet {
 
 				// verify signature, should be true
 				assert!(SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
-			})
-		}
-
-		#[test]
-		fn construct_ecdsa_signing_proposals_data_test() {
-			new_test_ext().execute_with(|| {
-				let p1 = Proposal {
-					origin_domain_id: 1,
-					deposit_nonce: 1,
-					resource_id: [0u8; 32],
-					data: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 92, 31, 89, 97, 105, 107, 173, 46, 115, 247, 52, 23, 240, 126, 245, 92, 98, 162, 220, 91]
-				};
-				let proposals = vec![p1];
-
-				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
-
-				println!("final_message {:?}", final_message);
-				println!("DestVerifyingContractAddress {:?}", DestVerifyingContractAddress::get());
-				println!("EIP712ChainID {:?}", EIP712ChainID::get())
 			})
 		}
 
