@@ -40,12 +40,12 @@ pub mod pallet {
 	};
 	use sp_std::{convert::From, vec, vec::Vec};
 	use xcm::latest::{prelude::*, MultiLocation};
-	use xcm_executor::traits::TransactAsset;
+	use xcm_executor::traits::{FilterAssetLocation, TransactAsset};
 
 	use crate::eip712;
 	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, IsReserved,
-		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
+		ChainID, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, MpcAddress,
+		ResourceId, TransferType, VerifyingContractAddress,
 	};
 
 	#[allow(dead_code)]
@@ -100,8 +100,8 @@ pub mod pallet {
 		/// AssetId and ResourceId pairs
 		type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 
-		/// Return if asset reserved on current chain
-		type ReserveChecker: IsReserved;
+		/// Return true if asset reserved on current chain
+		type IsReserve: FilterAssetLocation;
 
 		/// Extract dest data from given MultiLocation
 		type ExtractDestData: ExtractDestinationData;
@@ -460,7 +460,7 @@ pub mod pallet {
 
 			// Deposit `amount - fee` of asset to reserve account if asset is reserved in local
 			// chain.
-			if T::ReserveChecker::is_reserved(&asset.id) {
+			if T::IsReserve::filter_asset_location(&asset, &MultiLocation::here()) {
 				T::AssetTransactor::deposit_asset(
 					&(asset.id.clone(), Fungible(amount - fee)).into(),
 					&Junction::AccountId32 {
@@ -774,10 +774,10 @@ pub mod pallet {
 			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
 			let (amount, location) =
 				Self::extract_deposit_data(&proposal.data).ok_or(Error::<T>::InvalidDepositData)?;
-			let asset = (asset_id.clone(), amount).into();
+			let asset = (asset_id, amount).into();
 
 			// Withdraw `amount` of asset from reserve account
-			if T::ReserveChecker::is_reserved(&asset_id) {
+			if T::IsReserve::filter_asset_location(&asset, &MultiLocation::here()) {
 				T::AssetTransactor::withdraw_asset(
 					&asset,
 					&Junction::AccountId32 {

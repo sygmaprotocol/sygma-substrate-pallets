@@ -32,15 +32,16 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DepositNonce, DomainID, ExtractDestinationData, IsReserved, ResourceId,
-	VerifyingContractAddress,
+	ChainID, DepositNonce, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
 	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
+use xcm_executor::traits::{
+	Convert, Error as ExecutionError, FilterAssetLocation, MatchesFungibles,
+};
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -496,10 +497,61 @@ pub type FungiblesTransactor = FungiblesAdapter<
 /// Means for transacting assets on this chain.
 pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
+pub struct ConcrateSygmaAsset;
+impl ConcrateSygmaAsset {
+	pub fn id(asset: &MultiAsset) -> Option<MultiLocation> {
+		match (&asset.id, &asset.fun) {
+			// So far our native asset is concrete
+			(Concrete(id), Fungible(_)) => Some(id.clone()),
+			_ => None,
+		}
+	}
+
+	pub fn origin(asset: &MultiAsset) -> Option<MultiLocation> {
+		Self::id(asset).and_then(|id| {
+			match (id.parents, id.first_interior()) {
+				// Sibling parachain
+				(1, Some(Parachain(id))) => {
+					// Assume current parachain id is 2004, for production, you should always get
+					// your it from parachain info
+					if *id == 2004 {
+						// The registered foreign assets actually reserved on EVM chains, so when
+						// transfer back to EVM chains, they should be treated as non-reserve assets
+						// relative to current chain.
+						Some(MultiLocation::new(
+							0,
+							X1(GeneralKey(
+								b"sygma".to_vec().try_into().expect("less than length limit; qed"),
+							)),
+						))
+					} else {
+						// Other parachain assets should be treat as reserve asset when transfered
+						// to outside EVM chains
+						Some(MultiLocation::here())
+					}
+				},
+				// Parent assets should be treat as reserve asset when transfered to outside EVM
+				// chains
+				(1, _) => Some(MultiLocation::here()),
+				// Children parachain
+				(0, Some(Parachain(id))) => Some(MultiLocation::new(0, X1(Parachain(*id)))),
+				// Local: (0, Here)
+				(0, None) => Some(id),
+				_ => None,
+			}
+		})
+	}
+}
+
 pub struct ReserveChecker;
-impl IsReserved for ReserveChecker {
-	fn is_reserved(asset_id: &XcmAssetId) -> bool {
-		asset_id == &NativeLocation::get().into()
+impl FilterAssetLocation for ReserveChecker {
+	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
+		if let Some(ref id) = ConcrateSygmaAsset::origin(asset) {
+			if id == origin {
+				return true
+			}
+		}
+		false
 	}
 }
 
@@ -525,7 +577,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeHandler = FeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
-	type ReserveChecker = ReserveChecker;
+	type IsReserve = ReserveChecker;
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
