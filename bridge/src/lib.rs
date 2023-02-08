@@ -458,11 +458,13 @@ pub mod pallet {
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
-			// Deposit `amount - fee` of asset to reserve account if asset is reserved in local
+			let bridge_amount = amount - fee;
+
+			// Deposit `bridge_amount` of asset to reserve account if asset is reserved in local
 			// chain.
 			if T::IsReserve::filter_asset_location(&asset, &MultiLocation::here()) {
 				T::AssetTransactor::deposit_asset(
-					&(asset.id.clone(), Fungible(amount - fee)).into(),
+					&(asset.id.clone(), Fungible(bridge_amount)).into(),
 					&Junction::AccountId32 {
 						network: NetworkId::Any,
 						id: T::TransferReserveAccount::get().into(),
@@ -476,6 +478,12 @@ pub mod pallet {
 			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
 			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce + 1);
 
+			// TODO:
+			// bridge_amount is 9,000,000,000,000
+			// 0x0000000000000000000000000000000000000000000000000000082f79cd9000
+			// need to convert 9,000,000,000,000 -> 9,000,000,000,000,000,000
+			let decimal_converted_amount = 0u128;
+
 			// Emit Deposit event
 			Self::deposit_event(Event::Deposit {
 				dest_domain_id,
@@ -483,7 +491,7 @@ pub mod pallet {
 				deposit_nonce,
 				sender,
 				transfer_type,
-				deposit_data: Self::create_deposit_data(amount - fee, recipient),
+				deposit_data: Self::create_deposit_data(decimal_converted_amount, recipient),
 				handler_response: vec![],
 			});
 
@@ -703,7 +711,7 @@ pub mod pallet {
 		/// recipient data length     uint256     bytes  32 - 64
 		/// recipient data            bytes       bytes  64 - END
 		///
-		/// Only fungible transfer is supportted so far.
+		/// Only fungible transfer is supported so far.
 		fn extract_deposit_data(data: &Vec<u8>) -> Option<(u128, MultiLocation)> {
 			if data.len() < 64 {
 				return None
@@ -770,7 +778,12 @@ pub mod pallet {
 			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
 			let (amount, location) =
 				Self::extract_deposit_data(&proposal.data).ok_or(Error::<T>::InvalidDepositData)?;
-			let asset = (asset_id, amount).into();
+
+			// TODO:
+			// amount is 9,000,000,000,000,000,000
+			// need to convert 9,000,000,000,000,000,000 -> 9,000,000,000,000
+			let decimal_converted_amount = 0u128;
+			let asset = (asset_id, decimal_converted_amount).into();
 
 			// Withdraw `amount` of asset from reserve account
 			if T::IsReserve::filter_asset_location(&asset, &MultiLocation::here()) {
