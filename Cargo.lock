@@ -3869,6 +3869,8 @@ dependencies = [
  "sp-timestamp",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
+ "sygma-rpc",
+ "sygma-runtime-api",
  "try-runtime-cli",
 ]
 
@@ -3916,6 +3918,7 @@ dependencies = [
  "sygma-basic-feehandler",
  "sygma-bridge",
  "sygma-fee-handler-router",
+ "sygma-runtime-api",
  "sygma-traits",
  "xcm",
  "xcm-builder",
@@ -7696,6 +7699,31 @@ dependencies = [
  "sygma-traits",
  "xcm",
  "xcm-builder",
+]
+
+[[package]]
+name = "sygma-rpc"
+version = "0.1.0"
+dependencies = [
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-rpc",
+ "scale-info",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+ "sygma-runtime-api",
+ "sygma-traits",
+]
+
+[[package]]
+name = "sygma-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "sp-api",
+ "sygma-bridge",
+ "sygma-traits",
 ]
 
 [[package]]
