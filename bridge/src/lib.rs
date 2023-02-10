@@ -44,8 +44,8 @@ pub mod pallet {
 
 	use crate::eip712;
 	use sygma_traits::{
-		ChainID, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, MpcAddress,
-		ResourceId, TransferType, VerifyingContractAddress,
+		ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler,
+		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
 	};
 
 	#[allow(dead_code)]
@@ -111,6 +111,12 @@ pub mod pallet {
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;
+
+		/// Asset decimal converter
+		type DecimalConverter: DecimalConverter;
+
+		/// AssetId and its decimal pairs
+		type AssetDecimalPairs: Get<Vec<(AssetId, u8)>>;
 	}
 
 	#[allow(dead_code)]
@@ -192,6 +198,8 @@ pub mod pallet {
 		DestChainIDNotMatch,
 		/// Failed to extract destination data
 		ExtractDestDataFailed,
+		/// Failed on the decimal converter
+		DecimalConversionFail,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -478,11 +486,11 @@ pub mod pallet {
 			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
 			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce + 1);
 
-			// TODO:
-			// bridge_amount is 9,000,000,000,000
-			// 0x0000000000000000000000000000000000000000000000000000082f79cd9000
-			// need to convert 9,000,000,000,000 -> 9,000,000,000,000,000,000
-			let decimal_converted_amount = 0u128;
+			// convert the asset decimal
+			let decimal_converted_amount =
+				T::DecimalConverter::convert_to(&(asset.id, bridge_amount).into())
+					.ok_or(Error::<T>::DecimalConversionFail)?;
+			// println!("decimal_converted_amount {:?}", &decimal_converted_amount);
 
 			// Emit Deposit event
 			Self::deposit_event(Event::Deposit {
@@ -779,16 +787,17 @@ pub mod pallet {
 			let (amount, location) =
 				Self::extract_deposit_data(&proposal.data).ok_or(Error::<T>::InvalidDepositData)?;
 
-			// TODO:
-			// amount is 9,000,000,000,000,000,000
-			// need to convert 9,000,000,000,000,000,000 -> 9,000,000,000,000
-			let decimal_converted_amount = 0u128;
-			let asset = (asset_id, decimal_converted_amount).into();
+			// convert the asset decimal
+			let decimal_converted_asset =
+				T::DecimalConverter::convert_from(&(asset_id, amount).into())
+					.ok_or(Error::<T>::DecimalConversionFail)?;
+			// println!("decimal_converted_asset {:?}", &decimal_converted_asset);
 
-			// Withdraw `amount` of asset from reserve account
-			if T::IsReserve::filter_asset_location(&asset, &MultiLocation::here()) {
+			// Withdraw `decimal_converted_asset` of asset from reserve account
+			if T::IsReserve::filter_asset_location(&decimal_converted_asset, &MultiLocation::here())
+			{
 				T::AssetTransactor::withdraw_asset(
-					&asset,
+					&decimal_converted_asset,
 					&Junction::AccountId32 {
 						network: NetworkId::Any,
 						id: T::TransferReserveAccount::get().into(),
@@ -798,8 +807,8 @@ pub mod pallet {
 				.map_err(|_| Error::<T>::TransactFailed)?;
 			}
 
-			// Deposit `amount` of asset to dest location
-			T::AssetTransactor::deposit_asset(&asset, &location)
+			// Deposit `decimal_converted_asset` of asset to dest location
+			T::AssetTransactor::deposit_asset(&decimal_converted_asset, &location)
 				.map_err(|_| Error::<T>::TransactFailed)?;
 
 			Ok(())
@@ -827,7 +836,7 @@ pub mod pallet {
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
 		use primitive_types::U256;
-		use sp_core::{ecdsa, Pair};
+		use sp_core::{ecdsa, ByteArray, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
 		use sygma_traits::{MpcAddress, TransferType};
@@ -1903,6 +1912,143 @@ pub mod pallet {
 				assert!(!DestDomainIds::<Runtime>::get(1u8));
 				// corresponding chainID should be None since kv not exist anymore
 				assert!(DestChainIds::<Runtime>::get(1u8).is_none());
+			})
+		}
+
+		#[test]
+		fn deposit_with_decimal_converter() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				let fee = 1000000000000u128; // 1
+				let amount = 123123456789123456789u128; // 123.456_789_123_456 // 123456789123456u128 // 123123456789123456789123456u128
+
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					UsdcLocation::get().into(),
+					fee
+				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint some USDC to ALICE for test
+				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,));
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
+				println!("alice usdc balance {:?}", Assets::balance(UsdcAssetId::get(), &ALICE));
+
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(UsdcLocation::get()), Fungible(amount)).into(),
+					(
+						0,
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
+					)
+						.into(),
+				));
+				// Check balances
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
+				// Check event
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+					dest_domain_id: DEST_DOMAIN_ID,
+					resource_id: NativeResourceId::get(),
+					deposit_nonce: 0,
+					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
+					deposit_data: SygmaBridge::create_deposit_data(
+						amount - fee,
+						b"ethereum recipient".to_vec(),
+					),
+					handler_response: vec![],
+				})]);
+			})
+		}
+
+		#[test]
+		fn proposal_execution_with_decimal_converter() {
+			new_test_ext().execute_with(|| {
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
+
+				// generate mpc keypair
+				println!(
+					"test mpc address {:?}",
+					primitive_types::H160::from_slice(&test_mpc_addr.0)
+				);
+				// set mpc address
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// deposit 100 tokens(100_000_000_000_000)
+				let p1 = Proposal {
+					origin_domain_id: 1,
+					resource_id: [0u8; 32],
+					deposit_nonce: 1,
+					data: vec![
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0,
+					], // !!!!
+				};
+
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				let proposals = vec![p1];
+
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+				let signature = pair.sign(&final_message);
+
+				// check Alice balance of USDC
+				println!("alice address {:?}", ALICE.as_slice());
+				println!(
+					"alice balance of usdc BEFORE {:?}",
+					Assets::balance(UsdcAssetId::get(), &ALICE)
+				);
+
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals,
+					signature.encode()
+				));
+
+				println!(
+					"alice balance of usdc AFTER {:?}",
+					Assets::balance(UsdcAssetId::get(), &ALICE)
+				);
+
+				// should emit FailedHandlerExecution event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::ProposalExecution {
+						origin_domain_id: 1,
+						deposit_nonce: 1,
+						data_hash: [0u8; 32],
+					},
+				)]);
 			})
 		}
 	}

@@ -7,8 +7,10 @@ use codec::{Decode, Encode};
 use frame_support::dispatch::TypeInfo;
 use primitive_types::{H160, U256};
 use sp_std::vec::Vec;
-use xcm::latest::{AssetId, MultiLocation};
-use xcm::v1::MultiAsset;
+use xcm::{
+	latest::{AssetId, MultiLocation},
+	v1::MultiAsset,
+};
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;
@@ -43,8 +45,9 @@ impl FeeHandler for () {
 
 pub trait DecimalConverter {
 	/// convert_to converts the MultiAsset to u128 when bridging from sygma substrate pallet
+	/// Sygma relayer will always expect asset in 18 decimal
 	fn convert_to(asset: &MultiAsset) -> Option<u128>;
 	/// convert_from converts a u128 to MultiAsset when bridging to sygma substrate pallet
-	fn convert_from(amount: u128) -> Option<MultiAsset>;
+	/// Sygma relayer will always send asset in 18 decimal
+	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset>;
 }
-

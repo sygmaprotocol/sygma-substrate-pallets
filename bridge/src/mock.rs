@@ -4,6 +4,8 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
+use alloc::string::ToString;
+use core::str::FromStr;
 use frame_support::{
 	parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, PalletInfoAccess},
@@ -20,7 +22,8 @@ use sp_runtime::{
 };
 use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 use sygma_traits::{
-	ChainID, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
+	ChainID, DecimalConverter, DomainID, ExtractDestinationData, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -196,6 +199,7 @@ parameter_types! {
 	pub NativeResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8)];
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
@@ -325,6 +329,85 @@ impl ConcrateSygmaAsset {
 	}
 }
 
+pub struct SygmaDecimalConverter;
+impl DecimalConverter for SygmaDecimalConverter {
+	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) =>
+				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+					let original_decimal = AssetDecimalPairs::get()[idx].1;
+					// println!("ori_decimal {}", ori_decimal);
+
+					// let before = Decimal::try_from_i128_with_scale(*amount as i128,
+					// original_decimal as u32).unwrap_or(None); println!("before {}", before);
+
+					if original_decimal == 18 {
+						// println!("final {:?}", amount);
+						*amount
+					} else {
+						let mut new_amount = amount.clone().to_string();
+
+						if original_decimal > 18 {
+							let mut n = 0;
+							while n < original_decimal - 18 {
+								new_amount.pop();
+								n += 1;
+							}
+						} else {
+							let mut n = 0;
+							while n < 18 - original_decimal {
+								new_amount.push('0');
+								n += 1;
+							}
+						};
+
+						u128::from_str(&new_amount).unwrap() // TODO: Unsafe unwrap
+					}
+				}),
+			_ => None,
+		}
+	}
+
+	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) =>
+				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+					let dest_decimal = AssetDecimalPairs::get()[idx].1;
+					// println!("ori_decimal {}", ori_decimal);
+
+					// let before = Decimal::from_i128_with_scale(*amount as i128,
+					// 18u32).unwrap_or(None); println!("before {}", before);
+
+					if dest_decimal == 18 {
+						// println!("final {:?}", amount);
+						(asset.id.clone(), *amount).into()
+					} else {
+						let mut new_amount = amount.clone().to_string();
+
+						if dest_decimal > 18 {
+							let mut n = 0;
+							while n < dest_decimal - 18 {
+								new_amount.push('0');
+								n += 1;
+							}
+						} else {
+							let mut n = 0;
+							while n < 18 - dest_decimal {
+								new_amount.pop();
+								n += 1;
+							}
+						};
+
+						let f = u128::from_str(&new_amount).unwrap(); // TODO: Unsafe unwrap
+											  // println!("final {:?}", f);
+						(asset.id.clone(), f).into()
+					}
+				}),
+			_ => None,
+		}
+	}
+}
+
 pub struct ReserveChecker;
 impl FilterAssetLocation for ReserveChecker {
 	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
@@ -363,12 +446,14 @@ impl sygma_bridge::Config for Runtime {
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
+	type DecimalConverter = SygmaDecimalConverter;
+	type AssetDecimalPairs = AssetDecimalPairs;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const ASSET_OWNER: AccountId32 = AccountId32::new([1u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
-pub const ENDOWED_BALANCE: Balance = 100_000_000;
+pub const ENDOWED_BALANCE: Balance = 1_000_000_000_000_000_000_000_000_000;
 pub const DEST_DOMAIN_ID: DomainID = 1;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

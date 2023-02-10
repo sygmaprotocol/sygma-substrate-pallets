@@ -9,6 +9,8 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use alloc::string::ToString;
+use core::str::FromStr;
 use frame_support::{pallet_prelude::*, PalletId};
 use funty::Fundamental;
 use pallet_grandpa::{
@@ -31,7 +33,8 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DepositNonce, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
+	ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -414,6 +417,7 @@ parameter_types! {
 	// SygmaBridgePalletId is the palletID
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 12u8)];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -542,6 +546,85 @@ impl ConcrateSygmaAsset {
 	}
 }
 
+pub struct SygmaDecimalConverter;
+impl DecimalConverter for SygmaDecimalConverter {
+	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) =>
+				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+					let original_decimal = AssetDecimalPairs::get()[idx].1;
+					// println!("ori_decimal {}", ori_decimal);
+
+					// let before = Decimal::try_from_i128_with_scale(*amount as i128,
+					// original_decimal as u32).unwrap_or(None); println!("before {}", before);
+
+					if original_decimal == 18 {
+						// println!("final {:?}", amount);
+						*amount
+					} else {
+						let mut new_amount = amount.clone().to_string();
+
+						if original_decimal > 18 {
+							let mut n = 0;
+							while n < original_decimal - 18 {
+								new_amount.pop();
+								n += 1;
+							}
+						} else {
+							let mut n = 0;
+							while n < 18 - original_decimal {
+								new_amount.push('0');
+								n += 1;
+							}
+						};
+
+						u128::from_str(&new_amount).unwrap() // TODO: Unsafe unwrap
+					}
+				}),
+			_ => None,
+		}
+	}
+
+	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) =>
+				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+					let dest_decimal = AssetDecimalPairs::get()[idx].1;
+					// println!("ori_decimal {}", ori_decimal);
+
+					// let before = Decimal::from_i128_with_scale(*amount as i128,
+					// 18u32).unwrap_or(None); println!("before {}", before);
+
+					if dest_decimal == 18 {
+						// println!("final {:?}", amount);
+						(asset.id.clone(), *amount).into()
+					} else {
+						let mut new_amount = amount.clone().to_string();
+
+						if dest_decimal > 18 {
+							let mut n = 0;
+							while n < dest_decimal - 18 {
+								new_amount.push('0');
+								n += 1;
+							}
+						} else {
+							let mut n = 0;
+							while n < 18 - dest_decimal {
+								new_amount.pop();
+								n += 1;
+							}
+						};
+
+						let f = u128::from_str(&new_amount).unwrap(); // TODO: Unsafe unwrap
+						// println!("final {:?}", f);
+						(asset.id.clone(), f).into()
+					}
+				}),
+			_ => None,
+		}
+	}
+}
+
 pub struct ReserveChecker;
 impl FilterAssetLocation for ReserveChecker {
 	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
@@ -580,6 +663,8 @@ impl sygma_bridge::Config for Runtime {
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
+	type DecimalConverter = SygmaDecimalConverter;
+	type AssetDecimalPairs = AssetDecimalPairs;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -641,6 +726,7 @@ pub type Executive = frame_executive::Executive<
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
+extern crate alloc;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
