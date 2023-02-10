@@ -616,7 +616,7 @@ impl DecimalConverter for SygmaDecimalConverter {
 						};
 
 						let f = u128::from_str(&new_amount).unwrap(); // TODO: Unsafe unwrap
-						// println!("final {:?}", f);
+											  // println!("final {:?}", f);
 						(asset.id.clone(), f).into()
 					}
 				}),
