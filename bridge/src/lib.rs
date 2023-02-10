@@ -30,10 +30,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
-	use sp_io::{
-		crypto::secp256k1_ecdsa_recover,
-		hashing::{blake2_256, keccak_256},
-	};
+	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 	use sp_runtime::{
 		traits::{AccountIdConversion, Clear},
 		RuntimeDebug,
@@ -182,6 +179,8 @@ pub mod pallet {
 		AssetNotBound,
 		/// Proposal has either failed or succeeded
 		ProposalAlreadyComplete,
+		/// Proposal list empty
+		EmptyProposalList,
 		/// Transactor operation failed
 		TransactorFailed,
 		/// Deposit data not correct
@@ -525,9 +524,14 @@ pub mod pallet {
 			// Check MPC address and bridge status
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
+			ensure!(!proposals.is_empty(), Error::<T>::EmptyProposalList);
+
+			// parse proposals and construct signing message to meet EIP712 typed data
+			let final_message = Self::construct_ecdsa_signing_proposals_data(&proposals);
+
 			// Verify MPC signature
 			ensure!(
-				Self::verify_by_mpc_address(&proposals, signature),
+				Self::verify_by_mpc_address(final_message, signature),
 				Error::<T>::BadMpcSignature
 			);
 
@@ -576,25 +580,18 @@ pub mod pallet {
 	where
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
-		/// Verifies that proposal data is signed by MPC address.
+		/// Verifies that EIP712 typed proposal data is signed by MPC address
 		#[allow(dead_code)]
-		fn verify_by_mpc_address(proposals: &Vec<Proposal>, signature: Vec<u8>) -> bool {
+		fn verify_by_mpc_address(signing_message: [u8; 32], signature: Vec<u8>) -> bool {
 			let sig = match signature.try_into() {
 				Ok(_sig) => _sig,
 				Err(error) => return false,
 			};
 
-			if proposals.is_empty() {
-				return false
-			}
-
-			// parse proposals and construct signing message
-			let final_message = Self::construct_ecdsa_signing_proposals_data(proposals);
-
 			// recover the signing address
 			if let Ok(pubkey) =
 				// recover the uncompressed pubkey
-				secp256k1_ecdsa_recover(&sig, &blake2_256(&final_message))
+				secp256k1_ecdsa_recover(&sig, &signing_message)
 			{
 				let address = Self::public_key_to_address(&pubkey);
 
@@ -976,8 +973,10 @@ pub mod pallet {
 				};
 				let proposals = vec![p1, p2];
 
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+
 				// should be false
-				assert!(!SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
+				assert!(!SygmaBridge::verify_by_mpc_address(final_message, signature.encode()));
 			})
 		}
 
@@ -1009,8 +1008,10 @@ pub mod pallet {
 				};
 				let proposals = vec![p1, p2];
 
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+
 				// verify non matched signature against proposal list, should be false
-				assert!(!SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
+				assert!(!SygmaBridge::verify_by_mpc_address(final_message, signature.encode()));
 			})
 		}
 
@@ -1043,10 +1044,10 @@ pub mod pallet {
 				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
 
 				// sign final message using generated prikey
-				let signature = pair.sign(&final_message[..]);
+				let signature = pair.sign_prehashed(&final_message);
 
 				// verify signature, should be false because the signing address != mpc address
-				assert!(!SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
+				assert!(!SygmaBridge::verify_by_mpc_address(final_message, signature.encode()));
 			})
 		}
 
@@ -1079,10 +1080,12 @@ pub mod pallet {
 				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
 
 				// sign final message using generated mpc prikey
-				let signature = pair.sign(&final_message[..]);
+				// `pari.sign` will hash the final message into blake2_256 then sign it, so use
+				// sign_prehashed here
+				let signature = pair.sign_prehashed(&final_message);
 
 				// verify signature, should be true
-				assert!(SygmaBridge::verify_by_mpc_address(&proposals, signature.encode()));
+				assert!(SygmaBridge::verify_by_mpc_address(final_message, signature.encode()));
 			})
 		}
 
@@ -1666,10 +1669,9 @@ pub mod pallet {
 					invalid_recipient_proposal,
 				];
 
-				let proposals_with_valid_signature =
-					pair.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
-				let proposals_with_bad_signature = evil_pair
-					.sign(&SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals));
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+				let proposals_with_valid_signature = pair.sign_prehashed(&final_message);
+				let proposals_with_bad_signature = evil_pair.sign_prehashed(&final_message);
 
 				// Should failed if dest domain 1 bridge paused
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
@@ -1700,7 +1702,7 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE);
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), 0);
 				assert!(SygmaBridge::verify_by_mpc_address(
-					&proposals,
+					final_message,
 					proposals_with_valid_signature.encode()
 				));
 				assert_ok!(SygmaBridge::execute_proposal(
