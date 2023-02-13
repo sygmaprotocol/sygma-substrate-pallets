@@ -6,6 +6,7 @@ use ethabi::ethereum_types::{Address, U256};
 
 pub struct TakeLastXBytes(pub usize);
 
+#[allow(dead_code)]
 pub enum SolidityDataType<'a> {
 	String(&'a str),
 	Address(Address),
@@ -20,6 +21,7 @@ pub mod abi {
 	use sp_std::{vec, vec::Vec};
 
 	/// Pack a single `SolidityDataType` into bytes
+	#[allow(clippy::needless_lifetimes)]
 	fn pack<'a>(data_type: &'a SolidityDataType) -> Vec<u8> {
 		let mut res = Vec::new();
 		match data_type {
@@ -55,7 +57,7 @@ pub mod abi {
 				res.extend(local_res);
 			},
 		};
-		return res
+		res
 	}
 
 	pub fn encode_packed(items: &[SolidityDataType]) -> Vec<u8> {
@@ -64,7 +66,6 @@ pub mod abi {
 			acc.push(pack);
 			acc
 		});
-		let res = res.join(&[][..]);
-		res
+		res.join(&[][..])
 	}
 }

@@ -8,8 +8,8 @@ extern crate arrayref;
 
 pub use self::pallet::*;
 
-mod abi;
 mod eip712;
+mod encode;
 
 #[cfg(test)]
 mod mock;
@@ -18,7 +18,7 @@ mod mock;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::abi::{abi::encode_packed, SolidityDataType};
+	use crate::encode::{abi::encode_packed, SolidityDataType};
 	use codec::{Decode, Encode};
 	use ethabi::{encode as abi_encode, token::Token};
 	use frame_support::{
