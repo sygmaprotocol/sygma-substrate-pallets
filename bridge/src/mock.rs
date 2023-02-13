@@ -196,10 +196,20 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
+	pub AstrAssetId: AssetId = 1;
+	pub AstrLocation: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2005),
+			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"astr".to_vec().try_into().expect("less than length limit; qed")),
+		),
+	);
 	pub NativeResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
-	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8)];
+	pub AstrResourceId: ResourceId = hex_literal::hex!("4e071db61a2fb903df487c401663825643ba158d9b0ce73e1437163825643bba");
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
@@ -237,6 +247,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
 		if &UsdcLocation::get() == id.borrow() {
 			Ok(UsdcAssetId::get())
+		} else if &AstrLocation::get() == id.borrow() {
+			Ok(AstrAssetId::get())
 		} else {
 			Err(())
 		}
@@ -244,6 +256,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
 		if *what.borrow() == UsdcAssetId::get() {
 			Ok(UsdcLocation::get())
+		} else if *what.borrow() == AstrAssetId::get() {
+			Ok(AstrLocation::get())
 		} else {
 			Err(())
 		}
@@ -254,10 +268,12 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), Concrete(ref id)) =>
-				if id != &UsdcLocation::get() {
-					Err(ExecutionError::AssetNotFound)
-				} else {
+				if id == &UsdcLocation::get() {
 					Ok((UsdcAssetId::get(), *amount))
+				} else if id == &AstrLocation::get() {
+					Ok((AstrAssetId::get(), *amount))
+				} else {
+					Err(ExecutionError::AssetNotFound)
 				},
 			_ => Err(ExecutionError::AssetNotFound),
 		}
@@ -336,13 +352,8 @@ impl DecimalConverter for SygmaDecimalConverter {
 			(Fungible(amount), _) =>
 				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
 					let original_decimal = AssetDecimalPairs::get()[idx].1;
-					// println!("ori_decimal {}", ori_decimal);
-
-					// let before = Decimal::try_from_i128_with_scale(*amount as i128,
-					// original_decimal as u32).unwrap_or(None); println!("before {}", before);
 
 					if original_decimal == 18 {
-						// println!("final {:?}", amount);
 						*amount
 					} else {
 						let mut new_amount = amount.clone().to_string();
@@ -361,7 +372,13 @@ impl DecimalConverter for SygmaDecimalConverter {
 							}
 						};
 
-						u128::from_str(&new_amount).unwrap() // TODO: Unsafe unwrap
+						// new_amount.push('a');
+
+						let f = u128::from_str(&new_amount).unwrap_or_default();
+						if f == u128::default() {
+							None.unwrap()
+						}
+						f
 					}
 				}),
 			_ => None,
@@ -373,13 +390,8 @@ impl DecimalConverter for SygmaDecimalConverter {
 			(Fungible(amount), _) =>
 				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
 					let dest_decimal = AssetDecimalPairs::get()[idx].1;
-					// println!("ori_decimal {}", ori_decimal);
-
-					// let before = Decimal::from_i128_with_scale(*amount as i128,
-					// 18u32).unwrap_or(None); println!("before {}", before);
 
 					if dest_decimal == 18 {
-						// println!("final {:?}", amount);
 						(asset.id.clone(), *amount).into()
 					} else {
 						let mut new_amount = amount.clone().to_string();
@@ -398,8 +410,10 @@ impl DecimalConverter for SygmaDecimalConverter {
 							}
 						};
 
-						let f = u128::from_str(&new_amount).unwrap(); // TODO: Unsafe unwrap
-											  // println!("final {:?}", f);
+						let f = u128::from_str(&new_amount).unwrap_or_default();
+						if f == u128::default() {
+							None.unwrap()
+						}
 						(asset.id.clone(), f).into()
 					}
 				}),

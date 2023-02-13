@@ -490,7 +490,6 @@ pub mod pallet {
 			let decimal_converted_amount =
 				T::DecimalConverter::convert_to(&(asset.id, bridge_amount).into())
 					.ok_or(Error::<T>::DecimalConversionFail)?;
-			// println!("decimal_converted_amount {:?}", &decimal_converted_amount);
 
 			// Emit Deposit event
 			Self::deposit_event(Event::Deposit {
@@ -791,7 +790,6 @@ pub mod pallet {
 			let decimal_converted_asset =
 				T::DecimalConverter::convert_from(&(asset_id, amount).into())
 					.ok_or(Error::<T>::DecimalConversionFail)?;
-			// println!("decimal_converted_asset {:?}", &decimal_converted_asset);
 
 			// Withdraw `decimal_converted_asset` of asset from reserve account
 			if T::IsReserve::filter_asset_location(&decimal_converted_asset, &MultiLocation::here())
@@ -819,6 +817,7 @@ pub mod pallet {
 	mod test {
 		use crate as bridge;
 		use crate::{
+			mock::{AstrAssetId, AstrLocation, AstrResourceId},
 			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
 			Proposal,
 		};
@@ -836,7 +835,7 @@ pub mod pallet {
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
 		use primitive_types::U256;
-		use sp_core::{ecdsa, ByteArray, Pair};
+		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
 		use sp_std::convert::TryFrom;
 		use sygma_traits::{MpcAddress, TransferType};
@@ -1108,8 +1107,9 @@ pub mod pallet {
 		fn deposit_native_asset_should_work() {
 			new_test_ext().execute_with(|| {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
-				let fee = 100u128;
-				let amount = 200u128;
+				let fee = 1_000_000_000_000u128; // 1 with 12 decimals
+				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+				let final_amount_in_deposit_event = 199_000_000_000_000_000_000; // 200 - 1 then adjust to 18 decimals
 
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
@@ -1150,7 +1150,7 @@ pub mod pallet {
 					sender: ALICE,
 					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
-						amount - fee,
+						final_amount_in_deposit_event,
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
@@ -1589,8 +1589,8 @@ pub mod pallet {
 				let (evil_pair, _): (ecdsa::Pair, _) = Pair::generate();
 
 				// Deposit some native asset in advance
-				let fee = 100u128;
-				let amount = 200u128;
+				let fee = 1_000_000_000_000u128;
+				let amount = 200_000_000_000_000u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -1599,7 +1599,7 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(NativeLocation::get()), Fungible(2 * amount)).into(),
+					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
 					(
 						0,
 						X2(
@@ -1618,6 +1618,8 @@ pub mod pallet {
 				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
 
 				// Generate proposals
+				// amount is in 18 decimal 0.000200000000000000, will be convert to 12 decimal
+				// 0.000200000000
 				let valid_native_transfer_proposal = Proposal {
 					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 1,
@@ -1628,6 +1630,8 @@ pub mod pallet {
 							.encode(),
 					),
 				};
+				// amount is in 18 decimal 0.000200000000000000, will be convert to 18 decimal
+				// 0.000200000000000000
 				let valid_usdc_transfer_proposal = Proposal {
 					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 2,
@@ -1726,7 +1730,10 @@ pub mod pallet {
 					proposals,
 					proposals_with_valid_signature.encode(),
 				));
-				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + amount);
+				// proposal amount is in 18 decimal 0.000200000000000000, will be convert to 12
+				// decimal 0.000200000000(200000000) because native asset is defined in 12 decimal
+				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + 200000000);
+				// usdc is defined in 18 decimal so that converted amount is the same as in proposal
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), amount);
 			})
 		}
@@ -1919,35 +1926,53 @@ pub mod pallet {
 		fn deposit_with_decimal_converter() {
 			new_test_ext().execute_with(|| {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
-				let fee = 1000000000000u128; // 1
-				let amount = 123123456789123456789u128; // 123.456_789_123_456 // 123456789123456u128 // 123123456789123456789123456u128
-
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// native asset with 12 decimal
+				let fee_native_asset = 1_000_000_000_000u128; // 1.0 native asset
+				let amount_native_asset = 123_456_789_123_456u128; // 123.456_789_123_456
+				let adjusted_amount_native_asset = 122_456_789_123_456_000_000u128; // amount_native_asset - fee_native_asset then adjust it to 18 decimals
+
+				// usdc asset with 18 decimal
+				let fee_usdc_asset = 1_000_000_000_000_000_000u128; // 1.0 usdc asset
+				let amount_usdc_asset = 123_456_789_123_456_789_123u128; // 123.456_789_123_456_789_123
+				let adjusted_amount_usdc_asset = 122_456_789_123_456_789_123u128; // amount_usdc_asset - fee_usdc_asset then adjust it to 18 decimals
+
+				// astr asset with 24 decimal
+				let fee_astr_asset = 1_000_000_000_000_000_000_000_000u128; // 1.0 astr asset
+				let amount_astr_asset = 123_456_789_123_456_789_123_456_789u128; // 123.456_789_123_456_789_123_456_789
+				let adjusted_amount_astr_asset = 122_456_789_123_456_789_123u128; // amount_astr_asset - fee_astr_asset then adjust it to 18 decimals
+
+				// set fees
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					NativeLocation::get().into(),
+					fee_native_asset
+				));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					UsdcLocation::get().into(),
-					fee
+					fee_usdc_asset
 				));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					AstrLocation::get().into(),
+					fee_astr_asset
+				));
+
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					U256::from(1)
 				));
 
-				// Register foreign asset (USDC) with asset id 0
-				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
-					<Runtime as frame_system::Config>::AccountId,
-				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
-
-				// Mint some USDC to ALICE for test
-				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,));
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
-				println!("alice usdc balance {:?}", Assets::balance(UsdcAssetId::get(), &ALICE));
-
+				// deposit native asset which has 12 decimal
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(UsdcLocation::get()), Fungible(amount)).into(),
+					(Concrete(NativeLocation::get()), Fungible(amount_native_asset)).into(),
 					(
 						0,
 						X2(
@@ -1960,9 +1985,14 @@ pub mod pallet {
 						.into(),
 				));
 				// Check balances
-				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
-				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount_native_asset);
+				// native asset should be reserved so that BridgeAccount should hold it
+				assert_eq!(
+					Balances::free_balance(BridgeAccount::get()),
+					amount_native_asset - fee_native_asset
+				);
+				// TreasuryAccount is collecting the bridging fee
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee_native_asset);
 				// Check event
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 					dest_domain_id: DEST_DOMAIN_ID,
@@ -1971,7 +2001,115 @@ pub mod pallet {
 					sender: ALICE,
 					transfer_type: TransferType::FungibleTransfer,
 					deposit_data: SygmaBridge::create_deposit_data(
-						amount - fee,
+						adjusted_amount_native_asset,
+						b"ethereum recipient".to_vec(),
+					),
+					handler_response: vec![],
+				})]);
+
+				// deposit usdc asset which has 18 decimal
+				// Register foreign asset (usdc) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint some usdc to ALICE for test
+				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,)); // make sure Alice owns enough funds here
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
+
+				// deposit
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(UsdcLocation::get()), Fungible(amount_usdc_asset)).into(),
+					(
+						0,
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
+					)
+						.into(),
+				));
+				// Check balances
+				assert_eq!(
+					Assets::balance(UsdcAssetId::get(), &ALICE),
+					ENDOWED_BALANCE - amount_usdc_asset
+				);
+				// usdc asset should not be reserved so that BridgeAccount should not hold it
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), 0);
+				// TreasuryAccount is collecting the bridging fee
+				assert_eq!(
+					Assets::balance(UsdcAssetId::get(), TreasuryAccount::get()),
+					fee_usdc_asset
+				);
+
+				// Check event
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+					dest_domain_id: DEST_DOMAIN_ID,
+					resource_id: UsdcResourceId::get(),
+					deposit_nonce: 1,
+					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
+					deposit_data: SygmaBridge::create_deposit_data(
+						adjusted_amount_usdc_asset,
+						b"ethereum recipient".to_vec(),
+					),
+					handler_response: vec![],
+				})]);
+
+				// deposit astr asset which has 24 decimal
+				// Register foreign asset (astr) with asset id 1
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(AstrAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint some astr to ALICE for test
+				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 1, ALICE, ENDOWED_BALANCE,)); // make sure Alice owns enough funds here
+				assert_eq!(Assets::balance(AstrAssetId::get(), &ALICE), ENDOWED_BALANCE);
+
+				// deposit
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(AstrLocation::get()), Fungible(amount_astr_asset)).into(),
+					(
+						0,
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
+					)
+						.into(),
+				));
+				// Check balances
+				assert_eq!(
+					Assets::balance(AstrAssetId::get(), &ALICE),
+					ENDOWED_BALANCE - amount_astr_asset
+				);
+				// astr asset should be reserved so that BridgeAccount should hold it(Astr is not
+				// defined in ConcrateSygmaAsset)
+				assert_eq!(
+					Assets::balance(AstrAssetId::get(), &BridgeAccount::get()),
+					amount_astr_asset - fee_astr_asset
+				);
+				// TreasuryAccount is collecting the bridging fee
+				assert_eq!(
+					Assets::balance(AstrAssetId::get(), TreasuryAccount::get()),
+					fee_astr_asset
+				);
+
+				// Check event
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+					dest_domain_id: DEST_DOMAIN_ID,
+					resource_id: AstrResourceId::get(),
+					deposit_nonce: 2,
+					sender: ALICE,
+					transfer_type: TransferType::FungibleTransfer,
+					deposit_data: SygmaBridge::create_deposit_data(
+						adjusted_amount_astr_asset,
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
@@ -1982,73 +2120,158 @@ pub mod pallet {
 		#[test]
 		fn proposal_execution_with_decimal_converter() {
 			new_test_ext().execute_with(|| {
+				// generate mpc keypair
 				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
 				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
-
-				// generate mpc keypair
-				println!(
-					"test mpc address {:?}",
-					primitive_types::H160::from_slice(&test_mpc_addr.0)
-				);
 				// set mpc address
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
-
-				// deposit 100 tokens(100_000_000_000_000)
-				let p1 = Proposal {
-					origin_domain_id: 1,
-					resource_id: [0u8; 32],
-					deposit_nonce: 1,
-					data: vec![
-						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-						0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0,
-					], // !!!!
-				};
-
+				// register domain
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					U256::from(1)
 				));
+				let fee = 1_000_000_000_000u128; // 1 token in 12 decimals
+				let init_deposit = 10_000_000_000_000u128; // 12 token in 12 decimal
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					NativeLocation::get().into(),
+					fee
+				));
+				// deposit in advance to make sure the native asset has enough funds in
+				// TransferReserveAccount by doing this, Alice will deposit (half of her native
+				// asset - fee) into TransferReserveAccount
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					(Concrete(NativeLocation::get()), Fungible(ENDOWED_BALANCE / 2)).into(),
+					(
+						0,
+						X2(
+							GeneralKey(
+								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
+							),
+							GeneralIndex(1)
+						)
+					)
+						.into(),
+				));
+				// BridgeAccount should have half of alice native asset - fee
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), ENDOWED_BALANCE / 2 - fee);
+				// TreasuryAccount is collecting the bridging fee
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 
-				// Register foreign asset (USDC) with asset id 0
-				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
-					<Runtime as frame_system::Config>::AccountId,
-				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+				let bridge_amount = 100_000_000_000_000_000_000; // 100 native with 18 decimals
 
-				let proposals = vec![p1];
-
+				// proposal for bridging native asset to alice(native asset is 12 decimal)
+				let p_native = Proposal {
+					origin_domain_id: 1,
+					resource_id: NativeResourceId::get(),
+					deposit_nonce: 1,
+					data: SygmaBridge::create_deposit_data(
+						bridge_amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: ALICE.into() }))
+							.encode(),
+					),
+				};
+				let proposals = vec![p_native];
 				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
 				let signature = pair.sign(&final_message);
 
-				// check Alice balance of USDC
-				println!("alice address {:?}", ALICE.as_slice());
-				println!(
-					"alice balance of usdc BEFORE {:?}",
-					Assets::balance(UsdcAssetId::get(), &ALICE)
-				);
-
+				// check Alice balance of native asset before executing, should have half of the
+				// init native asset
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE / 2);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
 					proposals,
 					signature.encode()
 				));
-
-				println!(
-					"alice balance of usdc AFTER {:?}",
-					Assets::balance(UsdcAssetId::get(), &ALICE)
+				// check Alice balance of native asset after executing, should have half of the init
+				// native asset + 100_000_000_000_000(12 decimal)
+				assert_eq!(
+					Balances::free_balance(ALICE),
+					ENDOWED_BALANCE / 2 + 100_000_000_000_000
 				);
 
-				// should emit FailedHandlerExecution event
-				assert_events(vec![RuntimeEvent::SygmaBridge(
-					SygmaBridgeEvent::ProposalExecution {
-						origin_domain_id: 1,
-						deposit_nonce: 1,
-						data_hash: [0u8; 32],
-					},
-				)]);
+				// proposal for bridging usdc asset to alice(usdc asset is 18 decimal)
+				// Register foreign asset (usdc) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				let p_usdc = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 2,
+					resource_id: UsdcResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						bridge_amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: ALICE.into() }))
+							.encode(),
+					),
+				};
+				let proposals_usdc = vec![p_usdc];
+				let final_message_usdc =
+					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_usdc);
+				let signature_usdc = pair.sign(&final_message_usdc);
+
+				// alice does not have any usdc at this moment
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), 0);
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals_usdc,
+					signature_usdc.encode()
+				));
+				// alice should have 100 usdc at this moment (100 usdc with 18 decimals)
+				assert_eq!(
+					Assets::balance(UsdcAssetId::get(), &ALICE),
+					100_000_000_000_000_000_000
+				);
+
+				// proposal for bridging astr asset to alice(astr asset is 24 decimal)
+				// Register foreign asset (astr) with asset id 1
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(AstrAssetId::get(), ASSET_OWNER, true, 1,));
+				// Mint some astr to BridgeAccount for test because astr is reserved asset for
+				// testing
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					1,
+					BridgeAccount::get(),
+					ENDOWED_BALANCE
+				));
+				assert_eq!(
+					Assets::balance(AstrAssetId::get(), BridgeAccount::get()),
+					ENDOWED_BALANCE
+				);
+
+				let p_astr = Proposal {
+					origin_domain_id: 1,
+					deposit_nonce: 3,
+					resource_id: AstrResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						bridge_amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: ALICE.into() }))
+							.encode(),
+					),
+				};
+				let proposals_astr = vec![p_astr];
+				let final_message_astr =
+					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_astr);
+				let signature_astr = pair.sign(&final_message_astr);
+
+				// alice does not have any astr at this moment
+				assert_eq!(Assets::balance(AstrAssetId::get(), &ALICE), 0);
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals_astr,
+					signature_astr.encode()
+				));
+				// alice should have 100 astr at this moment (100 astr with 24 decimals)
+				assert_eq!(
+					Assets::balance(AstrAssetId::get(), &ALICE),
+					100_000_000_000_000_000_000_000_000
+				);
 			})
 		}
 	}

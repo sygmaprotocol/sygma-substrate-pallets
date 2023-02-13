@@ -44,10 +44,10 @@ impl FeeHandler for () {
 }
 
 pub trait DecimalConverter {
-	/// convert_to converts the MultiAsset to u128 when bridging from sygma substrate pallet
+	/// convert_to converts the MultiAsset to u128 when bridging from sygma substrate pallet.
 	/// Sygma relayer will always expect asset in 18 decimal
 	fn convert_to(asset: &MultiAsset) -> Option<u128>;
-	/// convert_from converts a u128 to MultiAsset when bridging to sygma substrate pallet
+	/// convert_from converts a u128 to MultiAsset when bridging to sygma substrate pallet.
 	/// Sygma relayer will always send asset in 18 decimal
 	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset>;
 }
