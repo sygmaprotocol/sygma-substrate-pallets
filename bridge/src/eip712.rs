@@ -1,7 +1,6 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
-use alloc::{string::String, vec};
 /// Port from https://github.com/gakonst/ethers-rs/blob/master/ethers-core/src/types/transaction/eip712.rs
 /// Replace hash provided by `sp_io`
 use ethabi::{
@@ -10,6 +9,7 @@ use ethabi::{
 	token::Token,
 };
 use sp_io::hashing::keccak_256;
+use sp_std::{vec, vec::Vec};
 
 /// Pre-computed value of the following statement:
 ///
@@ -34,11 +34,11 @@ pub const EIP712_DOMAIN_TYPE_HASH_WITH_SALT: [u8; 32] = [
 #[derive(Debug, Default, Clone)]
 pub struct EIP712Domain {
 	///  The user readable name of signing domain, i.e. the name of the DApp or the protocol.
-	pub name: String,
+	pub name: Vec<u8>,
 
 	/// The current major version of the signing domain. Signatures from different versions are not
 	/// compatible.
-	pub version: String,
+	pub version: Vec<u8>,
 
 	/// The EIP-155 chain id. The user-agent should refuse signing if it does not match the
 	/// currently active chain.
@@ -64,8 +64,8 @@ impl EIP712Domain {
 
 		let mut tokens = vec![
 			Token::Uint(U256::from(domain_type_hash)),
-			Token::Uint(U256::from(keccak_256(self.name.as_bytes()))),
-			Token::Uint(U256::from(keccak_256(self.version.as_bytes()))),
+			Token::Uint(U256::from(keccak_256(&self.name))),
+			Token::Uint(U256::from(keccak_256(&self.version))),
 			Token::Uint(self.chain_id),
 			Token::Address(self.verifying_contract),
 		];
