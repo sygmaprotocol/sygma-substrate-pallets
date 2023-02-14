@@ -8,7 +8,6 @@ license = "LGPL-3.0"
 codec = { package = "parity-scale-codec", version = "3.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.0", default-features = false, features = ["derive", "serde", "decode"] }
 log = { version = "0.4.14", default-features = false }
-# eth-encode-packed = { version =  "0.1.0", default-features = false }
 ethabi = { version = "18.0.0", default-features = false }
 primitive-types = { version = "0.12", default-features = false, features = ["scale-info", "serde_no_std"] }
 arrayref = { version = "0.3.6", default-features = false }
@@ -70,7 +69,6 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"log/std",
-	# "eth-encode-packed/std",
 	"ethabi/std",
 	"hex/std",
 	"primitive-types/std",
