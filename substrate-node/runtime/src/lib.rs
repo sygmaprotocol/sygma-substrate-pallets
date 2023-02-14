@@ -566,72 +566,68 @@ pub struct SygmaDecimalConverter;
 impl DecimalConverter for SygmaDecimalConverter {
 	fn convert_to(asset: &MultiAsset) -> Option<u128> {
 		match (&asset.fun, &asset.id) {
-			(Fungible(amount), _) =>
-				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
-					let original_decimal = AssetDecimalPairs::get()[idx].1;
-
-					if original_decimal == 18 {
-						*amount
-					} else {
-						let mut new_amount = amount.clone().to_string();
-
-						if original_decimal > 18 {
-							let mut n = 0;
-							while n < original_decimal - 18 {
-								new_amount.pop();
-								n += 1;
-							}
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in AssetDecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some(*amount)
 						} else {
-							let mut n = 0;
-							while n < 18 - original_decimal {
-								new_amount.push('0');
-								n += 1;
-							}
-						};
-
-						let f = u128::from_str(&new_amount).unwrap_or_default();
-						if f == u128::default() {
-							None.unwrap()
+							let mut new_amount = amount.clone().to_string();
+							if *decimal > 18 {
+								let mut n = 0;
+								while n < *decimal - 18 {
+									new_amount.pop();
+									n += 1;
+								}
+							} else {
+								let mut n = 0;
+								while n < 18 - *decimal {
+									new_amount.push('0');
+									n += 1;
+								}
+							};
+							u128::from_str(&new_amount).ok()
 						}
-						f
 					}
-				}),
+				}
+				None
+			},
 			_ => None,
 		}
 	}
 
 	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
 		match (&asset.fun, &asset.id) {
-			(Fungible(amount), _) =>
-				AssetDecimalPairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
-					let dest_decimal = AssetDecimalPairs::get()[idx].1;
-
-					if dest_decimal == 18 {
-						(asset.id.clone(), *amount).into()
-					} else {
-						let mut new_amount = amount.clone().to_string();
-
-						if dest_decimal > 18 {
-							let mut n = 0;
-							while n < dest_decimal - 18 {
-								new_amount.push('0');
-								n += 1;
-							}
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in AssetDecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some((asset.id.clone(), *amount).into())
 						} else {
-							let mut n = 0;
-							while n < 18 - dest_decimal {
-								new_amount.pop();
-								n += 1;
+							let mut new_amount = amount.clone().to_string();
+							if *decimal > 18 {
+								let mut n = 0;
+								while n < *decimal - 18 {
+									new_amount.push('0');
+									n += 1;
+								}
+							} else {
+								let mut n = 0;
+								while n < 18 - *decimal {
+									new_amount.pop();
+									n += 1;
+								}
+							};
+							let f = u128::from_str(&new_amount).unwrap_or_default();
+							if f == u128::default() {
+								return None
 							}
-						};
-
-						let f = u128::from_str(&new_amount).unwrap_or_default();
-						if f == u128::default() {
-							None.unwrap()
+							Some((asset.id.clone(), f).into())
 						}
-						(asset.id.clone(), f).into()
 					}
-				}),
+				}
+				None
+			},
 			_ => None,
 		}
 	}
