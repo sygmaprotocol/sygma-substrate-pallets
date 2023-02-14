@@ -2114,6 +2114,40 @@ pub mod pallet {
 					),
 					handler_response: vec![],
 				})]);
+
+				// deposit astr asset which has 24 decimal, extreme small amount edge case
+				let amount_astr_asset_extreme_small_amount = 100_000; // 0.000000000000000000100000 astr
+				let fee_astr_asset_extreme_small_amount = 1; // 0.000000000000000000000001 astr
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					AstrLocation::get().into(),
+					fee_astr_asset_extreme_small_amount
+				));
+				// after decimal conversion from 24 to 18, the final amount will be 0 so that
+				// decimal conversion will raise error deposit should not work
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						(
+							Concrete(AstrLocation::get()),
+							Fungible(amount_astr_asset_extreme_small_amount)
+						)
+							.into(),
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralIndex(1)
+							)
+						)
+							.into(),
+					),
+					bridge::Error::<Runtime>::DecimalConversionFail
+				);
 			})
 		}
 
@@ -2272,6 +2306,44 @@ pub mod pallet {
 					Assets::balance(AstrAssetId::get(), &ALICE),
 					100_000_000_000_000_000_000_000_000
 				);
+
+				// extreme small amount edge case
+				let extreme_small_bridge_amount = 100_000; // 0.000000000000100000 native asset with 18 decimals
+										   // proposal for bridging native asset to alice(native asset is 12 decimal)
+				let p_native_extreme = Proposal {
+					origin_domain_id: 1,
+					resource_id: NativeResourceId::get(),
+					deposit_nonce: 4,
+					data: SygmaBridge::create_deposit_data(
+						extreme_small_bridge_amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: ALICE.into() }))
+							.encode(),
+					),
+				};
+				let proposals_extreme = vec![p_native_extreme];
+				let final_message_extreme =
+					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_extreme);
+				let signature_extreme = pair.sign(&final_message_extreme);
+
+				// execute_proposal extrinsic should work but it will actually failed at decimal
+				// conversion step because 0.000000000000100000 in 18 decimal converts to 12 decimal
+				// would be 0.000000000000 which is 0
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals_extreme,
+					signature_extreme.encode()
+				));
+				// should emit FailedHandlerExecution event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::FailedHandlerExecution {
+						error: vec![
+							68, 101, 99, 105, 109, 97, 108, 67, 111, 110, 118, 101, 114, 115, 105,
+							111, 110, 70, 97, 105, 108,
+						],
+						origin_domain_id: 1,
+						deposit_nonce: 4,
+					},
+				)]);
 			})
 		}
 	}
