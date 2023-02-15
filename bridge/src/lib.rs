@@ -2210,7 +2210,7 @@ pub mod pallet {
 				};
 				let proposals = vec![p_native];
 				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
-				let signature = pair.sign(&final_message);
+				let signature = pair.sign_prehashed(&final_message);
 
 				// check Alice balance of native asset before executing, should have half of the
 				// init native asset
@@ -2246,7 +2246,7 @@ pub mod pallet {
 				let proposals_usdc = vec![p_usdc];
 				let final_message_usdc =
 					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_usdc);
-				let signature_usdc = pair.sign(&final_message_usdc);
+				let signature_usdc = pair.sign_prehashed(&final_message_usdc);
 
 				// alice does not have any usdc at this moment
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), 0);
@@ -2292,7 +2292,7 @@ pub mod pallet {
 				let proposals_astr = vec![p_astr];
 				let final_message_astr =
 					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_astr);
-				let signature_astr = pair.sign(&final_message_astr);
+				let signature_astr = pair.sign_prehashed(&final_message_astr);
 
 				// alice does not have any astr at this moment
 				assert_eq!(Assets::balance(AstrAssetId::get(), &ALICE), 0);
@@ -2323,7 +2323,7 @@ pub mod pallet {
 				let proposals_extreme = vec![p_native_extreme];
 				let final_message_extreme =
 					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_extreme);
-				let signature_extreme = pair.sign(&final_message_extreme);
+				let signature_extreme = pair.sign_prehashed(&final_message_extreme);
 
 				// execute_proposal extrinsic should work but it will actually failed at decimal
 				// conversion step because 0.000000000000100000 in 18 decimal converts to 12 decimal

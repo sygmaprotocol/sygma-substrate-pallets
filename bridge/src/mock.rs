@@ -3,6 +3,7 @@
 
 #![cfg(test)]
 
+extern crate alloc;
 use crate as sygma_bridge;
 use alloc::string::ToString;
 use core::str::FromStr;
