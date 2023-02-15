@@ -6,11 +6,11 @@
 #[macro_use]
 extern crate arrayref;
 
-extern crate alloc;
-
 pub use self::pallet::*;
 
 mod eip712;
+mod encode;
+
 #[cfg(test)]
 mod mock;
 
@@ -18,10 +18,8 @@ mod mock;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use alloc::string::String;
-
+	use crate::encode::{abi::encode_packed, SolidityDataType};
 	use codec::{Decode, Encode};
-	use eth_encode_packed::{abi::encode_packed, SolidityDataType};
 	use ethabi::{encode as abi_encode, token::Token};
 	use frame_support::{
 		dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion, transactional,
@@ -647,7 +645,7 @@ pub mod pallet {
 			}
 
 			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-			let (bytes, _) = encode_packed(final_keccak_data_input);
+			let bytes = encode_packed(final_keccak_data_input);
 			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
 			let struct_hash = keccak_256(&abi_encode(&[
@@ -658,8 +656,8 @@ pub mod pallet {
 			// domain separator
 			let default_eip712_domain = eip712::EIP712Domain::default();
 			let eip712_domain = eip712::EIP712Domain {
-				name: String::from("Bridge"),
-				version: String::from("3.1.0"),
+				name: b"Bridge".to_vec(),
+				version: b"3.1.0".to_vec(),
 				chain_id: T::EIP712ChainID::get(),
 				verifying_contract: T::DestVerifyingContractAddress::get(),
 				salt: default_eip712_domain.salt,
@@ -671,7 +669,7 @@ pub mod pallet {
 				SolidityDataType::Bytes(&domain_separator),
 				SolidityDataType::Bytes(&struct_hash),
 			];
-			let (bytes, _) = encode_packed(typed_data_hash_input);
+			let bytes = encode_packed(typed_data_hash_input);
 			keccak_256(bytes.as_slice())
 		}
 
@@ -800,7 +798,6 @@ pub mod pallet {
 			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
 			Proposal,
 		};
-		use alloc::vec;
 		use bridge::mock::{
 			assert_events, new_test_ext, AccessSegregator, Assets, Balances, BridgeAccount,
 			BridgePalletIndex, NativeLocation, NativeResourceId, Runtime, RuntimeEvent,
@@ -816,7 +813,7 @@ pub mod pallet {
 		use primitive_types::U256;
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
-		use sp_std::convert::TryFrom;
+		use sp_std::{convert::TryFrom, vec};
 		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
 
