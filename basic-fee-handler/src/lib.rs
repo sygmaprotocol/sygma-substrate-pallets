@@ -60,6 +60,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set bridge fee for a specific asset
+		#[pallet::call_index(0)]
 		#[pallet::weight(195_000_000)]
 		pub fn set_fee(
 			origin: OriginFor<T>,
