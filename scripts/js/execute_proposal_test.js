@@ -17,10 +17,9 @@ async function executeProposal(api, proposalList, signature, finalization, sudo)
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
         console.log(
-            `--- Submitting extrinsic to execute dummy proposal for testing ---`
+            `--- Submitting extrinsic to execute dummy proposal for testing : (nonce: ${nonce}) ---`
         );
-        const unsub = await api.tx.sudo
-            .sudo(api.tx.sygmaBridge.executeProposal(proposalList, signature))
+        const unsub = await api.tx.sygmaBridge.executeProposal(proposalList, signature)
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
@@ -62,13 +61,13 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
 
-    const balanceBefore = await queryAssetBalance(2000, sudo.address)
-    console.log('asset balance info before: ', balanceBefore);
+    const balanceBefore = await queryAssetBalance(api,2000, sudo.address)
+    console.log('asset balance before: ', balanceBefore.balance);
 
-    await executeProposal(api, [proposal], signature, true, sudo);
+    await executeProposal(api, [proposal], signature.buffer, true, sudo);
 
-    const balanceAfter = await queryAssetBalance(2000, sudo.address)
-    console.log('asset balance info after: ', balanceAfter);
+    const balanceAfter = await queryAssetBalance(api,2000, sudo.address)
+    console.log('asset balance after: ', balanceAfter.balance);
 }
 
 main().catch(console.error).finally(() => process.exit());
