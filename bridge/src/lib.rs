@@ -114,9 +114,6 @@ pub mod pallet {
 
 		/// Asset decimal converter
 		type DecimalConverter: DecimalConverter;
-
-		/// AssetId and its decimal pairs
-		type AssetDecimalPairs: Get<Vec<(AssetId, u8)>>;
 	}
 
 	#[allow(dead_code)]

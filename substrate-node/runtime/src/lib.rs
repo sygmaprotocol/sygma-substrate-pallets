@@ -672,7 +672,6 @@ impl sygma_bridge::Config for Runtime {
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 	type DecimalConverter = SygmaDecimalConverter;
-	type AssetDecimalPairs = AssetDecimalPairs;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

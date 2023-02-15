@@ -455,7 +455,6 @@ impl sygma_bridge::Config for Runtime {
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 	type DecimalConverter = SygmaDecimalConverter;
-	type AssetDecimalPairs = AssetDecimalPairs;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
