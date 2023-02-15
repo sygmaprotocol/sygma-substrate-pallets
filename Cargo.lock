@@ -1552,15 +1552,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eth-encode-packed"
-version = "0.1.0"
-source = "git+https://github.com/tolak/eth-encode-packed-rs.git?branch=0.1.0-etherabi-18#90d2fe0e98232cb318771ee3ffd4fee284c7c870"
-dependencies = [
- "ethabi",
- "hex",
-]
-
-[[package]]
 name = "ethabi"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7652,12 +7643,12 @@ version = "0.1.0"
 dependencies = [
  "arrayref",
  "assert_matches",
- "eth-encode-packed",
  "ethabi",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "funty 3.0.0-rc2",
+ "hex",
  "hex-literal",
  "log",
  "pallet-assets",
@@ -8214,7 +8205,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

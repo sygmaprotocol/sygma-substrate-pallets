@@ -17,6 +17,7 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use polkadot_parachain::primitives::Sibling;
+use primitive_types::U256;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -385,7 +386,7 @@ parameter_types! {
 	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
 	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
 	// EIP712ChainID is the chainID that pallet is assigned with, used in EIP712 typed data domain
-	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
+	pub EIP712ChainID: ChainID = U256::from(5);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
 	// When relayers signing, this address will be included in the EIP712Domain
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
