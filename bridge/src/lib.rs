@@ -1123,7 +1123,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1232,7 +1232,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1289,7 +1289,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1361,7 +1361,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1401,7 +1401,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1446,7 +1446,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1465,7 +1465,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1496,7 +1496,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1601,7 +1601,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),

@@ -10,7 +10,6 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::{pallet_prelude::*, PalletId};
-use funty::Fundamental;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -567,8 +566,14 @@ pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
 	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
-				Some((recipient.to_vec(), dest_domain_id.as_u8())),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(dest_domain_id))) => {
+				let d = u8::default();
+				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
+				if *domain_id == d {
+					return None
+				}
+				Some((recipient.to_vec(), *domain_id))
+			},
 			_ => None,
 		}
 	}
