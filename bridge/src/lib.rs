@@ -247,6 +247,7 @@ pub mod pallet {
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
 		#[pallet::weight(195_000_000)]
+		#[pallet::call_index(0)]
 		pub fn pause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permission to pause bridge
@@ -275,6 +276,7 @@ pub mod pallet {
 
 		/// Unpause bridge.
 		#[pallet::weight(195_000_000)]
+		#[pallet::call_index(1)]
 		pub fn unpause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permission to unpause bridge
@@ -306,6 +308,7 @@ pub mod pallet {
 
 		/// Mark an ECDSA address as a MPC account.
 		#[pallet::weight(195_000_000)]
+		#[pallet::call_index(2)]
 		pub fn set_mpc_address(origin: OriginFor<T>, addr: MpcAddress) -> DispatchResult {
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permission to set mpc address
@@ -329,6 +332,7 @@ pub mod pallet {
 
 		/// Mark the give dest domainID with chainID to be enabled
 		#[pallet::weight(195_000_000)]
+		#[pallet::call_index(3)]
 		pub fn register_domain(
 			origin: OriginFor<T>,
 			dest_domain_id: DomainID,
@@ -366,6 +370,7 @@ pub mod pallet {
 
 		/// Mark the give dest domainID with chainID to be disabled
 		#[pallet::weight(195_000_000)]
+		#[pallet::call_index(4)]
 		pub fn unregister_domain(
 			origin: OriginFor<T>,
 			dest_domain_id: DomainID,
@@ -413,6 +418,7 @@ pub mod pallet {
 		/// Initiates a transfer.
 		#[pallet::weight(195_000_000)]
 		#[transactional]
+		#[pallet::call_index(5)]
 		pub fn deposit(
 			origin: OriginFor<T>,
 			asset: MultiAsset,
@@ -502,6 +508,7 @@ pub mod pallet {
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
 		#[pallet::weight(195_000_000)]
 		#[transactional]
+		#[pallet::call_index(6)]
 		pub fn retry(
 			origin: OriginFor<T>,
 			deposit_on_block_height: u128,
@@ -526,6 +533,7 @@ pub mod pallet {
 		/// Executes a batch of deposit proposals (only if signature is signed by MPC).
 		#[pallet::weight(195_000_000)]
 		#[transactional]
+		#[pallet::call_index(7)]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
 			proposals: Vec<Proposal>,
@@ -1226,7 +1234,12 @@ pub mod pallet {
 				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
 
 				// Mint some USDC to ALICE for test
-				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,));
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					ALICE,
+					ENDOWED_BALANCE,
+				));
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
 
 				assert_ok!(SygmaBridge::deposit(
