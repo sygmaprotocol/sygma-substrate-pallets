@@ -1895,5 +1895,56 @@ pub mod pallet {
 				assert!(DestChainIds::<Runtime>::get(1u8).is_none());
 			})
 		}
+
+		#[test]
+		fn proposal_execution_should_work_abc() {
+			new_test_ext().execute_with(|| {
+				// set mpc address to generated keypair's address
+				let (pair, _): (ecdsa::Pair, _) = Pair::generate();
+				let test_mpc_addr: MpcAddress = MpcAddress(pair.public().to_eth_address().unwrap());
+				println!("mpc address: {:?}", primitive_types::H160::from_slice(&test_mpc_addr.0));
+
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
+				// register domain
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				let amount = 10_000_000_000_000; // 10
+				let valid_usdc_transfer_proposal = Proposal {
+					origin_domain_id: DEST_DOMAIN_ID,
+					deposit_nonce: 0,
+					resource_id: UsdcResourceId::get(),
+					data: SygmaBridge::create_deposit_data(
+						amount,
+						MultiLocation::new(0, X1(AccountId32 { network: Any, id: ALICE.into() }))
+							.encode(),
+					),
+				};
+				println!("proposal: {:?}", valid_usdc_transfer_proposal);
+				let proposals = vec![
+					valid_usdc_transfer_proposal,
+				];
+				println!("proposal list: {:?}", proposals.as_slice());
+
+				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
+				let proposals_with_valid_signature = pair.sign_prehashed(&final_message);
+				println!("signature: {:?}", proposals_with_valid_signature.0);
+				assert_ok!(SygmaBridge::execute_proposal(
+					Origin::signed(ALICE),
+					proposals,
+					proposals_with_valid_signature.encode(),
+				));
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), amount);
+			})
+		}
 	}
 }
