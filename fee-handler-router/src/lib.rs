@@ -72,6 +72,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Set fee handler specific (domain, asset) pair
 		#[pallet::weight(195_000_000)]
+		#[pallet::call_index(0)]
 		pub fn set_fee_handler(
 			origin: OriginFor<T>,
 			domain: DomainID,
