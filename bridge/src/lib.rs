@@ -835,7 +835,6 @@ pub mod pallet {
 		use sp_std::{convert::TryFrom, vec};
 		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
-		use fixed::{types::extra::U16, FixedU128};
 
 		#[test]
 		fn set_mpc_address() {
@@ -2345,38 +2344,6 @@ pub mod pallet {
 						deposit_nonce: 4,
 					},
 				)]);
-			})
-		}
-
-		#[test]
-		fn small_to_large_test() {
-			new_test_ext().execute_with(|| {
-				pub type U112F16 = FixedU128<U16>;
-
-				let asset_decimal = 12;
-				let amount: u128 = 1_000_000_000_000; // 1
-
-				let f = U112F16::from_num(amount);
-				let a = U112F16::from_num(10u128.saturating_pow(18 - asset_decimal));
-				let b = f.saturating_mul(a);
-				println!("{:?}", b); // 1000000000000000000
-			})
-		}
-
-		#[test]
-		fn large_to_small_test() {
-			new_test_ext().execute_with(|| {
-				pub type U112F16 = FixedU128<U16>;
-
-				let asset_decimal = 24;
-				let amount: u128 = 1_000_000_000_000_000_000_000_000; // 1
-
-				// `amount` can not > U96_MAX
-				let f = U112F16::from_num(amount);
-				let a = U112F16::from_num(10u128.saturating_pow(asset_decimal - 18));
-
-				let b = f.checked_div_int(a.to_num());
-				println!("{:?}", b.unwrap()); // 1000000000000000000
 			})
 		}
 	}

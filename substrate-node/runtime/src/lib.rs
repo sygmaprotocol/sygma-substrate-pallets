@@ -9,8 +9,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use alloc::string::ToString;
-use core::str::FromStr;
+use fixed::{types::extra::U16, FixedU128};
 use frame_support::{pallet_prelude::*, PalletId};
 use funty::Fundamental;
 use pallet_grandpa::{
@@ -575,21 +574,28 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 						return if *decimal == 18 {
 							Some(*amount)
 						} else {
-							let mut new_amount = amount.clone().to_string();
+							type U112F16 = FixedU128<U16>;
 							if *decimal > 18 {
-								let mut n = 0;
-								while n < *decimal - 18 {
-									new_amount.pop();
-									n += 1;
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).checked_div_int(a.to_num());
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
 								}
+								Some(r)
 							} else {
-								let mut n = 0;
-								while n < 18 - *decimal {
-									new_amount.push('0');
-									n += 1;
+								// Max is 5192296858534827628530496329220095
+								// if source asset decimal is 12, the max amount sending to sygma
+								// relayer is 5192296858534827.628530496329
+								if *amount > U112F16::MAX {
+									return None
 								}
-							};
-							u128::from_str(&new_amount).ok()
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								Some(b.to_num())
+							}
 						}
 					}
 				}
@@ -607,25 +613,29 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 						return if *decimal == 18 {
 							Some((asset.id.clone(), *amount).into())
 						} else {
-							let mut new_amount = amount.clone().to_string();
+							type U112F16 = FixedU128<U16>;
 							if *decimal > 18 {
-								let mut n = 0;
-								while n < *decimal - 18 {
-									new_amount.push('0');
-									n += 1;
+								// Max is 5192296858534827628530496329220095
+								// if dest asset decimal is 24, the max amount coming from sygma
+								// relayer is 5192296858.534827628530496329
+								if *amount > U112F16::MAX {
+									return None
 								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								let r: u128 = b.to_num();
+								Some((asset.id.clone(), r).into())
 							} else {
-								let mut n = 0;
-								while n < 18 - *decimal {
-									new_amount.pop();
-									n += 1;
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).checked_div_int(a.to_num());
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
 								}
-							};
-							let f = u128::from_str(&new_amount).unwrap_or_default();
-							if f == u128::default() {
-								return None
+								Some((asset.id.clone(), r).into())
 							}
-							Some((asset.id.clone(), f).into())
 						}
 					}
 				}
@@ -736,7 +746,6 @@ pub type Executive = frame_executive::Executive<
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
-extern crate alloc;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
