@@ -563,12 +563,12 @@ impl ConcrateSygmaAsset {
 	}
 }
 
-pub struct SygmaDecimalConverter;
-impl DecimalConverter for SygmaDecimalConverter {
+pub struct SygmaDecimalConverter<DecimalPairs>;
+impl<DecimalPairs: Get<Vec<(AssetId, u8)>>> DecimalConverter for SygmaDecimalConverter<DecimalPairs> {
 	fn convert_to(asset: &MultiAsset) -> Option<u128> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
-				for (asset_id, decimal) in AssetDecimalPairs::get().iter() {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
 					if *asset_id == asset.id {
 						return if *decimal == 18 {
 							Some(*amount)
@@ -600,7 +600,7 @@ impl DecimalConverter for SygmaDecimalConverter {
 	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
-				for (asset_id, decimal) in AssetDecimalPairs::get().iter() {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
 					if *asset_id == asset.id {
 						return if *decimal == 18 {
 							Some((asset.id.clone(), *amount).into())
@@ -672,7 +672,7 @@ impl sygma_bridge::Config for Runtime {
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
-	type DecimalConverter = SygmaDecimalConverter;
+	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
