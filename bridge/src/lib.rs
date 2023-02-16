@@ -832,7 +832,7 @@ pub mod pallet {
 			UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID,
 			ENDOWED_BALANCE,
 		};
-		use codec::Encode;
+		use codec::{self, Encode};
 		use frame_support::{
 			assert_noop, assert_ok, crypto::ecdsa::ECDSAExt,
 			traits::tokens::fungibles::Create as FungibleCerate,
@@ -2027,7 +2027,12 @@ pub mod pallet {
 				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
 
 				// Mint some usdc to ALICE for test
-				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 0, ALICE, ENDOWED_BALANCE,)); // make sure Alice owns enough funds here
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					ALICE,
+					ENDOWED_BALANCE,
+				)); // make sure Alice owns enough funds here
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
 
 				// deposit
@@ -2079,7 +2084,12 @@ pub mod pallet {
 				>>::create(AstrAssetId::get(), ASSET_OWNER, true, 1,));
 
 				// Mint some astr to ALICE for test
-				assert_ok!(Assets::mint(Origin::signed(ASSET_OWNER), 1, ALICE, ENDOWED_BALANCE,)); // make sure Alice owns enough funds here
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(1),
+					ALICE,
+					ENDOWED_BALANCE,
+				)); // make sure Alice owns enough funds here
 				assert_eq!(Assets::balance(AstrAssetId::get(), &ALICE), ENDOWED_BALANCE);
 
 				// deposit
@@ -2283,7 +2293,7 @@ pub mod pallet {
 				// testing
 				assert_ok!(Assets::mint(
 					Origin::signed(ASSET_OWNER),
-					1,
+					codec::Compact(1),
 					BridgeAccount::get(),
 					ENDOWED_BALANCE
 				));
