@@ -12,11 +12,10 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU32, PalletInfoAccess},
 	PalletId,
 };
-use sp_core::Get;
 use frame_system::{self as system, EnsureSigned};
 use funty::Fundamental;
 use polkadot_parachain::primitives::Sibling;
-use sp_core::hash::H256;
+use sp_core::{hash::H256, Get};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -347,8 +346,10 @@ impl ConcrateSygmaAsset {
 	}
 }
 
-pub struct SygmaDecimalConverter<DecimalPairs>;
-impl<DecimalPairs: Get<Vec<(AssetId, u8)>>>  DecimalConverter for SygmaDecimalConverter<DecimalPairs> {
+pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
+impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
+	for SygmaDecimalConverter<DecimalPairs>
+{
 	fn convert_to(asset: &MultiAsset) -> Option<u128> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {

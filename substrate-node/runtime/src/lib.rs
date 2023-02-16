@@ -563,8 +563,10 @@ impl ConcrateSygmaAsset {
 	}
 }
 
-pub struct SygmaDecimalConverter<DecimalPairs>;
-impl<DecimalPairs: Get<Vec<(AssetId, u8)>>> DecimalConverter for SygmaDecimalConverter<DecimalPairs> {
+pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
+impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
+	for SygmaDecimalConverter<DecimalPairs>
+{
 	fn convert_to(asset: &MultiAsset) -> Option<u128> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
