@@ -163,6 +163,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"register_domain".to_vec()),
 		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
+		(BridgePalletIndex::get(), b"retry".to_vec()),
 	].to_vec();
 }
 
