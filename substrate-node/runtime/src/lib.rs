@@ -355,6 +355,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"retry".to_vec()),
 	].to_vec();
 }
 
