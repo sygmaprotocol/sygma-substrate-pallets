@@ -140,8 +140,8 @@ pub mod pallet {
 			deposit_nonce: DepositNonce,
 		},
 		/// When user is going to retry a bridge transfer
-		/// args: [deposit_on_block_height, deposit_extrinsic_index, sender]
-		Retry { deposit_on_block_height: u128, deposit_extrinsic_index: u128, sender: T::AccountId },
+		/// args: [deposit_on_block_height, dest_domain_id, sender]
+		Retry { deposit_on_block_height: u128, dest_domain_id: DomainID, sender: T::AccountId },
 		/// When bridge is paused
 		/// args: [dest_domain_id]
 		BridgePaused { dest_domain_id: DomainID },
@@ -512,10 +512,23 @@ pub mod pallet {
 		pub fn retry(
 			origin: OriginFor<T>,
 			deposit_on_block_height: u128,
-			deposit_extrinsic_index: u128,
 			dest_domain_id: DomainID,
 		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
+			let mut sender: T::AccountId = [0u8; 32].into();
+			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
+				// Ensure bridge committee or the account that has permission to register the dest
+				// domain
+				let who = ensure_signed(origin)?;
+				ensure!(
+					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+						<T as Config>::PalletIndex::get(),
+						b"retry".to_vec(),
+						who.clone()
+					),
+					Error::<T>::AccessDenied
+				);
+				sender = who;
+			}
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
@@ -524,7 +537,7 @@ pub mod pallet {
 			// Emit retry event
 			Self::deposit_event(Event::<T>::Retry {
 				deposit_on_block_height,
-				deposit_extrinsic_index,
+				dest_domain_id,
 				sender,
 			});
 			Ok(())
@@ -1142,7 +1155,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1251,7 +1264,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1308,7 +1321,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1380,7 +1393,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1420,7 +1433,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1465,7 +1478,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1484,7 +1497,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1515,7 +1528,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -1528,14 +1541,23 @@ pub mod pallet {
 		#[test]
 		fn retry_bridge() {
 			new_test_ext().execute_with(|| {
+				// should be access denied SINCE Alice does not have permission to retry
+				assert_noop!(
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, DEST_DOMAIN_ID),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+
+				// Grant ALICE the access of `retry`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"retry".to_vec(),
+					ALICE
+				));
+
 				// mpc address is missing, should fail
 				assert_noop!(
-					SygmaBridge::retry(
-						Origin::signed(ALICE),
-						1234567u128,
-						1234u128,
-						DEST_DOMAIN_ID
-					),
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
 
@@ -1551,12 +1573,7 @@ pub mod pallet {
 				// pause bridge and retry, should fail
 				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), DEST_DOMAIN_ID));
 				assert_noop!(
-					SygmaBridge::retry(
-						Origin::signed(ALICE),
-						1234567u128,
-						1234u128,
-						DEST_DOMAIN_ID
-					),
+					SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, DEST_DOMAIN_ID),
 					bridge::Error::<Runtime>::BridgePaused
 				);
 
@@ -1565,15 +1582,10 @@ pub mod pallet {
 				assert!(!IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 
 				// retry again, should work
-				assert_ok!(SygmaBridge::retry(
-					Origin::signed(ALICE),
-					1234567u128,
-					1234u128,
-					DEST_DOMAIN_ID
-				));
+				assert_ok!(SygmaBridge::retry(Origin::signed(ALICE), 1234567u128, DEST_DOMAIN_ID));
 				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Retry {
 					deposit_on_block_height: 1234567u128,
-					deposit_extrinsic_index: 1234u128,
+					dest_domain_id: DEST_DOMAIN_ID,
 					sender: ALICE,
 				})]);
 			})
@@ -1620,7 +1632,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -1992,7 +2004,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -2045,7 +2057,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -2102,7 +2114,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),
@@ -2164,7 +2176,7 @@ pub mod pallet {
 									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
 										.unwrap()
 								),
-								GeneralIndex(1)
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
 							.into(),
@@ -2208,7 +2220,7 @@ pub mod pallet {
 							GeneralKey(
 								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
 							),
-							GeneralIndex(1)
+							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 						)
 					)
 						.into(),

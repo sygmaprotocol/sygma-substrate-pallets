@@ -11,7 +11,6 @@ use frame_support::{
 	PalletId,
 };
 use frame_system::{self as system, EnsureSigned};
-use funty::Fundamental;
 use polkadot_parachain::primitives::Sibling;
 use sp_core::{hash::H256, Get};
 use sp_runtime::{
@@ -165,6 +164,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"register_domain".to_vec()),
 		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
+		(BridgePalletIndex::get(), b"retry".to_vec()),
 	].to_vec();
 }
 
@@ -450,8 +450,14 @@ pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
 	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
-				Some((recipient.to_vec(), dest_domain_id.as_u8())),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(dest_domain_id))) => {
+				let d = u8::default();
+				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
+				if *domain_id == d {
+					return None
+				}
+				Some((recipient.to_vec(), *domain_id))
+			},
 			_ => None,
 		}
 	}
