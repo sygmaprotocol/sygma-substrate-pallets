@@ -585,7 +585,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 							if *decimal > 18 {
 								let a =
 									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
-								let b = U112F16::from_num(*amount).checked_div_int(a.to_num());
+								let b = U112F16::from_num(*amount).checked_div(a);
 								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
 								if r == 0 {
 									return None
@@ -636,7 +636,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 							} else {
 								let a =
 									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
-								let b = U112F16::from_num(*amount).checked_div_int(a.to_num());
+								let b = U112F16::from_num(*amount).checked_div(a);
 								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
 								if r == 0 {
 									return None
