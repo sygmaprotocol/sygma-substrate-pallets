@@ -9,6 +9,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use fixed::{types::extra::U16, FixedU128};
 use frame_support::{pallet_prelude::*, PalletId};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -31,7 +32,8 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DepositNonce, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
+	ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -411,17 +413,28 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
+	pub AstrAssetId: AssetId = 2001;
+	pub AstrLocation: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2005),
+			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"astr".to_vec().try_into().expect("less than length limit; qed")),
+		),
+	);
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
 	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
 	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
+	pub AstrResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000002");
 	// UsdcAssetId is the substrate assetID of USDC
 	pub UsdcAssetId: AssetId = 2000;
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
 	// SygmaBridgePalletId is the palletID
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -458,6 +471,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
 		if &UsdcLocation::get() == id.borrow() {
 			Ok(UsdcAssetId::get())
+		} else if &AstrLocation::get() == id.borrow() {
+			Ok(AstrAssetId::get())
 		} else {
 			Err(())
 		}
@@ -465,6 +480,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
 		if *what.borrow() == UsdcAssetId::get() {
 			Ok(UsdcLocation::get())
+		} else if *what.borrow() == AstrAssetId::get() {
+			Ok(AstrLocation::get())
 		} else {
 			Err(())
 		}
@@ -475,10 +492,12 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), Concrete(ref id)) =>
-				if id != &UsdcLocation::get() {
-					Err(ExecutionError::AssetNotFound)
-				} else {
+				if id == &UsdcLocation::get() {
 					Ok((UsdcAssetId::get(), *amount))
+				} else if id == &AstrLocation::get() {
+					Ok((AstrAssetId::get(), *amount))
+				} else {
+					Err(ExecutionError::AssetNotFound)
 				},
 			_ => Err(ExecutionError::AssetNotFound),
 		}
@@ -550,6 +569,90 @@ impl ConcrateSygmaAsset {
 	}
 }
 
+pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
+impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
+	for SygmaDecimalConverter<DecimalPairs>
+{
+	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some(*amount)
+						} else {
+							type U112F16 = FixedU128<U16>;
+							if *decimal > 18 {
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).checked_div(a);
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
+								}
+								Some(r)
+							} else {
+								// Max is 5192296858534827628530496329220095
+								// if source asset decimal is 12, the max amount sending to sygma
+								// relayer is 5192296858534827.628530496329
+								if *amount > U112F16::MAX {
+									return None
+								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								Some(b.to_num())
+							}
+						}
+					}
+				}
+				None
+			},
+			_ => None,
+		}
+	}
+
+	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some((asset.id.clone(), *amount).into())
+						} else {
+							type U112F16 = FixedU128<U16>;
+							if *decimal > 18 {
+								// Max is 5192296858534827628530496329220095
+								// if dest asset decimal is 24, the max amount coming from sygma
+								// relayer is 5192296858.534827628530496329
+								if *amount > U112F16::MAX {
+									return None
+								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								let r: u128 = b.to_num();
+								Some((asset.id.clone(), r).into())
+							} else {
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).checked_div(a);
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
+								}
+								Some((asset.id.clone(), r).into())
+							}
+						}
+					}
+				}
+				None
+			},
+			_ => None,
+		}
+	}
+}
+
 pub struct ReserveChecker;
 impl FilterAssetLocation for ReserveChecker {
 	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
@@ -594,6 +697,7 @@ impl sygma_bridge::Config for Runtime {
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
+	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
