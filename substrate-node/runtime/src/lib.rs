@@ -9,8 +9,8 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use fixed::{types::extra::U16, FixedU128};
 use frame_support::{pallet_prelude::*, PalletId};
-use funty::Fundamental;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -32,7 +32,8 @@ use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DepositNonce, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
+	ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -51,7 +52,9 @@ pub use frame_support::{
 		Randomness, StorageInfo,
 	},
 	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+		constants::{
+			BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND,
+		},
 		IdentityFee, Weight,
 	},
 	StorageValue,
@@ -158,9 +161,9 @@ parameter_types! {
 	/// We allow for 2 seconds of compute with a 6 second average block time.
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
-			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 			NORMAL_DISPATCH_RATIO,
-	);
+		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 	pub const SS58Prefix: u8 = 42;
@@ -320,6 +323,7 @@ impl pallet_assets::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
 	type AssetId = AssetId;
+	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -329,9 +333,13 @@ impl pallet_assets::Config for Runtime {
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = AssetsStringLimit;
+	type RemoveItemsLimit = ConstU32<1000>;
 	type Freezer = ();
 	type Extra = ();
-	type WeightInfo = ();
+	type CallbackHandle = ();
+	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
@@ -348,6 +356,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"retry".to_vec()),
 	].to_vec();
 }
 
@@ -404,17 +413,28 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
+	pub AstrAssetId: AssetId = 2001;
+	pub AstrLocation: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2005),
+			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"astr".to_vec().try_into().expect("less than length limit; qed")),
+		),
+	);
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
 	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
 	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
+	pub AstrResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000002");
 	// UsdcAssetId is the substrate assetID of USDC
 	pub UsdcAssetId: AssetId = 2000;
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
 	// SygmaBridgePalletId is the palletID
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -451,6 +471,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
 		if &UsdcLocation::get() == id.borrow() {
 			Ok(UsdcAssetId::get())
+		} else if &AstrLocation::get() == id.borrow() {
+			Ok(AstrAssetId::get())
 		} else {
 			Err(())
 		}
@@ -458,6 +480,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
 		if *what.borrow() == UsdcAssetId::get() {
 			Ok(UsdcLocation::get())
+		} else if *what.borrow() == AstrAssetId::get() {
+			Ok(AstrLocation::get())
 		} else {
 			Err(())
 		}
@@ -468,10 +492,12 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), Concrete(ref id)) =>
-				if id != &UsdcLocation::get() {
-					Err(ExecutionError::AssetNotFound)
-				} else {
+				if id == &UsdcLocation::get() {
 					Ok((UsdcAssetId::get(), *amount))
+				} else if id == &AstrLocation::get() {
+					Ok((AstrAssetId::get(), *amount))
+				} else {
+					Err(ExecutionError::AssetNotFound)
 				},
 			_ => Err(ExecutionError::AssetNotFound),
 		}
@@ -543,6 +569,90 @@ impl ConcrateSygmaAsset {
 	}
 }
 
+pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
+impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
+	for SygmaDecimalConverter<DecimalPairs>
+{
+	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some(*amount)
+						} else {
+							type U112F16 = FixedU128<U16>;
+							if *decimal > 18 {
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).checked_div(a);
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
+								}
+								Some(r)
+							} else {
+								// Max is 5192296858534827628530496329220095
+								// if source asset decimal is 12, the max amount sending to sygma
+								// relayer is 5192296858534827.628530496329
+								if *amount > U112F16::MAX {
+									return None
+								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								Some(b.to_num())
+							}
+						}
+					}
+				}
+				None
+			},
+			_ => None,
+		}
+	}
+
+	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some((asset.id.clone(), *amount).into())
+						} else {
+							type U112F16 = FixedU128<U16>;
+							if *decimal > 18 {
+								// Max is 5192296858534827628530496329220095
+								// if dest asset decimal is 24, the max amount coming from sygma
+								// relayer is 5192296858.534827628530496329
+								if *amount > U112F16::MAX {
+									return None
+								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								let r: u128 = b.to_num();
+								Some((asset.id.clone(), r).into())
+							} else {
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).checked_div(a);
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
+								}
+								Some((asset.id.clone(), r).into())
+							}
+						}
+					}
+				}
+				None
+			},
+			_ => None,
+		}
+	}
+}
+
 pub struct ReserveChecker;
 impl FilterAssetLocation for ReserveChecker {
 	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
@@ -560,8 +670,14 @@ pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
 	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
-				Some((recipient.to_vec(), dest_domain_id.as_u8())),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(dest_domain_id))) => {
+				let d = u8::default();
+				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
+				if *domain_id == d {
+					return None
+				}
+				Some((recipient.to_vec(), *domain_id))
+			},
 			_ => None,
 		}
 	}
@@ -581,6 +697,7 @@ impl sygma_bridge::Config for Runtime {
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
+	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -851,22 +968,23 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
-		fn on_runtime_upgrade() -> (Weight, Weight) {
+		fn on_runtime_upgrade(checks: frame_try_runtime::UpgradeCheckSelect) -> (Weight, Weight) {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
 			// right here and right now.
-			let weight = Executive::try_runtime_upgrade().unwrap();
+			let weight = Executive::try_runtime_upgrade(checks).unwrap();
 			(weight, BlockWeights::get().max_block)
 		}
 
 		fn execute_block(
 			block: Block,
 			state_root_check: bool,
+			signature_check: bool,
 			select: frame_try_runtime::TryStateSelect
 		) -> Weight {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
-			Executive::try_execute_block(block, state_root_check, select).expect("execute-block failed")
+			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
 		}
 	}
 }

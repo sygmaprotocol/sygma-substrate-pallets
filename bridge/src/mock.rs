@@ -4,15 +4,15 @@
 #![cfg(test)]
 
 use crate as sygma_bridge;
+use fixed::{types::extra::U16, FixedU128};
 use frame_support::{
 	parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, PalletInfoAccess},
 	PalletId,
 };
 use frame_system::{self as system, EnsureSigned};
-use funty::Fundamental;
 use polkadot_parachain::primitives::Sibling;
-use sp_core::hash::H256;
+use sp_core::{hash::H256, Get};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -20,7 +20,8 @@ use sp_runtime::{
 };
 use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 use sygma_traits::{
-	ChainID, DomainID, ExtractDestinationData, ResourceId, VerifyingContractAddress,
+	ChainID, DecimalConverter, DomainID, ExtractDestinationData, ResourceId,
+	VerifyingContractAddress,
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
@@ -124,6 +125,7 @@ impl pallet_assets::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
 	type AssetId = AssetId;
+	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId32>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -133,9 +135,13 @@ impl pallet_assets::Config for Runtime {
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = AssetsStringLimit;
+	type RemoveItemsLimit = ConstU32<1000>;
 	type Freezer = ();
 	type Extra = ();
-	type WeightInfo = ();
+	type CallbackHandle = ();
+	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -158,6 +164,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"register_domain".to_vec()),
 		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
+		(BridgePalletIndex::get(), b"retry".to_vec()),
 	].to_vec();
 }
 
@@ -193,9 +200,20 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
+	pub AstrAssetId: AssetId = 1;
+	pub AstrLocation: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2005),
+			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"astr".to_vec().try_into().expect("less than length limit; qed")),
+		),
+	);
 	pub NativeResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get())];
+	pub AstrResourceId: ResourceId = hex_literal::hex!("4e071db61a2fb903df487c401663825643ba158d9b0ce73e1437163825643bba");
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
@@ -233,6 +251,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
 		if &UsdcLocation::get() == id.borrow() {
 			Ok(UsdcAssetId::get())
+		} else if &AstrLocation::get() == id.borrow() {
+			Ok(AstrAssetId::get())
 		} else {
 			Err(())
 		}
@@ -240,6 +260,8 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
 		if *what.borrow() == UsdcAssetId::get() {
 			Ok(UsdcLocation::get())
+		} else if *what.borrow() == AstrAssetId::get() {
+			Ok(AstrLocation::get())
 		} else {
 			Err(())
 		}
@@ -250,10 +272,12 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), Concrete(ref id)) =>
-				if id != &UsdcLocation::get() {
-					Err(ExecutionError::AssetNotFound)
-				} else {
+				if id == &UsdcLocation::get() {
 					Ok((UsdcAssetId::get(), *amount))
+				} else if id == &AstrLocation::get() {
+					Ok((AstrAssetId::get(), *amount))
+				} else {
+					Err(ExecutionError::AssetNotFound)
 				},
 			_ => Err(ExecutionError::AssetNotFound),
 		}
@@ -325,6 +349,90 @@ impl ConcrateSygmaAsset {
 	}
 }
 
+pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
+impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
+	for SygmaDecimalConverter<DecimalPairs>
+{
+	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some(*amount)
+						} else {
+							type U112F16 = FixedU128<U16>;
+							if *decimal > 18 {
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).checked_div(a);
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
+								}
+								Some(r)
+							} else {
+								// Max is 5192296858534827628530496329220095
+								// if source asset decimal is 12, the max amount sending to sygma
+								// relayer is 5192296858534827.628530496329
+								if *amount > U112F16::MAX {
+									return None
+								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								Some(b.to_num())
+							}
+						}
+					}
+				}
+				None
+			},
+			_ => None,
+		}
+	}
+
+	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+		match (&asset.fun, &asset.id) {
+			(Fungible(amount), _) => {
+				for (asset_id, decimal) in DecimalPairs::get().iter() {
+					if *asset_id == asset.id {
+						return if *decimal == 18 {
+							Some((asset.id.clone(), *amount).into())
+						} else {
+							type U112F16 = FixedU128<U16>;
+							if *decimal > 18 {
+								// Max is 5192296858534827628530496329220095
+								// if dest asset decimal is 24, the max amount coming from sygma
+								// relayer is 5192296858.534827628530496329
+								if *amount > U112F16::MAX {
+									return None
+								}
+								let a =
+									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
+								let b = U112F16::from_num(*amount).saturating_mul(a);
+								let r: u128 = b.to_num();
+								Some((asset.id.clone(), r).into())
+							} else {
+								let a =
+									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
+								let b = U112F16::from_num(*amount).checked_div(a);
+								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
+								if r == 0 {
+									return None
+								}
+								Some((asset.id.clone(), r).into())
+							}
+						}
+					}
+				}
+				None
+			},
+			_ => None,
+		}
+	}
+}
+
 pub struct ReserveChecker;
 impl FilterAssetLocation for ReserveChecker {
 	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
@@ -342,8 +450,14 @@ pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
 	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralIndex(dest_domain_id))) =>
-				Some((recipient.to_vec(), dest_domain_id.as_u8())),
+			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(dest_domain_id))) => {
+				let d = u8::default();
+				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
+				if *domain_id == d {
+					return None
+				}
+				Some((recipient.to_vec(), *domain_id))
+			},
 			_ => None,
 		}
 	}
@@ -363,12 +477,13 @@ impl sygma_bridge::Config for Runtime {
 	type ExtractDestData = DestinationDataParser;
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
+	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const ASSET_OWNER: AccountId32 = AccountId32::new([1u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
-pub const ENDOWED_BALANCE: Balance = 100_000_000;
+pub const ENDOWED_BALANCE: Balance = 1_000_000_000_000_000_000_000_000_000;
 pub const DEST_DOMAIN_ID: DomainID = 1;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
