@@ -3,15 +3,16 @@ require('dotenv').config();
 const {ApiPromise, WsProvider, Keyring} = require('@polkadot/api');
 const {cryptoWaitReady} = require('@polkadot/util-crypto');
 
+// this is the dummy proposal that used to verify if proposal execution works on pallet
 const proposal = {
     origin_domain_id: 1,
-    deposit_nonce: 0,
-    resource_id: new Uint8Array([0, 177, 78, 7, 29, 218, 208, 177, 43, 229, 172, 166, 223, 252, 95, 37, 132, 234, 21, 141, 155, 12, 231, 62, 20, 55, 17, 94, 151, 163, 42, 62]),
-    data: new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 24, 78, 114, 160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    deposit_nonce: 2,
+    resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0],
+    data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125]
 }
-// signer should be the same MPC address as setup.js
-// 0xe51258e9a4ea837e53f4898c64c417c6c4800aa8
-const signature = [113, 25, 147, 244, 240, 122, 231, 247, 95, 241, 104, 112, 28, 225, 244, 217, 171, 141, 254, 135, 243, 85, 50, 72, 198, 247, 246, 149, 33, 219, 61, 223, 119, 97, 41, 158, 15, 77, 58, 97, 196, 44, 109, 202, 115, 8, 21, 15, 85, 139, 70, 128, 227, 250, 101, 143, 229, 180, 128, 31, 209, 47, 109, 12, 1];
+// signer is the mpc address 0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4
+const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+const mpcAddress = "0x1c5541a79acc662ab2d2647f3b141a3b7cdb2ae4";
 
 async function executeProposal(api, proposalList, signature, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
@@ -52,6 +53,11 @@ async function queryAssetBalance(api, assetID, account) {
     return result.toHuman()
 }
 
+async function queryMPCAddress(api) {
+    let result = await api.query.sygmaBridge.mpcAddr();
+    return result.toJSON()
+}
+
 async function main() {
     const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9944');
     const api = await ApiPromise.create({
@@ -62,13 +68,26 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
 
-    const balanceBefore = await queryAssetBalance(api,2000, sudo.address)
+    // make sure mpc address matches
+    const registeredMpcAddr = await queryMPCAddress(api);
+    if (registeredMpcAddr !== mpcAddress) {
+        console.error("mpc address not match");
+        return
+    }
+
+    console.log(`Alice address ${sudo.address}`)
+
+    const balanceBefore = await queryAssetBalance(api, 2000, sudo.address);
     console.log('asset balance before: ', balanceBefore.balance);
-
-    await executeProposal(api, [proposal], signature.buffer, true, sudo);
-
-    const balanceAfter = await queryAssetBalance(api,2000, sudo.address)
+    await executeProposal(api, [proposal], signature, true, sudo);
+    const balanceAfter = await queryAssetBalance(api, 2000, sudo.address);
     console.log('asset balance after: ', balanceAfter.balance);
+
+    if (balanceAfter.balance !== balanceBefore.balance) {
+        console.log('proposal execution test is passing✅');
+        return
+    }
+    console.error('proposal execution test failed❌')
 }
 
 main().catch(console.error).finally(() => process.exit());

@@ -351,8 +351,7 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
     const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
-    // const mpcAddr = process.env.MPCADDR || '0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4';
-    const mpcAddr = process.env.MPCADDR || '0xe51258e9a4ea837e53f4898c64c417c6c4800aa8';
+    const mpcAddr = process.env.MPCADDR || '0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4';
 
     // set up MPC address
     await setMpcAddress(api, mpcAddr, true, sudo);
