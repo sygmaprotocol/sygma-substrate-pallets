@@ -2344,7 +2344,7 @@ pub mod pallet {
 
 				// extreme small amount edge case
 				let extreme_small_bridge_amount = 100_000; // 0.000000000000100000 native asset with 18 decimals
-				// proposal for bridging native asset to alice(native asset is 12 decimal)
+										   // proposal for bridging native asset to alice(native asset is 12 decimal)
 				let p_native_extreme = Proposal {
 					origin_domain_id: 1,
 					resource_id: NativeResourceId::get(),
