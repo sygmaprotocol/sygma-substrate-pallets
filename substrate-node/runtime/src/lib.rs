@@ -434,7 +434,7 @@ parameter_types! {
 	// SygmaBridgePalletId is the palletID
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
-	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 12u8), (AstrLocation::get().into(), 24u8)];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
