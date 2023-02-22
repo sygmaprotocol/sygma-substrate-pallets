@@ -13,6 +13,7 @@ const proposal = {
 // signer is the mpc address 0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4
 const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
 const mpcAddress = "0x1c5541a79acc662ab2d2647f3b141a3b7cdb2ae4";
+const aliceAddress = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
 
 async function executeProposal(api, proposalList, signature, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
@@ -59,6 +60,10 @@ async function queryMPCAddress(api) {
 }
 
 async function main() {
+    const [assetID] = process.argv.slice(2);
+    if (!assetID) {
+        console.log("assetID is not provided, using default assetID 2000")
+    }
     const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9944');
     const api = await ApiPromise.create({
         provider: sygmaPalletProvider,
@@ -75,12 +80,12 @@ async function main() {
         return
     }
 
-    console.log(`Alice address ${sudo.address}`)
+    console.log(`sudo address ${sudo.address}`)
 
-    const balanceBefore = await queryAssetBalance(api, 2000, sudo.address);
+    const balanceBefore = await queryAssetBalance(api, assetID || 2000, aliceAddress);
     console.log('asset balance before: ', balanceBefore.balance);
     await executeProposal(api, [proposal], signature, true, sudo);
-    const balanceAfter = await queryAssetBalance(api, 2000, sudo.address);
+    const balanceAfter = await queryAssetBalance(api, assetID || 2000, aliceAddress);
     console.log('asset balance after: ', balanceAfter.balance);
 
     if (balanceAfter.balance !== balanceBefore.balance) {
