@@ -2,63 +2,36 @@ require('dotenv').config();
 
 const {ApiPromise, WsProvider, Keyring} = require('@polkadot/api');
 const {cryptoWaitReady} = require('@polkadot/util-crypto');
+const {
+    executeProposal,
+    queryAssetBalance,
+    queryBalance,
+    queryMPCAddress
+} = require("./util");
 
-// this is the dummy proposal that used to verify if proposal execution works on pallet
-const proposal = {
+// these are the dummy proposals that used to verify if proposal execution works on pallet
+// bridge amount from relayer  is 100000000000000
+const proposal_usdc = {
     origin_domain_id: 1,
     deposit_nonce: 2,
     resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0],
     data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125]
 }
+const proposal_native = {
+    origin_domain_id: 1,
+    deposit_nonce: 3,
+    resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125]
+}
+
 // signer is the mpc address 0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4
-const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+const signature_usdc = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+const signature_native = [57, 218, 225, 125, 128, 217, 23, 82, 49, 217, 8, 197, 110, 174, 42, 157, 129, 43, 22, 63, 215, 213, 100, 179, 17, 170, 23, 95, 72, 80, 78, 181, 108, 176, 60, 138, 137, 29, 157, 138, 244, 0, 5, 180, 128, 243, 48, 99, 175, 53, 140, 245, 162, 111, 36, 65, 89, 208, 41, 69, 209, 149, 247, 149, 28];
+
 const mpcAddress = "0x1c5541a79acc662ab2d2647f3b141a3b7cdb2ae4";
 const aliceAddress = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
 
-async function executeProposal(api, proposalList, signature, finalization, sudo) {
-    return new Promise(async (resolve, reject) => {
-        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
-
-        console.log(
-            `--- Submitting extrinsic to execute dummy proposal for testing : (nonce: ${nonce}) ---`
-        );
-        const unsub = await api.tx.sygmaBridge.executeProposal(proposalList, signature)
-            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
-                console.log(`Current status is ${result.status}`);
-                if (result.status.isInBlock) {
-                    console.log(
-                        `Transaction included at blockHash ${result.status.asInBlock}`
-                    );
-                    if (finalization) {
-                        console.log('Waiting for finalization...');
-                    } else {
-                        unsub();
-                        resolve();
-                    }
-                } else if (result.status.isFinalized) {
-                    console.log(
-                        `Transaction finalized at blockHash ${result.status.asFinalized}`
-                    );
-                    unsub();
-                    resolve();
-                } else if (result.isError) {
-                    console.log(`Transaction Error`);
-                    reject(`Transaction Error`);
-                }
-            });
-    });
-}
-
-async function queryAssetBalance(api, assetID, account) {
-    let result = await api.query.assets.account(assetID, account);
-    return result.toHuman()
-}
-
-async function queryMPCAddress(api) {
-    let result = await api.query.sygmaBridge.mpcAddr();
-    return result.toJSON()
-}
-
+// this script take one param as the USDC assetID, default is 2000 if not provided
 async function main() {
     const [assetID] = process.argv.slice(2);
     if (!assetID) {
@@ -76,23 +49,39 @@ async function main() {
     // make sure mpc address matches
     const registeredMpcAddr = await queryMPCAddress(api);
     if (registeredMpcAddr !== mpcAddress) {
-        console.error("mpc address not match");
-        return
+        throw Error("mpc address not match")
     }
 
     console.log(`sudo address ${sudo.address}`)
 
-    const balanceBefore = await queryAssetBalance(api, assetID || 2000, aliceAddress);
-    console.log('asset balance before: ', balanceBefore.balance);
-    await executeProposal(api, [proposal], signature, true, sudo);
-    const balanceAfter = await queryAssetBalance(api, assetID || 2000, aliceAddress);
-    console.log('asset balance after: ', balanceAfter.balance);
+    // USDC
+    const usdcBalanceBefore = await queryAssetBalance(api, assetID || 2000, aliceAddress);
+    console.log('usdc asset balance before: ', usdcBalanceBefore.balance);
+    await executeProposal(api, [proposal_usdc], signature_usdc, true, sudo);
+    const usdcbalanceAfter = await queryAssetBalance(api, assetID || 2000, aliceAddress);
+    console.log('usdc asset balance after: ', usdcbalanceAfter.balance);
 
-    if (balanceAfter.balance !== balanceBefore.balance) {
-        console.log('proposal execution test is passing✅');
-        return
+    if (usdcbalanceAfter.balance === usdcBalanceBefore.balance) {
+        throw Error('proposal execution test failed(proposal of USDC)')
     }
-    console.error('proposal execution test failed❌')
+
+    // Native asset
+    const nativeBalanceBefore = await queryBalance(api, aliceAddress);
+    console.log('native asset balance before: ', nativeBalanceBefore.data.free);
+    await executeProposal(api, [proposal_native], signature_native, true, sudo);
+    const nativeBalanceAfter = await queryBalance(api, aliceAddress);
+    console.log('native asset balance after: ', nativeBalanceAfter.data.free);
+
+    const fee = BigInt(293974317);
+    const amount = BigInt(100000000);
+    const before_num = BigInt(nativeBalanceBefore.data.free.replaceAll(',', ''));
+    const after_num = BigInt(nativeBalanceAfter.data.free.replaceAll(',', ''));
+
+    if (after_num !== before_num + amount - fee) {
+        throw Error('proposal execution test failed(proposal of Native asset)')
+    }
+
+    console.log('proposal execution test pass✅');
 }
 
 main().catch(console.error).finally(() => process.exit());
