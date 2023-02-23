@@ -67,7 +67,7 @@ async function setFeeHandler(api, domainID, asset, feeHandlerType, finalization,
             `--- Submitting extrinsic to set fee handler on domainID ${domainID}. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
-            .sudo(api.tx.feeHandlerRouter.setFeeHandler(domainID, asset, feeHandlerType))
+            .sudo(api.tx.sygmaFeeHandlerRouter.setFeeHandler(domainID, asset, feeHandlerType))
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
