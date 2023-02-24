@@ -35,6 +35,8 @@ const supportedDestDomains = [
     }
 ]
 
+// those account are configured in the substrate-node runtime, and are only applicable for sygma pallet standalone node,
+// other parachain might have different runtime config so those account address need to be adjusted accordingly
 const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
 const TransferReserveAccount = "5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw";
 

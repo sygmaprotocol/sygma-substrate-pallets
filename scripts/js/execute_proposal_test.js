@@ -72,6 +72,8 @@ async function main() {
     const nativeBalanceAfter = await queryBalance(api, aliceAddress);
     console.log('native asset balance after: ', nativeBalanceAfter.data.free);
 
+    // this fee is proposal execution fee for sygma pallet standalone node with hardcoded dummy proposal
+    // its value might be different when running on other parachain, so need to be adjusted accordingly
     const fee = BigInt(293974317);
     const amount = BigInt(100000000);
     const before_num = BigInt(nativeBalanceBefore.data.free.replaceAll(',', ''));
