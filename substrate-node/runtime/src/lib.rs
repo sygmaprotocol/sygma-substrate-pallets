@@ -690,7 +690,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeReserveAccount = TreasuryAccount;
 	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
-	type FeeHandler = FeeHandlerRouter;
+	type FeeHandler = SygmaFeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type IsReserve = ReserveChecker;
@@ -717,10 +717,10 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>} = 8,
-		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
+		SygmaAccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
-		FeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
+		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
 	}
 );
 
