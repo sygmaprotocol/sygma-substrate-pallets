@@ -8,6 +8,6 @@ CHAINSPECFILE="chain-spec.json"
 echo "cleanup..."
 rm -rf "$NODE_DB_DIR"
 rm -f $CHAINSPECFILE
-rm -f subsrate_node_log
+rm -f subsrate_node.log
 
 echo "done"

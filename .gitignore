@@ -5,8 +5,9 @@
 
 /target
 /db
-subsrate_node_log
+*.log
 chain-spec.json
+/scripts/phala-subbridge/code
 
 .idea
 
