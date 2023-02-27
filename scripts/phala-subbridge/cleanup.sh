@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: LGPL-3.0-only
 
 echo "cleanup..."
-rm -f ./scripts/phala-subbridge/code
+rm -rf ./scripts/phala-subbridge/code
 rm -f subbridge_node_launching.log
 
 echo "done"
