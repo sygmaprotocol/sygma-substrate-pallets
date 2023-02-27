@@ -16,10 +16,6 @@ node $SETUP_SCRIPTS_DIR/setup_sygma.js
 
 sleep 10
 
-# Run chain snapshot after setup
-echo "set up is done, now export the chain state..."
-#./target/release/node-template export-state > $CHAINSPECFILE
-
 # Stop the nodes
 echo "stopping the dev nodes..."
 nPid=`pgrep -f "polkadot"`

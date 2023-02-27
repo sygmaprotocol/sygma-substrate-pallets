@@ -1,0 +1,45 @@
+# The Licensed Work is (c) 2022 Sygma
+# SPDX-License-Identifier: LGPL-3.0-only
+
+FROM paritytech/ci-linux:production as builder
+
+WORKDIR /launch-base
+COPY ./scripts/phala-subbridge/code/khala-parachain/polkadot-launch/ ./polkadot-launch/
+# make sure there is no previously built binary
+RUN rm ./polkadot-launch/bin/polkadot
+RUN rm ./polkadot-launch/bin/khala-node
+
+# build polkadot relay chain
+WORKDIR /code
+RUN git clone https://github.com/paritytech/polkadot.git ./polkadot
+RUN git clone https://github.com/Phala-Network/khala-parachain.git ./khala-parachain
+
+WORKDIR /code/polkadot
+RUN git checkout release-v0.9.37
+RUN cargo build --release
+RUN cp ./target/release/polkadot /launch-base/polkadot-launch/bin/
+
+# build khala-parachain
+WORKDIR /code/khala-parachain
+RUN git checkout sygma-integration
+RUN cargo build --release --features=all-runtimes
+RUN cp ./target/release/khala-node /launch-base/polkadot-launch/bin/
+
+FROM node:18.14.2
+WORKDIR /node
+
+# Copy the node binary.
+COPY --from=builder /launch-base/polkadot-launch .
+
+WORKDIR /node/polkadot-launch
+
+# yarn install
+RUN yarn
+
+# JSON-RPC WS server
+EXPOSE 9944
+# JSON-RPC HTTP server
+EXPOSE 9933
+
+ENTRYPOINT ["yarn", "start", "khala-e2e.config.json"]
+
