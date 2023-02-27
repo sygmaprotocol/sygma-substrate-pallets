@@ -1,20 +1,19 @@
 # The Licensed Work is (c) 2022 Sygma
 # SPDX-License-Identifier: LGPL-3.0-only
 
-name: Build and publish E2E Docker image
+name: Build and publish Subbridge E2E Docker image
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  push_e2e_to_registry:
-    name: Push E2E Docker image to GitHub Container Registry
+  push_subbridge_e2e_to_registry:
+    name: Push Phala subbridge integrated E2E Docker image to GitHub Container Registry
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -32,7 +31,7 @@ jobs:
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
 
           # creates local variable to hold docker images
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-latest"
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:subbridge_e2e-latest"
 
           # check if branch/tag that triggered workflow was from tags
           if [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -49,7 +48,7 @@ jobs:
           echo ::set-output name=tags::${TAGS}
 
       - name: Run build and setups
-        run: make setup-e2e-test
+        run: make setup-subbridge-e2e-test
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -70,7 +69,7 @@ jobs:
         with:
           context: .
           push: true
-          file: ./Dockerfile_e2e
+          file: ./Dockerfile_subbridge_e2e
           tags: ${{ steps.prep.outputs.tags }}
 
       - name: Image digest
