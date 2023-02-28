@@ -5,10 +5,10 @@ name: Compile check
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
     paths-ignore:
       - '*.md'
       - 'scripts/**'
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - main
