@@ -6,7 +6,7 @@ name: Compile check
 on:
   pull_request:
     paths-ignore:
-      - '*.md'
+      - '**.md'
       - 'scripts/**'
     types: [opened, synchronize, reopened]
   push:
