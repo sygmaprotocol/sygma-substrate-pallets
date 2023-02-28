@@ -196,8 +196,6 @@ pub mod pallet {
 		DecimalConversionFail,
 		/// Function unimplemented
 		Unimplemented,
-		/// Invalid parameter passed by user
-		BadParameter,
 	}
 
 	/// Deposit counter of dest domain
@@ -427,8 +425,6 @@ pub mod pallet {
 			dest: Box<MultiLocation>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let asset: MultiAsset = (*asset).try_into().map_err(|_| Error::<T>::BadParameter)?;
-			let dest: MultiLocation = (*dest).try_into().map_err(|_| Error::<T>::BadParameter)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
@@ -553,13 +549,9 @@ pub mod pallet {
 		#[pallet::call_index(7)]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
-			proposals: Box<Vec<Proposal>>,
-			signature: Box<Vec<u8>>,
+			proposals: Vec<Proposal>,
+			signature: Vec<u8>,
 		) -> DispatchResult {
-			let proposals: Vec<Proposal> =
-				proposals.to_vec().try_into().map_err(|_| Error::<T>::BadParameter)?;
-			let signature: Vec<u8> = signature.to_vec();
-
 			// Check MPC address and bridge status
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
@@ -1623,11 +1615,7 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc address is missing, should fail
 				assert_noop!(
-					SygmaBridge::execute_proposal(
-						Origin::signed(ALICE),
-						Box::new(vec![]),
-						Box::new(vec![])
-					),
+					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
 					bridge::Error::<Runtime>::MissingMpcAddress,
 				);
 				// set mpc address to generated keypair's address
@@ -1757,8 +1745,8 @@ pub mod pallet {
 				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					Box::new(proposals.clone()),
-					Box::new(proposals_with_valid_signature.encode())
+					proposals.clone(),
+					proposals_with_valid_signature.encode()
 				));
 				// should emit FailedHandlerExecution event
 				assert_events(vec![RuntimeEvent::SygmaBridge(
@@ -1773,8 +1761,8 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::execute_proposal(
 						Origin::signed(ALICE),
-						Box::new(proposals.clone()),
-						Box::new(proposals_with_bad_signature.encode()),
+						proposals.clone(),
+						proposals_with_bad_signature.encode(),
 					),
 					bridge::Error::<Runtime>::BadMpcSignature,
 				);
@@ -1786,8 +1774,8 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					Box::new(proposals),
-					Box::new(proposals_with_valid_signature.encode()),
+					proposals,
+					proposals_with_valid_signature.encode(),
 				));
 				// proposal amount is in 18 decimal 0.000200000000000000, will be convert to 12
 				// decimal 0.000200000000(200000000) because native asset is defined in 12 decimal
@@ -2306,8 +2294,8 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE / 2);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					Box::new(proposals),
-					Box::new(signature.encode())
+					proposals,
+					signature.encode()
 				));
 				// check Alice balance of native asset after executing, should have half of the init
 				// native asset + 100_000_000_000_000(12 decimal)
@@ -2341,8 +2329,8 @@ pub mod pallet {
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), 0);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					Box::new(proposals_usdc),
-					Box::new(signature_usdc.encode())
+					proposals_usdc,
+					signature_usdc.encode()
 				));
 				// alice should have 100 usdc at this moment (100 usdc with 18 decimals)
 				assert_eq!(
@@ -2387,8 +2375,8 @@ pub mod pallet {
 				assert_eq!(Assets::balance(AstrAssetId::get(), &ALICE), 0);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					Box::new(proposals_astr),
-					Box::new(signature_astr.encode())
+					proposals_astr,
+					signature_astr.encode()
 				));
 				// alice should have 100 astr at this moment (100 astr with 24 decimals)
 				assert_eq!(
@@ -2419,8 +2407,8 @@ pub mod pallet {
 				// would be 0.000000000000 which is 0
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					Box::new(proposals_extreme),
-					Box::new(signature_extreme.encode())
+					proposals_extreme,
+					signature_extreme.encode()
 				));
 				// should emit FailedHandlerExecution event
 				assert_events(vec![RuntimeEvent::SygmaBridge(
