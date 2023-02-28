@@ -156,3 +156,4 @@ The substrate reference table for this `encoding/decoding` rules can be found [h
 
 There are other language lib that has implemented SCALE codec can be used when interacting with substrate node which can also be found in the link above.
 
+
