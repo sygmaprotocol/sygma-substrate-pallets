@@ -1,4 +1,14 @@
 {
 	"plugins": ["cargo-workspace"],
-	"release-type": "rust"
+	"release-type": "rust",
+	"packages": {
+		"access-segregator": {},
+		"basic-fee-handler": {},
+		"bridge": {},
+		"dynamic-fee-handler": {},
+		"fee-handler-router": {},
+		"rpc": {},
+		"runtime-api": {},
+		"traits": {}
+	}
 }
