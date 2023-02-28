@@ -33,7 +33,7 @@ pub mod pallet {
 		traits::{AccountIdConversion, Clear},
 		RuntimeDebug,
 	};
-	use sp_std::{convert::From, vec, vec::Vec};
+	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::{FilterAssetLocation, TransactAsset};
 
@@ -196,6 +196,8 @@ pub mod pallet {
 		DecimalConversionFail,
 		/// Function unimplemented
 		Unimplemented,
+		/// Invalid parameter passed by user
+		BadParameter,
 	}
 
 	/// Deposit counter of dest domain
@@ -421,10 +423,12 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		pub fn deposit(
 			origin: OriginFor<T>,
-			asset: MultiAsset,
-			dest: MultiLocation,
+			asset: Box<MultiAsset>,
+			dest: Box<MultiLocation>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			let asset: MultiAsset = (*asset).try_into().map_err(|_| Error::<T>::BadParameter)?;
+			let dest: MultiLocation = (*dest).try_into().map_err(|_| Error::<T>::BadParameter)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
@@ -549,9 +553,13 @@ pub mod pallet {
 		#[pallet::call_index(7)]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
-			proposals: Vec<Proposal>,
-			signature: Vec<u8>,
+			proposals: Box<Vec<Proposal>>,
+			signature: Box<Vec<u8>>,
 		) -> DispatchResult {
+			let proposals: Vec<Proposal> =
+				proposals.to_vec().try_into().map_err(|_| Error::<T>::BadParameter)?;
+			let signature: Vec<u8> = signature.to_vec();
+
 			// Check MPC address and bridge status
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
@@ -853,7 +861,7 @@ pub mod pallet {
 		use primitive_types::U256;
 		use sp_core::{ecdsa, Pair};
 		use sp_runtime::WeakBoundedVec;
-		use sp_std::{convert::TryFrom, vec};
+		use sp_std::{boxed::Box, convert::TryFrom, vec};
 		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
 
@@ -1148,17 +1156,20 @@ pub mod pallet {
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
@@ -1257,17 +1268,20 @@ pub mod pallet {
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(UsdcLocation::get()), Fungible(amount)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new((Concrete(UsdcLocation::get()), Fungible(amount)).into()),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 				// Check balances
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE - amount);
@@ -1313,18 +1327,20 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(unbounded_asset_location), Fungible(amount)).into(),
-						(
-							0,
-							X2(
-								GeneralKey(
-									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-										.unwrap()
-								),
-								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+						Box::new((Concrete(unbounded_asset_location), Fungible(amount)).into()),
+						Box::new(
+							(
+								0,
+								X2(
+									GeneralKey(
+										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+											.unwrap()
+									),
+									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+								)
 							)
-						)
-							.into(),
+								.into()
+						),
 					),
 					bridge::Error::<Runtime>::AssetNotBound
 				);
@@ -1363,8 +1379,8 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-						invalid_dest,
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(invalid_dest),
 					),
 					bridge::Error::<Runtime>::ExtractDestDataFailed
 				);
@@ -1385,18 +1401,20 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-						(
-							0,
-							X2(
-								GeneralKey(
-									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-										.unwrap()
-								),
-								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(
+							(
+								0,
+								X2(
+									GeneralKey(
+										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+											.unwrap()
+									),
+									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+								)
 							)
-						)
-							.into(),
+								.into()
+						),
 					),
 					bridge::Error::<Runtime>::MissingFeeConfig
 				);
@@ -1425,18 +1443,20 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-						(
-							0,
-							X2(
-								GeneralKey(
-									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-										.unwrap()
-								),
-								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(
+							(
+								0,
+								X2(
+									GeneralKey(
+										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+											.unwrap()
+									),
+									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+								)
 							)
-						)
-							.into(),
+								.into()
+						),
 					),
 					bridge::Error::<Runtime>::FeeTooExpensive
 				);
@@ -1470,7 +1490,30 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(
+							(
+								0,
+								X2(
+									GeneralKey(
+										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+											.unwrap()
+									),
+									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+								)
+							)
+								.into()
+						),
+					),
+					bridge::Error::<Runtime>::BridgePaused
+				);
+				// Unpause bridge
+				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
+				// Should success
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(
 						(
 							0,
 							X2(
@@ -1481,26 +1524,8 @@ pub mod pallet {
 								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
 							)
 						)
-							.into(),
+							.into()
 					),
-					bridge::Error::<Runtime>::BridgePaused
-				);
-				// Unpause bridge
-				assert_ok!(SygmaBridge::unpause_bridge(Origin::root(), DEST_DOMAIN_ID));
-				// Should success
-				assert_ok!(SygmaBridge::deposit(
-					Origin::signed(ALICE),
-					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
-						)
-					)
-						.into(),
 				));
 			})
 		}
@@ -1520,18 +1545,20 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-						(
-							0,
-							X2(
-								GeneralKey(
-									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-										.unwrap()
-								),
-								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(
+							(
+								0,
+								X2(
+									GeneralKey(
+										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+											.unwrap()
+									),
+									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+								)
 							)
-						)
-							.into(),
+								.into()
+						),
 					),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
@@ -1596,7 +1623,11 @@ pub mod pallet {
 			new_test_ext().execute_with(|| {
 				// mpc address is missing, should fail
 				assert_noop!(
-					SygmaBridge::execute_proposal(Origin::signed(ALICE), vec![], vec![]),
+					SygmaBridge::execute_proposal(
+						Origin::signed(ALICE),
+						Box::new(vec![]),
+						Box::new(vec![])
+					),
 					bridge::Error::<Runtime>::MissingMpcAddress,
 				);
 				// set mpc address to generated keypair's address
@@ -1625,17 +1656,20 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(NativeLocation::get()), Fungible(amount)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 
 				// Register foreign asset (USDC) with asset id 0
@@ -1723,8 +1757,8 @@ pub mod pallet {
 				assert!(IsPaused::<Runtime>::get(DEST_DOMAIN_ID));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals.clone(),
-					proposals_with_valid_signature.encode()
+					Box::new(proposals.clone()),
+					Box::new(proposals_with_valid_signature.encode())
 				));
 				// should emit FailedHandlerExecution event
 				assert_events(vec![RuntimeEvent::SygmaBridge(
@@ -1739,8 +1773,8 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::execute_proposal(
 						Origin::signed(ALICE),
-						proposals.clone(),
-						proposals_with_bad_signature.encode(),
+						Box::new(proposals.clone()),
+						Box::new(proposals_with_bad_signature.encode()),
 					),
 					bridge::Error::<Runtime>::BadMpcSignature,
 				);
@@ -1752,8 +1786,8 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals,
-					proposals_with_valid_signature.encode(),
+					Box::new(proposals),
+					Box::new(proposals_with_valid_signature.encode()),
 				));
 				// proposal amount is in 18 decimal 0.000200000000000000, will be convert to 12
 				// decimal 0.000200000000(200000000) because native asset is defined in 12 decimal
@@ -1997,17 +2031,22 @@ pub mod pallet {
 				// deposit native asset which has 12 decimal
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(NativeLocation::get()), Fungible(amount_native_asset)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new(
+						(Concrete(NativeLocation::get()), Fungible(amount_native_asset)).into()
+					),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount_native_asset);
@@ -2050,17 +2089,20 @@ pub mod pallet {
 				// deposit
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(UsdcLocation::get()), Fungible(amount_usdc_asset)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new((Concrete(UsdcLocation::get()), Fungible(amount_usdc_asset)).into()),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 				// Check balances
 				assert_eq!(
@@ -2107,17 +2149,20 @@ pub mod pallet {
 				// deposit
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(AstrLocation::get()), Fungible(amount_astr_asset)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new((Concrete(AstrLocation::get()), Fungible(amount_astr_asset)).into()),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 				// Check balances
 				assert_eq!(
@@ -2164,22 +2209,26 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						(
-							Concrete(AstrLocation::get()),
-							Fungible(amount_astr_asset_extreme_small_amount)
-						)
-							.into(),
-						(
-							0,
-							X2(
-								GeneralKey(
-									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-										.unwrap()
-								),
-								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+						Box::new(
+							(
+								Concrete(AstrLocation::get()),
+								Fungible(amount_astr_asset_extreme_small_amount)
 							)
-						)
-							.into(),
+								.into()
+						),
+						Box::new(
+							(
+								0,
+								X2(
+									GeneralKey(
+										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+											.unwrap()
+									),
+									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+								)
+							)
+								.into()
+						),
 					),
 					bridge::Error::<Runtime>::DecimalConversionFail
 				);
@@ -2213,17 +2262,22 @@ pub mod pallet {
 				// asset - fee) into TransferReserveAccount
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					(Concrete(NativeLocation::get()), Fungible(ENDOWED_BALANCE / 2)).into(),
-					(
-						0,
-						X2(
-							GeneralKey(
-								WeakBoundedVec::try_from(b"ethereum recipient".to_vec()).unwrap()
-							),
-							GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+					Box::new(
+						(Concrete(NativeLocation::get()), Fungible(ENDOWED_BALANCE / 2)).into()
+					),
+					Box::new(
+						(
+							0,
+							X2(
+								GeneralKey(
+									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
+										.unwrap()
+								),
+								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
+							)
 						)
-					)
-						.into(),
+							.into()
+					),
 				));
 				// BridgeAccount should have half of alice native asset - fee
 				assert_eq!(Balances::free_balance(BridgeAccount::get()), ENDOWED_BALANCE / 2 - fee);
@@ -2252,8 +2306,8 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE / 2);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals,
-					signature.encode()
+					Box::new(proposals),
+					Box::new(signature.encode())
 				));
 				// check Alice balance of native asset after executing, should have half of the init
 				// native asset + 100_000_000_000_000(12 decimal)
@@ -2287,8 +2341,8 @@ pub mod pallet {
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), 0);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals_usdc,
-					signature_usdc.encode()
+					Box::new(proposals_usdc),
+					Box::new(signature_usdc.encode())
 				));
 				// alice should have 100 usdc at this moment (100 usdc with 18 decimals)
 				assert_eq!(
@@ -2333,8 +2387,8 @@ pub mod pallet {
 				assert_eq!(Assets::balance(AstrAssetId::get(), &ALICE), 0);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals_astr,
-					signature_astr.encode()
+					Box::new(proposals_astr),
+					Box::new(signature_astr.encode())
 				));
 				// alice should have 100 astr at this moment (100 astr with 24 decimals)
 				assert_eq!(
@@ -2365,8 +2419,8 @@ pub mod pallet {
 				// would be 0.000000000000 which is 0
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals_extreme,
-					signature_extreme.encode()
+					Box::new(proposals_extreme),
+					Box::new(signature_extreme.encode())
 				));
 				// should emit FailedHandlerExecution event
 				assert_events(vec![RuntimeEvent::SygmaBridge(
