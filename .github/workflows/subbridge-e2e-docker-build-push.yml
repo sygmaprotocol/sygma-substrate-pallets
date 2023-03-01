@@ -31,7 +31,7 @@ jobs:
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
 
           # creates local variable to hold docker images
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:subbridge_e2e-latest"
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:subbridge-e2e-latest"
 
           # check if branch/tag that triggered workflow was from tags
           if [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -40,7 +40,7 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/}
 
             # append version and e2e testing name to tags
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:subbridge-e2e-${VERSION}"
 
           fi
 
@@ -48,7 +48,7 @@ jobs:
           echo ::set-output name=tags::${TAGS}
 
       - name: Run build and setups
-        run: make setup-subbridge-e2e-test
+        run: make setup-prebuild-subbridge-e2e-test
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
