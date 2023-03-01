@@ -1137,7 +1137,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1235,7 +1235,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					UsdcLocation::get().into(),
+					Box::new(UsdcLocation::get().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1307,7 +1307,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					unbounded_asset_location.clone().into(),
+					Box::new(unbounded_asset_location.clone().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1359,7 +1359,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1424,7 +1424,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1466,7 +1466,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				// register domain
@@ -1531,7 +1531,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				assert_noop!(
@@ -1639,7 +1639,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::deposit(
@@ -1994,19 +1994,19 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee_native_asset
 				));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					UsdcLocation::get().into(),
+					Box::new(UsdcLocation::get().into()),
 					fee_usdc_asset
 				));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					AstrLocation::get().into(),
+					Box::new(AstrLocation::get().into()),
 					fee_astr_asset
 				));
 
@@ -2189,7 +2189,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					AstrLocation::get().into(),
+					Box::new(AstrLocation::get().into()),
 					fee_astr_asset_extreme_small_amount
 				));
 				// after decimal conversion from 24 to 18, the final amount will be 0 so that
@@ -2242,7 +2242,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					NativeLocation::get().into(),
+					Box::new(NativeLocation::get().into()),
 					fee
 				));
 				// deposit in advance to make sure the native asset has enough funds in

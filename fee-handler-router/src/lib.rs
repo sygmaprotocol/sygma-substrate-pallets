@@ -14,6 +14,7 @@ mod mock;
 pub mod pallet {
 	use frame_support::{pallet_prelude::*, traits::StorageVersion};
 	use frame_system::pallet_prelude::*;
+	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
 	use xcm::latest::AssetId;
 
@@ -76,9 +77,10 @@ pub mod pallet {
 		pub fn set_fee_handler(
 			origin: OriginFor<T>,
 			domain: DomainID,
-			asset: AssetId,
+			asset: Box<AssetId>,
 			handler_type: FeeHandlerType,
 		) -> DispatchResult {
+			let asset: AssetId = *asset;
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to set fee
 				let who = ensure_signed(origin)?;
@@ -128,6 +130,7 @@ pub mod pallet {
 			RuntimeOrigin as Origin, SygmaBasicFeeHandler, Test, ALICE,
 		};
 		use frame_support::{assert_noop, assert_ok};
+		use sp_std::boxed::Box;
 		use sygma_traits::FeeHandler;
 		use xcm::latest::prelude::*;
 
@@ -139,14 +142,14 @@ pub mod pallet {
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					EthereumDomainID::get(),
-					asset_id.clone(),
+					Box::new(asset_id.clone()),
 					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_noop!(
 					FeeHandlerRouter::set_fee_handler(
 						Some(ALICE).into(),
 						EthereumDomainID::get(),
-						asset_id.clone(),
+						Box::new(asset_id.clone()),
 						FeeHandlerType::BasicFeeHandler,
 					),
 					fee_router::Error::<Test>::AccessDenied
@@ -172,7 +175,7 @@ pub mod pallet {
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Some(ALICE).into(),
 					MoonbeamDomainID::get(),
-					asset_id.clone(),
+					Box::new(asset_id.clone()),
 					FeeHandlerType::DynamicFeeHandler,
 				),);
 				assert_eq!(
@@ -189,14 +192,14 @@ pub mod pallet {
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					EthereumDomainID::get(),
-					PhaLocation::get().into(),
+					Box::new(PhaLocation::get().into()),
 					FeeHandlerType::BasicFeeHandler,
 				));
 				// config dest of (moonbeam, PHA) use dyncmic fee handler
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					MoonbeamDomainID::get(),
-					PhaLocation::get().into(),
+					Box::new(PhaLocation::get().into()),
 					FeeHandlerType::DynamicFeeHandler,
 				));
 
@@ -204,7 +207,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					EthereumDomainID::get(),
-					PhaLocation::get().into(),
+					Box::new(PhaLocation::get().into()),
 					10000
 				));
 
