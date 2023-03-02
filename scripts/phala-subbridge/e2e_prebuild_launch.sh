@@ -19,7 +19,12 @@ git -C $SETUP_SCRIPTS_DIR/code/khala-parachain checkout sygma-integration
 cd $SETUP_SCRIPTS_DIR/code/khala-parachain && cargo build --release --features=all-runtimes
 cp $SETUP_SCRIPTS_DIR/code/khala-parachain/target/release/khala-node $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
 
-# yarn
 cp $SETUP_SCRIPTS_DIR/khala-e2e.config.json $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch
-yarn --cwd $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch
-yarn --cwd $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch start khala-e2e.config.json > subbridge_node_launching.log 2>&1 &
+
+mkdir $SETUP_SCRIPTS_DIR/node
+mv $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch $SETUP_SCRIPTS_DIR/node/polkadot-launch
+
+rm -rf $SETUP_SCRIPTS_DIR/code
+
+yarn --cwd $SETUP_SCRIPTS_DIR/node/polkadot-launch
+yarn --cwd $SETUP_SCRIPTS_DIR/node/polkadot-launch start khala-e2e.config.json > subbridge_node_launching.log 2>&1 &

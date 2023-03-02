@@ -4,7 +4,7 @@
 FROM paritytech/ci-linux:production as builder
 
 WORKDIR /launch-base
-COPY ./scripts/phala-subbridge/code/khala-parachain/polkadot-launch/ ./polkadot-launch/
+COPY ./scripts/phala-subbridge/node/polkadot-launch/ ./polkadot-launch/
 # make sure there is no previously built binary
 RUN rm -f ./polkadot-launch/bin/polkadot
 RUN rm -f ./polkadot-launch/bin/khala-node
