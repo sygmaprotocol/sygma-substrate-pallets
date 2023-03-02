@@ -8,21 +8,22 @@ SETUP_SCRIPTS_DIR=${PWD}/scripts/phala-subbridge
 
 # clone polkadot and khala repo
 mkdir $SETUP_SCRIPTS_DIR/code
+
 git clone https://github.com/Phala-Network/khala-parachain.git $SETUP_SCRIPTS_DIR/code/khala-parachain
+git -C $SETUP_SCRIPTS_DIR/code/khala-parachain checkout sygma-integration
+cd $SETUP_SCRIPTS_DIR/code/khala-parachain && cargo build --release --features=all-runtimes
+cp $SETUP_SCRIPTS_DIR/code/khala-parachain/target/release/khala-node $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
 
 # download prebuild the polkadot and build khala-node
 wget https://github.com/paritytech/polkadot/releases/download/v0.9.37/polkadot
 mv polkadot $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
 chmod +x $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin/polkadot
 
-git -C $SETUP_SCRIPTS_DIR/code/khala-parachain checkout sygma-integration
-cd $SETUP_SCRIPTS_DIR/code/khala-parachain && cargo build --release --features=all-runtimes
-cp $SETUP_SCRIPTS_DIR/code/khala-parachain/target/release/khala-node $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
-
 cp $SETUP_SCRIPTS_DIR/khala-e2e.config.json $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch
 
 mkdir $SETUP_SCRIPTS_DIR/node
-mv $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch $SETUP_SCRIPTS_DIR/node/polkadot-launch
+cp -r $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/ $SETUP_SCRIPTS_DIR/node/polkadot-launch
+cp -r $SETUP_SCRIPTS_DIR/code/khala-parachain/scripts/ $SETUP_SCRIPTS_DIR/node/scripts
 
 rm -rf $SETUP_SCRIPTS_DIR/code
 

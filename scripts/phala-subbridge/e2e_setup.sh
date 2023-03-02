@@ -7,7 +7,7 @@ set -e
 echo "waiting for relay chain nodes and parachain nodes start..."
 sleep 60
 
-SETUP_SCRIPTS_DIR=${PWD}/scripts/phala-subbridge/code/khala-parachain/scripts/js
+SETUP_SCRIPTS_DIR=${PWD}/scripts/phala-subbridge/node/scripts/js
 
 # Run setup script
 echo "run scripts to set up sygma pallets..."
@@ -31,5 +31,8 @@ then
   echo "terminating parachain nodes"
   kill $nPid
 fi
+
+echo "clean up the setup scripts..."
+rm -rf ${PWD}/scripts/phala-subbridge/node/scripts
 
 echo "done"

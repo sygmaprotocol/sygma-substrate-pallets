@@ -6,26 +6,26 @@ FROM paritytech/ci-linux:production as builder
 WORKDIR /launch-base
 COPY ./scripts/phala-subbridge/node/polkadot-launch/ ./polkadot-launch/
 # make sure there is no previously built binary
-RUN rm -f ./polkadot-launch/bin/polkadot
-RUN rm -f ./polkadot-launch/bin/khala-node
+#RUN rm -f ./polkadot-launch/bin/polkadot
+#RUN rm -f ./polkadot-launch/bin/khala-node
 
-RUN  apt-get update \
-  && apt-get install -y wget
+#RUN  apt-get update \
+#  && apt-get install -y wget
 
 # grab the prebuild polkadot relay chain binary
-WORKDIR /code
-RUN wget https://github.com/paritytech/polkadot/releases/download/v0.9.37/polkadot
-RUN mv polkadot /launch-base/polkadot-launch/bin/
+#WORKDIR /code
+#RUN wget https://github.com/paritytech/polkadot/releases/download/v0.9.37/polkadot
+#RUN mv polkadot /launch-base/polkadot-launch/bin/
 
 # grant execution permission
-RUN chmod +x /launch-base/polkadot-launch/bin/polkadot
+#RUN chmod +x /launch-base/polkadot-launch/bin/polkadot
 
 # build khala-parachain
-RUN git clone https://github.com/Phala-Network/khala-parachain.git ./khala-parachain
-WORKDIR /code/khala-parachain
-RUN git checkout sygma-integration
-RUN cargo build --release --features=all-runtimes
-RUN cp ./target/release/khala-node /launch-base/polkadot-launch/bin/
+#RUN git clone https://github.com/Phala-Network/khala-parachain.git ./khala-parachain
+#WORKDIR /code/khala-parachain
+#RUN git checkout sygma-integration
+#RUN cargo build --release --features=all-runtimes
+#RUN cp ./target/release/khala-node /launch-base/polkadot-launch/bin/
 
 FROM node:18.14.2
 WORKDIR /node
