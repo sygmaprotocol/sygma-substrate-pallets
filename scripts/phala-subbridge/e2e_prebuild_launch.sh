@@ -13,6 +13,7 @@ git clone https://github.com/Phala-Network/khala-parachain.git $SETUP_SCRIPTS_DI
 # download prebuild the polkadot and build khala-node
 wget https://github.com/paritytech/polkadot/releases/download/v0.9.37/polkadot
 mv polkadot $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
+chmod +x $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin/polkadot
 
 git -C $SETUP_SCRIPTS_DIR/code/khala-parachain checkout sygma-integration
 cd $SETUP_SCRIPTS_DIR/code/khala-parachain && cargo build --release --features=all-runtimes
