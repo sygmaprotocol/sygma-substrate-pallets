@@ -4,6 +4,7 @@
 
 echo "cleanup..."
 rm -rf ./scripts/phala-subbridge/code
+rm -rf ./scripts/phala-subbridge/node
 rm -f subbridge_node_launching.log
 
 echo "done"

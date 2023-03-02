@@ -23,7 +23,8 @@ cp $SETUP_SCRIPTS_DIR/code/khala-parachain/target/release/khala-node $SETUP_SCRI
 cp $SETUP_SCRIPTS_DIR/khala-e2e.config.json $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch
 
 mkdir $SETUP_SCRIPTS_DIR/node
-mv $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch $SETUP_SCRIPTS_DIR/node/polkadot-launch
+cp -r $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/ $SETUP_SCRIPTS_DIR/node/polkadot-launch
+cp -r $SETUP_SCRIPTS_DIR/code/khala-parachain/scripts/ $SETUP_SCRIPTS_DIR/node/scripts
 
 rm -rf $SETUP_SCRIPTS_DIR/code
 
