@@ -18,6 +18,7 @@ mv polkadot $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
 chmod +x $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin/polkadot
 
 cd $SETUP_SCRIPTS_DIR/code/khala-parachain && cargo build --release --features=all-runtimes
+cd ${PWD}
 cp $SETUP_SCRIPTS_DIR/code/khala-parachain/target/release/khala-node $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/bin
 
 cp $SETUP_SCRIPTS_DIR/khala-e2e.config.json $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch
