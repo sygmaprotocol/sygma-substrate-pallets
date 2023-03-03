@@ -29,6 +29,7 @@ mkdir $SETUP_SCRIPTS_DIR/node
 cp -r $SETUP_SCRIPTS_DIR/code/khala-parachain/polkadot-launch/ $SETUP_SCRIPTS_DIR/node/polkadot-launch
 cp -r $SETUP_SCRIPTS_DIR/code/khala-parachain/scripts/ $SETUP_SCRIPTS_DIR/node/scripts
 
+echo "clean up the code dir..."
 rm -rf $SETUP_SCRIPTS_DIR/code
 
 yarn --cwd $SETUP_SCRIPTS_DIR/node/polkadot-launch
