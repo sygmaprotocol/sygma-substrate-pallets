@@ -26,6 +26,7 @@ WORKDIR /code/khala-parachain
 RUN git checkout sygma-integration
 RUN cargo build --release --features=all-runtimes
 RUN cp ./target/release/khala-node /launch-base/polkadot-launch/bin/
+RUN rm -rf ./target/
 
 FROM node:18.14.2
 WORKDIR /node
