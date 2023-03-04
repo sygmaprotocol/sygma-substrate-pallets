@@ -47,9 +47,6 @@ jobs:
           # sets output of step
           echo ::set-output name=tags::${TAGS}
 
-      - name: Run build and setups
-        run: make setup-subbridge-e2e-test-remote
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
