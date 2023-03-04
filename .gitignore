@@ -7,8 +7,6 @@
 /db
 *.log
 chain-spec.json
-/scripts/phala-subbridge/code
-/scripts/phala-subbridge/node
 
 .idea
 

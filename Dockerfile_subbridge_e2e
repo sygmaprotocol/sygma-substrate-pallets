@@ -42,8 +42,8 @@ RUN yarn
 
 # setup and launch
 WORKDIR /node/polkadot-launch/scripts
-COPY ./scripts/phala-subbridge/e2e_setup_remote.sh .
-RUN chmod +x ./e2e_setup_remote.sh
+COPY scripts/phala-subbridge/e2e_setup.sh .
+RUN chmod +x ./e2e_setup.sh
 
 WORKDIR /node/polkadot-launch
 
@@ -52,7 +52,7 @@ EXPOSE 9944
 # JSON-RPC HTTP server
 EXPOSE 9933
 
-RUN ["./scripts/e2e_setup_remote.sh"]
+RUN ["./scripts/e2e_setup.sh"]
 
 ENTRYPOINT ["yarn", "start", "khala-e2e.config.json"]
 
