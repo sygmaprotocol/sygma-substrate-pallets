@@ -1,0 +1,24 @@
+# The Licensed Work is (c) 2022 Sygma
+# SPDX-License-Identifier: LGPL-3.0-only
+
+FROM node:18.14.2
+
+WORKDIR /launch-base
+COPY ./scripts/phala-subbridge/node/polkadot-launch/ ./polkadot-launch/
+
+# grant execution permission
+RUN chmod +x /launch-base/polkadot-launch/bin/polkadot
+RUN chmod +x /launch-base/polkadot-launch/bin/khala-node
+
+WORKDIR /launch-base/polkadot-launch
+
+# yarn install
+RUN yarn
+
+# JSON-RPC WS server
+EXPOSE 9944
+# JSON-RPC HTTP server
+EXPOSE 9933
+
+ENTRYPOINT ["yarn", "start", "khala-e2e.config.json"]
+
