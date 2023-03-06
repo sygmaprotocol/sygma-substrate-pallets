@@ -11,7 +11,7 @@ COPY ./scripts/phala-subbridge/khala-e2e.config.json .
 RUN git clone https://github.com/Phala-Network/khala-parachain.git ./khala-parachain
 WORKDIR /code/khala-parachain
 RUN git checkout sygma-integration
-RUN cargo build --release --features=all-runtimes
+RUN cargo build --profile production --features=thala-parachain-runtime
 RUN cp ./target/release/khala-node ./polkadot-launch/bin/
 
 # grab the prebuild polkadot relay chain binary
