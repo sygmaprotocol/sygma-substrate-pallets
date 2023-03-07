@@ -8,7 +8,7 @@ NODE_DB_DIR=${PWD}/db
 
 # Run dev node
 echo "start the dev node up..."
-./target/release/node-template --dev --ws-external --base-path "$NODE_DB_DIR" > subsrate_node_log 2>&1 &
+./target/release/node-template --dev --ws-external --base-path "$NODE_DB_DIR" > subsrate_node.log 2>&1 &
 
 sleep 5
 

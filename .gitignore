@@ -5,7 +5,7 @@
 
 /target
 /db
-subsrate_node_log
+*.log
 chain-spec.json
 
 .idea

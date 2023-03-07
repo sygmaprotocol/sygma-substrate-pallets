@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 require('dotenv').config();
 
 async function setBalance(api, who, value, finalization, sudo) {
