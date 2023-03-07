@@ -9,6 +9,8 @@ const {
     registerDomain,
     setFee,
     getNativeAssetId,
+    getERC20TSTAssetId,
+    getERC20TSTD20AssetId,
     createAsset,
     setAssetMetadata,
     mintAsset,
@@ -18,6 +20,8 @@ const {
 
 const BN = require('bn.js');
 const bn1e12 = new BN(10).pow(new BN(12));
+const bn1e18 = new BN(10).pow(new BN(18));
+const bn1e20 = new BN(10).pow(new BN(20));
 
 const feeHandlerType = {
     BasicFeeHandler: "BasicFeeHandler",
@@ -76,12 +80,40 @@ async function main() {
     const usdcDecimal = 12;
     await createAsset(api, usdcAssetID, usdcAdmin, usdcMinBalance, true, sudo);
     await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
-    await mintAsset(api, usdcAssetID, usdcAdmin, 100000000000000, true, sudo); // mint 100 USDC to Alice
+    await mintAsset(api, usdcAssetID, usdcAdmin, bn1e12.mul(new BN(100)), true, sudo); // mint 100 USDC to Alice
 
-    // set fee for USDC for domains
+    // create ERC20TST test asset (foreign asset)
+    const erc20tstAssetID = 2001;
+    const erc20tstAdmin = sudo.address;
+    const erc20tstMinBalance = 100;
+    const erc20tstName = "erc20tst test asset";
+    const erc20tstSymbol = "ERC20TST";
+    const erc20tstDecimal = 18;
+    await createAsset(api, erc20tstAssetID, erc20tstAdmin, erc20tstMinBalance, true, sudo);
+    await setAssetMetadata(api, erc20tstAssetID, erc20tstName, erc20tstSymbol, erc20tstDecimal, true, sudo);
+    await mintAsset(api, erc20tstAssetID, erc20tstAdmin, bn1e18.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to Alice
+
+    // create ERC20TSTD20 test asset (foreign asset)
+    const erc20tstd20AssetID = 2002;
+    const erc20tstd20Admin = sudo.address;
+    const erc20tstd20MinBalance = 100;
+    const erc20tstd20Name = "erc20tstd20 test asset";
+    const erc20tstd20Symbol = "ERC20TSTD20";
+    const erc20tstd20Decimal = 20;
+    await createAsset(api, erc20tstd20AssetID, erc20tstd20Admin, erc20tstd20MinBalance, true, sudo);
+    await setAssetMetadata(api, erc20tstd20AssetID, erc20tstd20Name, erc20tstd20Symbol, erc20tstd20Decimal, true, sudo);
+    await mintAsset(api, erc20tstd20AssetID, erc20tstd20Admin, bn1e20.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to Alice
+
+    // set fee for tokens with domains
     for (const domain of supportedDestDomains) {
         await setFeeHandler(api, domain.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
         await setFee(api, domain.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+
+        await setFeeHandler(api, domain.domainID, getERC20TSTAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        await setFee(api, domain.domainID, getERC20TSTAssetId(api), basicFeeAmount, true, sudo);
+
+        await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        await setFee(api, domain.domainID, getERC20TSTD20AssetId(api), basicFeeAmount, true, sudo);
     }
 
     // transfer some native asset to FeeReserveAccount and TransferReserveAccount as Existential Deposit(aka ED)

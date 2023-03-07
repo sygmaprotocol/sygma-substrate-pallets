@@ -308,6 +308,48 @@ function getUSDCAssetId(api) {
     })
 }
 
+function getERC20TSTAssetId(api) {
+    return api.createType('XcmV1MultiassetAssetId', {
+        Concrete: api.createType('XcmV1MultiLocation', {
+            parents: 1,
+            interior: api.createType('Junctions', {
+                X3: [
+                    api.createType('XcmV1Junction', {
+                        Parachain: api.createType('Compact<U32>', 2004)
+                    }),
+                    api.createType('XcmV1Junction', {
+                        GeneralKey: '0x7379676d61' // sygma
+                    }),
+                    api.createType('XcmV1Junction', {
+                        GeneralKey: '0x6572633230747374' // erc20tst
+                    }),
+                ]
+            })
+        })
+    })
+}
+
+function getERC20TSTD20AssetId(api) {
+    return api.createType('XcmV1MultiassetAssetId', {
+        Concrete: api.createType('XcmV1MultiLocation', {
+            parents: 1,
+            interior: api.createType('Junctions', {
+                X3: [
+                    api.createType('XcmV1Junction', {
+                        Parachain: api.createType('Compact<U32>', 2004)
+                    }),
+                    api.createType('XcmV1Junction', {
+                        GeneralKey: '0x7379676d61' // sygma
+                    }),
+                    api.createType('XcmV1Junction', {
+                        GeneralKey: '0x6572633230747374643230' // erc20tstd20
+                    }),
+                ]
+            })
+        })
+    })
+}
+
 function getNativeAssetId(api) {
     return api.createType('XcmV1MultiassetAssetId', {
         Concrete: api.createType('XcmV1MultiLocation', {
@@ -369,6 +411,8 @@ async function queryMPCAddress(api) {
 module.exports = {
     getNativeAssetId,
     getUSDCAssetId,
+    getERC20TSTAssetId,
+    getERC20TSTD20AssetId,
     registerDomain,
     mintAsset,
     setAssetMetadata,

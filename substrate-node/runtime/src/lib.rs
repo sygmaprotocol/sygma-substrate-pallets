@@ -413,28 +413,39 @@ parameter_types! {
 			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
-	pub AstrAssetId: AssetId = 2001;
-	pub AstrLocation: MultiLocation = MultiLocation::new(
+	pub ERC20TSTLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
-			Parachain(2005),
+			Parachain(2004),
 			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-			GeneralKey(b"astr".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"erc20tst".to_vec().try_into().expect("less than length limit; qed")),
 		),
 	);
+	pub ERC20TSTD20Location: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2004),
+			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
+			GeneralKey(b"erc20tstd20".to_vec().try_into().expect("less than length limit; qed")),
+		),
+	);
+	// UsdcAssetId is the substrate assetID of USDC
+	pub UsdcAssetId: AssetId = 2000;
+	pub ERC20TSTAssetId: AssetId = 2001;
+	pub ERC20TSTD20AssetId: AssetId = 2002;
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
 	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
 	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
 	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
-	pub AstrResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000002");
-	// UsdcAssetId is the substrate assetID of USDC
-	pub UsdcAssetId: AssetId = 2000;
+	pub ERC20TSTResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
+	pub ERC20TSTD20ResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000900");
+
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
-	// SygmaBridgePalletId is the palletID
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (ERC20TSTLocation::get().into(), ERC20TSTResourceId::get()), (ERC20TSTD20Location::get().into(), ERC20TSTD20ResourceId::get())];
+	// SygmaBridgePalletId is the palletIDl
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
-	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 12u8), (AstrLocation::get().into(), 24u8)];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 12u8), (ERC20TSTLocation::get().into(), 18u8), (ERC20TSTD20Location::get().into(), 20u8)];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -471,8 +482,10 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
 		if &UsdcLocation::get() == id.borrow() {
 			Ok(UsdcAssetId::get())
-		} else if &AstrLocation::get() == id.borrow() {
-			Ok(AstrAssetId::get())
+		} else if &ERC20TSTLocation::get() == id.borrow() {
+			Ok(ERC20TSTAssetId::get())
+		} else if &ERC20TSTD20Location::get() == id.borrow() {
+			Ok(ERC20TSTD20AssetId::get())
 		} else {
 			Err(())
 		}
@@ -480,8 +493,10 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
 		if *what.borrow() == UsdcAssetId::get() {
 			Ok(UsdcLocation::get())
-		} else if *what.borrow() == AstrAssetId::get() {
-			Ok(AstrLocation::get())
+		} else if *what.borrow() == ERC20TSTAssetId::get() {
+			Ok(ERC20TSTLocation::get())
+		} else if *what.borrow() == ERC20TSTD20AssetId::get() {
+			Ok(ERC20TSTD20Location::get())
 		} else {
 			Err(())
 		}
@@ -494,8 +509,10 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 			(Fungible(ref amount), Concrete(ref id)) =>
 				if id == &UsdcLocation::get() {
 					Ok((UsdcAssetId::get(), *amount))
-				} else if id == &AstrLocation::get() {
-					Ok((AstrAssetId::get(), *amount))
+				} else if id == &ERC20TSTLocation::get() {
+					Ok((ERC20TSTAssetId::get(), *amount))
+				} else if id == &ERC20TSTD20Location::get() {
+					Ok((ERC20TSTD20AssetId::get(), *amount))
 				} else {
 					Err(ExecutionError::AssetNotFound)
 				},

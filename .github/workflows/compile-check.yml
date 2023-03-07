@@ -5,9 +5,6 @@ name: Compile check
 
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - 'scripts/**'
     types: [opened, synchronize, reopened]
   push:
     branches:
