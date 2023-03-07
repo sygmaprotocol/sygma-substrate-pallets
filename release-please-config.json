@@ -1,4 +1,15 @@
 {
+	"bootstrap-sha": "da515d6007f2927e8c6cefd22e99da7d2dcb6fbf",
 	"plugins": ["cargo-workspace"],
-	"release-type": "rust"
+	"release-type": "rust",
+	"packages": {
+		"access-segregator": {},
+		"basic-fee-handler": {},
+		"bridge": {},
+		"dynamic-fee-handler": {},
+		"fee-handler-router": {},
+		"rpc": {},
+		"runtime-api": {},
+		"traits": {}
+	}
 }

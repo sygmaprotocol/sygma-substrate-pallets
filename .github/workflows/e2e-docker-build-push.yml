@@ -41,7 +41,7 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/}
 
             # append version and e2e testing name to tags
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-${VERSION}"
 
           fi
 

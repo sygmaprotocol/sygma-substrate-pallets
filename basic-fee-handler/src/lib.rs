@@ -14,6 +14,7 @@ mod mock;
 pub mod pallet {
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
 	use frame_system::pallet_prelude::*;
+	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
 	use xcm::latest::AssetId;
 
@@ -65,9 +66,10 @@ pub mod pallet {
 		pub fn set_fee(
 			origin: OriginFor<T>,
 			domain: DomainID,
-			asset: AssetId,
+			asset: Box<AssetId>,
 			amount: u128,
 		) -> DispatchResult {
+			let asset: AssetId = *asset;
 			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
 				// Ensure bridge committee or the account that has permisson to set fee
 				let who = ensure_signed(origin)?;
@@ -105,6 +107,7 @@ pub mod pallet {
 			RuntimeEvent as Event, RuntimeOrigin as Origin, Test, ALICE,
 		};
 		use frame_support::{assert_noop, assert_ok};
+		use sp_std::boxed::Box;
 		use sygma_traits::DomainID;
 		use xcm::latest::{prelude::*, MultiLocation};
 
@@ -123,14 +126,14 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					asset_id_a.clone(),
+					Box::new(asset_id_a.clone()),
 					amount_a
 				));
 				// set fee 200 with assetId asset_id_a for another domain
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					another_dest_domain_id,
-					asset_id_a.clone(),
+					Box::new(asset_id_a.clone()),
 					amount_a * 2
 				));
 				assert_eq!(
@@ -146,7 +149,7 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					asset_id_b.clone(),
+					Box::new(asset_id_b.clone()),
 					amount_b
 				));
 				assert_eq!(
@@ -172,7 +175,7 @@ pub mod pallet {
 					BasicFeeHandler::set_fee(
 						unauthorized_account,
 						dest_domain_id,
-						asset_id_a.clone(),
+						Box::new(asset_id_a.clone()),
 						amount_a
 					),
 					basic_fee_handler::Error::<Test>::AccessDenied
@@ -207,14 +210,14 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					asset_id.clone(),
+					Box::new(asset_id.clone()),
 					100
 				),);
 				assert_noop!(
 					BasicFeeHandler::set_fee(
 						Some(ALICE).into(),
 						dest_domain_id,
-						asset_id.clone(),
+						Box::new(asset_id.clone()),
 						200
 					),
 					basic_fee_handler::Error::<Test>::AccessDenied
@@ -240,7 +243,7 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Some(ALICE).into(),
 					dest_domain_id,
-					asset_id.clone(),
+					Box::new(asset_id.clone()),
 					200
 				),);
 				assert_eq!(AssetFees::<Test>::get(&(dest_domain_id, asset_id)).unwrap(), 200);
