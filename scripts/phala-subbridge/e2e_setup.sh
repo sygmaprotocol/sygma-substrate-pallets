@@ -17,3 +17,12 @@ sleep 60
 echo "run scripts to set up sygma pallets..."
 npm i --prefix $SETUP_SCRIPTS_DIR/scripts
 node $SETUP_SCRIPTS_DIR/scripts/setup_sygma.js
+
+# Stop the node
+echo "stopping the relaychain node..."
+pkill polkadot
+
+echo "stopping the parachain node..."
+pkill khala-node
+
+echo "done"
