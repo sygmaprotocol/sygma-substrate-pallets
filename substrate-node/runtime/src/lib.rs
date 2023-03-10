@@ -356,7 +356,10 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
+		(BridgePalletIndex::get(), b"register_domain".to_vec()),
+		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
 		(BridgePalletIndex::get(), b"retry".to_vec()),
+		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
 	].to_vec();
 }
 
