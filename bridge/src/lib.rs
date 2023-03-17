@@ -261,9 +261,6 @@ pub mod pallet {
 					Error::<T>::AccessDenied
 				);
 			}
-			// make sure MPC address is set up
-			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			// Mark as paused
@@ -327,6 +324,10 @@ pub mod pallet {
 
 			// Set MPC account address
 			MpcAddr::<T>::set(addr);
+
+			// unpause bridge
+			Self::unpause_all_bridges();
+
 			Ok(())
 		}
 
@@ -353,8 +354,6 @@ pub mod pallet {
 				);
 				sender = who;
 			}
-			// make sure MPC address is set up
-			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			DestDomainIds::<T>::insert(dest_domain_id, true);
 			DestChainIds::<T>::insert(dest_domain_id, dest_chain_id);
@@ -391,8 +390,6 @@ pub mod pallet {
 				);
 				sender = who;
 			}
-			// make sure MPC address is set up
-			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
 			ensure!(
 				DestDomainIds::<T>::get(dest_domain_id) &&
@@ -427,6 +424,7 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Extract dest (MultiLocation) to get corresponding dest domainID and Ethereum
 			// recipient address
@@ -434,8 +432,6 @@ pub mod pallet {
 				T::ExtractDestData::extract_dest(&dest).ok_or(Error::<T>::ExtractDestDataFailed)?;
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
-
-			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
 			// transfer type
@@ -531,8 +527,8 @@ pub mod pallet {
 			}
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
+			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			// Emit retry event
 			Self::deposit_event(Event::<T>::Retry {
@@ -784,13 +780,13 @@ pub mod pallet {
 
 		/// Execute a single proposal
 		fn execute_proposal_internal(proposal: &Proposal) -> DispatchResult {
+			// Check if dest domain bridge is paused
+			ensure!(!IsPaused::<T>::get(proposal.origin_domain_id), Error::<T>::BridgePaused);
 			// Check if domain is supported
 			ensure!(
 				DestDomainIds::<T>::get(proposal.origin_domain_id),
 				Error::<T>::DestDomainNotSupported
 			);
-			// Check if dest domain bridge is paused
-			ensure!(!IsPaused::<T>::get(proposal.origin_domain_id), Error::<T>::BridgePaused);
 			// Check if proposal has executed
 			ensure!(
 				!Self::is_proposal_executed(proposal.deposit_nonce, proposal.origin_domain_id),
@@ -827,6 +823,13 @@ pub mod pallet {
 				.map_err(|_| Error::<T>::TransactFailed)?;
 
 			Ok(())
+		}
+
+		/// unpause all registered domains in the storage
+		fn unpause_all_bridges() {
+			for mut bridge_pair in IsPaused::<T>::iter() {
+				bridge_pair.1 = false;
+			}
 		}
 	}
 
