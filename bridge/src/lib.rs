@@ -326,7 +326,7 @@ pub mod pallet {
 			MpcAddr::<T>::set(addr);
 
 			// unpause bridge
-			Self::unpause_all_bridges();
+			Self::unpause_all_domains();
 
 			Ok(())
 		}
@@ -424,12 +424,13 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
-			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			// Extract dest (MultiLocation) to get corresponding dest domainID and Ethereum
 			// recipient address
 			let (recipient, dest_domain_id) =
 				T::ExtractDestData::extract_dest(&dest).ok_or(Error::<T>::ExtractDestDataFailed)?;
+
+			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
@@ -826,9 +827,9 @@ pub mod pallet {
 		}
 
 		/// unpause all registered domains in the storage
-		fn unpause_all_bridges() {
-			for mut bridge_pair in IsPaused::<T>::iter() {
-				bridge_pair.1 = false;
+		fn unpause_all_domains() {
+			for bridge_pair in IsPaused::<T>::iter() {
+				IsPaused::<T>::insert(bridge_pair.0, false);
 			}
 		}
 	}
@@ -2424,6 +2425,58 @@ pub mod pallet {
 						deposit_nonce: 4,
 					},
 				)]);
+			})
+		}
+
+		#[test]
+		fn unpause_all_domains_test() {
+			new_test_ext().execute_with(|| {
+				// Grant ALICE the access of `register_domain`
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"register_domain".to_vec(),
+					ALICE
+				));
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"pause_bridge".to_vec(),
+					ALICE
+				));
+				// alice register some domains
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::from(Some(ALICE)),
+					1u8,
+					U256::from(1)
+				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::from(Some(ALICE)),
+					2u8,
+					U256::from(2)
+				));
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::from(Some(ALICE)),
+					3u8,
+					U256::from(3)
+				));
+
+				// pause all
+				assert_ok!(SygmaBridge::pause_bridge(Some(ALICE).into(), 1));
+				assert_ok!(SygmaBridge::pause_bridge(Some(ALICE).into(), 2));
+				assert_ok!(SygmaBridge::pause_bridge(Some(ALICE).into(), 3));
+
+				// double check if they are all paused
+				assert!(SygmaBridge::is_paused(1));
+				assert!(SygmaBridge::is_paused(2));
+				assert!(SygmaBridge::is_paused(3));
+
+				SygmaBridge::unpause_all_domains();
+
+				// all domains shoud be unpaused now
+				assert!(!SygmaBridge::is_paused(1));
+				assert!(!SygmaBridge::is_paused(2));
+				assert!(!SygmaBridge::is_paused(3));
 			})
 		}
 	}
