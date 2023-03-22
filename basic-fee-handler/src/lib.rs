@@ -126,22 +126,19 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id_a.clone()),
+					Box::new(asset_id_a),
 					amount_a
 				));
 				// set fee 200 with assetId asset_id_a for another domain
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					another_dest_domain_id,
-					Box::new(asset_id_a.clone()),
+					Box::new(asset_id_a),
 					amount_a * 2
 				));
+				assert_eq!(AssetFees::<Test>::get((dest_domain_id, asset_id_a)).unwrap(), amount_a);
 				assert_eq!(
-					AssetFees::<Test>::get(&(dest_domain_id, asset_id_a.clone())).unwrap(),
-					amount_a
-				);
-				assert_eq!(
-					AssetFees::<Test>::get(&(another_dest_domain_id, asset_id_a.clone())).unwrap(),
+					AssetFees::<Test>::get((another_dest_domain_id, asset_id_a)).unwrap(),
 					amount_a * 2
 				);
 
@@ -149,25 +146,16 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id_b.clone()),
+					Box::new(asset_id_b),
 					amount_b
 				));
-				assert_eq!(
-					AssetFees::<Test>::get(&(dest_domain_id, asset_id_b.clone())).unwrap(),
-					amount_b
-				);
+				assert_eq!(AssetFees::<Test>::get((dest_domain_id, asset_id_b)).unwrap(), amount_b);
 
 				// fee of asset_id_a should not be equal to amount_b
-				assert_ne!(
-					AssetFees::<Test>::get(&(dest_domain_id, asset_id_a.clone())).unwrap(),
-					amount_b
-				);
+				assert_ne!(AssetFees::<Test>::get((dest_domain_id, asset_id_a)).unwrap(), amount_b);
 
 				// fee of asset_id_b should not be equal to amount_a
-				assert_ne!(
-					AssetFees::<Test>::get(&(dest_domain_id, asset_id_b.clone())).unwrap(),
-					amount_a
-				);
+				assert_ne!(AssetFees::<Test>::get((dest_domain_id, asset_id_b)).unwrap(), amount_a);
 
 				// permission test: unauthorized account should not be able to set fee
 				let unauthorized_account = Origin::from(Some(ALICE));
@@ -175,7 +163,7 @@ pub mod pallet {
 					BasicFeeHandler::set_fee(
 						unauthorized_account,
 						dest_domain_id,
-						Box::new(asset_id_a.clone()),
+						Box::new(asset_id_a),
 						amount_a
 					),
 					basic_fee_handler::Error::<Test>::AccessDenied
@@ -184,7 +172,7 @@ pub mod pallet {
 				assert_events(vec![
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
 						domain: dest_domain_id,
-						asset: asset_id_a.clone(),
+						asset: asset_id_a,
 						amount: amount_a,
 					}),
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
@@ -210,14 +198,14 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id.clone()),
+					Box::new(asset_id),
 					100
 				),);
 				assert_noop!(
 					BasicFeeHandler::set_fee(
 						Some(ALICE).into(),
 						dest_domain_id,
-						Box::new(asset_id.clone()),
+						Box::new(asset_id),
 						200
 					),
 					basic_fee_handler::Error::<Test>::AccessDenied
@@ -243,10 +231,10 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Some(ALICE).into(),
 					dest_domain_id,
-					Box::new(asset_id.clone()),
+					Box::new(asset_id),
 					200
 				),);
-				assert_eq!(AssetFees::<Test>::get(&(dest_domain_id, asset_id)).unwrap(), 200);
+				assert_eq!(AssetFees::<Test>::get((dest_domain_id, asset_id)).unwrap(), 200);
 			})
 		}
 	}

@@ -10,7 +10,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use fixed::{types::extra::U16, FixedU128};
-use frame_support::{pallet_prelude::*, PalletId};
+use frame_support::{pallet_prelude::*, traits::ContainsPair, PalletId};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -37,12 +37,10 @@ use sygma_traits::{
 };
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
 use xcm_builder::{
-	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, ParentIsPreset,
+	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
 	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::{
-	Convert, Error as ExecutionError, FilterAssetLocation, MatchesFungibles,
-};
+use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -248,6 +246,7 @@ impl pallet_grandpa::Config for Runtime {
 
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<32>;
+	type MaxSetIdSessionEntries = ConstU64<0>;
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -406,30 +405,32 @@ parameter_types! {
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
 	pub NativeLocation: MultiLocation = MultiLocation::here();
+	// amount = 0 act as placeholder
+	pub NativeAsset: MultiAsset = (Concrete(MultiLocation::here()), 0u128).into();
 	// UsdcLocation is the representation of the USDC asset location in substrate
 	// USDC is a foreign asset, and in our local testing env, it's being registered on Parachain 2004 with the following location
 	pub UsdcLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
 			Parachain(2004),
-			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-			GeneralKey(b"usdc".to_vec().try_into().expect("less than length limit; qed")),
+			slice_to_generalkey(b"sygma"),
+			slice_to_generalkey(b"usdc"),
 		),
 	);
 	pub ERC20TSTLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
 			Parachain(2004),
-			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-			GeneralKey(b"erc20tst".to_vec().try_into().expect("less than length limit; qed")),
+			slice_to_generalkey(b"sygma"),
+			slice_to_generalkey(b"erc20tst"),
 		),
 	);
 	pub ERC20TSTD20Location: MultiLocation = MultiLocation::new(
 		1,
 		X3(
 			Parachain(2004),
-			GeneralKey(b"sygma".to_vec().try_into().expect("less than length limit; qed")),
-			GeneralKey(b"erc20tstd20".to_vec().try_into().expect("less than length limit; qed")),
+			slice_to_generalkey(b"sygma"),
+			slice_to_generalkey(b"erc20tstd20"),
 		),
 	);
 	// UsdcAssetId is the substrate assetID of USDC
@@ -534,9 +535,8 @@ pub type FungiblesTransactor = FungiblesAdapter<
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
-	// We only want to allow teleports of known assets. We use non-zero issuance as an indication
-	// that this asset is known.
-	parachains_common::impls::NonZeroIssuance<AccountId32, Assets>,
+	// Disable teleport.
+	NoChecking,
 	// The account to use for tracking teleports.
 	CheckingAccount,
 >;
@@ -548,7 +548,7 @@ impl ConcrateSygmaAsset {
 	pub fn id(asset: &MultiAsset) -> Option<MultiLocation> {
 		match (&asset.id, &asset.fun) {
 			// So far our native asset is concrete
-			(Concrete(id), Fungible(_)) => Some(id.clone()),
+			(Concrete(id), Fungible(_)) => Some(*id),
 			_ => None,
 		}
 	}
@@ -564,12 +564,7 @@ impl ConcrateSygmaAsset {
 						// The registered foreign assets actually reserved on EVM chains, so when
 						// transfer back to EVM chains, they should be treated as non-reserve assets
 						// relative to current chain.
-						Some(MultiLocation::new(
-							0,
-							X1(GeneralKey(
-								b"sygma".to_vec().try_into().expect("less than length limit; qed"),
-							)),
-						))
+						Some(MultiLocation::new(0, X1(slice_to_generalkey(b"sygma"))))
 					} else {
 						// Other parachain assets should be treat as reserve asset when transfered
 						// to outside EVM chains
@@ -638,7 +633,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 				for (asset_id, decimal) in DecimalPairs::get().iter() {
 					if *asset_id == asset.id {
 						return if *decimal == 18 {
-							Some((asset.id.clone(), *amount).into())
+							Some((asset.id, *amount).into())
 						} else {
 							type U112F16 = FixedU128<U16>;
 							if *decimal > 18 {
@@ -652,7 +647,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
 								let b = U112F16::from_num(*amount).saturating_mul(a);
 								let r: u128 = b.to_num();
-								Some((asset.id.clone(), r).into())
+								Some((asset.id, r).into())
 							} else {
 								let a =
 									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
@@ -661,7 +656,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								if r == 0 {
 									return None
 								}
-								Some((asset.id.clone(), r).into())
+								Some((asset.id, r).into())
 							}
 						}
 					}
@@ -674,8 +669,8 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 }
 
 pub struct ReserveChecker;
-impl FilterAssetLocation for ReserveChecker {
-	fn filter_asset_location(asset: &MultiAsset, origin: &MultiLocation) -> bool {
+impl ContainsPair<MultiAsset, MultiLocation> for ReserveChecker {
+	fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool {
 		if let Some(ref id) = ConcrateSygmaAsset::origin(asset) {
 			if id == origin {
 				return true
@@ -690,13 +685,19 @@ pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
 	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
 		match (dest.parents, &dest.interior) {
-			(0, Junctions::X2(GeneralKey(recipient), GeneralKey(dest_domain_id))) => {
+			(
+				0,
+				Junctions::X2(
+					GeneralKey { length: recipient_len, data: recipient },
+					GeneralKey { length: _domain_len, data: dest_domain_id },
+				),
+			) => {
 				let d = u8::default();
 				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
 				if *domain_id == d {
 					return None
 				}
-				Some((recipient.to_vec(), *domain_id))
+				Some((recipient[..*recipient_len as usize].to_vec(), *domain_id))
 			},
 			_ => None,
 		}
@@ -718,6 +719,19 @@ impl sygma_bridge::Config for Runtime {
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
+}
+
+pub fn slice_to_generalkey(key: &[u8]) -> Junction {
+	let len = key.len();
+	assert!(len <= 32);
+	GeneralKey {
+		length: len as u8,
+		data: {
+			let mut data = [0u8; 32];
+			data[..len].copy_from_slice(key);
+			data
+		},
+	}
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -926,6 +940,12 @@ impl_runtime_apis! {
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
 		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
+		}
 	}
 
 	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<Block, Balance, RuntimeCall>
@@ -942,6 +962,12 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(call, len)
+		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
 		}
 	}
 

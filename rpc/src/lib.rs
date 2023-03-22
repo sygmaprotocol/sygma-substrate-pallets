@@ -6,7 +6,7 @@ use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 };
-use sp_api::{BlockId, BlockT, ProvideRuntimeApi};
+use sp_api::{BlockT, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sygma_runtime_api::SygmaBridgeApi;
 use sygma_traits::{DepositNonce, DomainID};
@@ -50,9 +50,9 @@ where
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 
-		let runtime_api_result = api.is_proposal_executed(&at, nonce, domain_id);
+		let runtime_api_result = api.is_proposal_executed(at, nonce, domain_id);
 		runtime_api_result.map_err(|e| JsonRpseeError::Custom(format!("runtime error: {e:?}")))
 	}
 }
