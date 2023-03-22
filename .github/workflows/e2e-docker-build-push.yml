@@ -48,9 +48,6 @@ jobs:
           # sets output of step
           echo ::set-output name=tags::${TAGS}
 
-      - name: Run build and setups
-        run: make setup-e2e-test
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -71,6 +68,7 @@ jobs:
           context: .
           push: true
           file: ./Dockerfile_e2e
+          build-args: mpc_address=${{ env.MPCADDR }}
           tags: ${{ steps.prep.outputs.tags }}
 
       - name: Image digest

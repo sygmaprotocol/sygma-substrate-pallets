@@ -4,19 +4,28 @@
 
 set -e
 
-SETUP_SCRIPTS_DIR=${PWD}/scripts
+NODE_DB_DIR=${PWD}/db
+
+# Run dev node
+echo "start the dev node up..."
+./node-template --dev --ws-external --base-path "$NODE_DB_DIR" > substrate_node.log 2>&1 &
+
+echo "waiting for dev nodes start..."
+sleep 60
+
+SETUP_SCRIPTS_DIR=${PWD}
 CHAINSPECFILE="chain-spec.json"
 
 # Run setup script
 echo "run scripts to set up pallets..."
-npm i --prefix $SETUP_SCRIPTS_DIR/js
-node $SETUP_SCRIPTS_DIR/js/setup.js
+npm i --prefix $SETUP_SCRIPTS_DIR/scripts/js
+node $SETUP_SCRIPTS_DIR/scripts/js/setup.js
 
 sleep 10
 
 # Run chain snapshot after setup
 echo "set up is done, now export the chain state..."
-./target/release/node-template export-state > $CHAINSPECFILE
+./node-template export-state > $CHAINSPECFILE
 
 # Stop the node
 echo "stopping the dev node..."

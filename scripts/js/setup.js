@@ -57,10 +57,7 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
     const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
-    const mpcAddr = process.env.MPCADDR || '0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4';
-
-    // set up MPC address
-    await setMpcAddress(api, mpcAddr, true, sudo);
+    const mpcAddr = process.env.MPCADDR;
 
     // register dest domains
     for (const domain of supportedDestDomains) {
@@ -123,9 +120,14 @@ async function main() {
     await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
     await setBalance(api, TransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
-    // bridge should be unpaused by the end of the setup
-    for (const domain of supportedDestDomains) {
-        if (!await queryBridgePauseStatus(api, domain.domainID)) console.log(`DestDomainID: ${domain.domainID} is ready✅`);
+    // set up MPC address(will also unpause all registered domains)
+    if (mpcAddr) {
+        console.log(`set up mpc address: ${mpcAddr}`);
+        await setMpcAddress(api, mpcAddr, true, sudo);
+        // bridge should be unpaused by the end of the setup
+        for (const domain of supportedDestDomains) {
+            if (!await queryBridgePauseStatus(api, domain.domainID)) console.log(`DestDomainID: ${domain.domainID} is ready✅`);
+        }
     }
 
     console.log('🚀 Sygma substrate pallet setup is done! 🚀');
