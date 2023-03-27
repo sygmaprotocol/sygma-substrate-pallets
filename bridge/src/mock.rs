@@ -277,9 +277,9 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 				} else if id == &AstrLocation::get() {
 					Ok((AstrAssetId::get(), *amount))
 				} else {
-					Err(ExecutionError::AssetNotFound)
+					Err(ExecutionError::AssetNotHandled)
 				},
-			_ => Err(ExecutionError::AssetNotFound),
+			_ => Err(ExecutionError::AssetNotHandled),
 		}
 	}
 }

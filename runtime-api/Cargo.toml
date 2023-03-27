@@ -6,7 +6,7 @@ license = "LGPL-3.0"
 
 [dependencies]
 # Substrate
-sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
+sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false }
 
 sygma-bridge = { path = "../bridge", default-features = false }
 sygma-traits = { path = "../traits", default-features = false }

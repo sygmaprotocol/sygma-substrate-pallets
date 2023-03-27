@@ -26,7 +26,6 @@ pub mod pallet {
 	pub type AssetFees<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u128>;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
