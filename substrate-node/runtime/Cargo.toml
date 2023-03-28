@@ -141,7 +141,6 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"pallet-assets/try-runtime",
 	"sygma-basic-feehandler/try-runtime",
-	"sygma-traits/try-runtime",
 	"sygma-bridge/try-runtime",
 	"sygma-access-segregator/try-runtime",
 	"sygma-fee-handler-router/try-runtime",

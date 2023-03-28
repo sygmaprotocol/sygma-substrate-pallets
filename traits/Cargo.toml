@@ -29,4 +29,3 @@ std = [
 	"ethabi/std",
 	"primitive-types/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
