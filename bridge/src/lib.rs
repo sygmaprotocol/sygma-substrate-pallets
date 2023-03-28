@@ -2447,19 +2447,13 @@ pub mod pallet {
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
 						Box::new((Concrete(AstrLocation::get()), Fungible(100)).into()),
-						Box::new(
-							(
-								0,
-								X2(
-									GeneralKey(
-										WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-											.unwrap()
-									),
-									GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
-								)
+						Box::new(MultiLocation {
+							parents: 0,
+							interior: X2(
+								slice_to_generalkey(b"ethereum recipient"),
+								slice_to_generalkey(&[1]),
 							)
-								.into()
-						),
+						}),
 					),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
@@ -2498,19 +2492,13 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(
-						(
-							0,
-							X2(
-								GeneralKey(
-									WeakBoundedVec::try_from(b"ethereum recipient".to_vec())
-										.unwrap()
-								),
-								GeneralKey(WeakBoundedVec::try_from(vec![1]).unwrap())
-							)
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
 						)
-							.into()
-					),
+					}),
 				));
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
@@ -2524,7 +2512,7 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: Any, id: BOB.into() }))
+						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
 							.encode(),
 					),
 				};
