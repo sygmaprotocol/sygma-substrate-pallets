@@ -49,3 +49,4 @@ std = [
 	"sygma-basic-feehandler/std",
 	"sygma-access-segregator/std",
 ]
+try-runtime = ["frame-support/try-runtime"]
