@@ -7,10 +7,7 @@ use codec::{Decode, Encode};
 use frame_support::dispatch::TypeInfo;
 use primitive_types::{H160, U256};
 use sp_std::vec::Vec;
-use xcm::{
-	latest::{AssetId, MultiLocation},
-	v1::MultiAsset,
-};
+use xcm::latest::{prelude::*, AssetId, MultiLocation};
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;

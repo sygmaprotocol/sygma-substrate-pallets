@@ -142,14 +142,14 @@ pub mod pallet {
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					EthereumDomainID::get(),
-					Box::new(asset_id.clone()),
+					Box::new(asset_id),
 					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_noop!(
 					FeeHandlerRouter::set_fee_handler(
 						Some(ALICE).into(),
 						EthereumDomainID::get(),
-						Box::new(asset_id.clone()),
+						Box::new(asset_id),
 						FeeHandlerType::BasicFeeHandler,
 					),
 					fee_router::Error::<Test>::AccessDenied
@@ -175,11 +175,11 @@ pub mod pallet {
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Some(ALICE).into(),
 					MoonbeamDomainID::get(),
-					Box::new(asset_id.clone()),
+					Box::new(asset_id),
 					FeeHandlerType::DynamicFeeHandler,
 				),);
 				assert_eq!(
-					HandlerType::<Test>::get(&(MoonbeamDomainID::get(), asset_id)).unwrap(),
+					HandlerType::<Test>::get((MoonbeamDomainID::get(), asset_id)).unwrap(),
 					FeeHandlerType::DynamicFeeHandler
 				);
 			})
