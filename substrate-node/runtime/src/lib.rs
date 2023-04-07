@@ -776,6 +776,10 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
+	(
+		// Just demonstrate how migration works
+		sygma_bridge::migration::FixMpcAddress<Runtime>,
+	),
 >;
 
 #[cfg(feature = "runtime-benchmarks")]
