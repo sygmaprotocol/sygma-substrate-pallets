@@ -6,10 +6,10 @@ use super::*;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
-#[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
 use frame_support::traits::{Get, OnRuntimeUpgrade, StorageVersion};
 use log;
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 use sygma_traits::MpcAddress;
 
 const EXPECTED_STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
