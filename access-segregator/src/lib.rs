@@ -25,7 +25,6 @@ pub mod pallet {
 	pub type ExtrinsicAccess<T: Config> = StorageMap<_, Twox64Concat, (u8, Vec<u8>), T::AccountId>;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);

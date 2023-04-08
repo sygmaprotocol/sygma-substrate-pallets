@@ -3,6 +3,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod migration;
+
 #[macro_use]
 extern crate arrayref;
 
@@ -48,7 +50,7 @@ pub mod pallet {
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 	pub struct Proposal {
@@ -59,7 +61,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);

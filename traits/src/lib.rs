@@ -4,8 +4,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::TypeInfo;
 use primitive_types::{H160, U256};
+use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 use xcm::latest::{prelude::*, AssetId, MultiLocation};
 

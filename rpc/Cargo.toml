@@ -10,11 +10,11 @@ scale-info = { version = "2.0" }
 jsonrpsee = { version = "0.16.2", features = ["server", "macros"] }
 
 # Substrate
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39" }
-sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
-sp-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
-sc-client-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
-sc-rpc = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40" }
+sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.40" }
+sp-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.40" }
+sc-client-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.40" }
+sc-rpc = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.40" }
 
 sygma-runtime-api = { path = "../runtime-api", default-features = false }
 sygma-traits = { path = "../traits", default-features = false }
