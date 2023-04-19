@@ -194,6 +194,8 @@ pub mod pallet {
 		ExtractDestDataFailed,
 		/// Failed on the decimal converter
 		DecimalConversionFail,
+		/// Deposit nonce has reached max integer qvalue
+		DepositNonceOverflow,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -483,8 +485,8 @@ pub mod pallet {
 			}
 
 			// Bump deposit nonce
-			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
-			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce + 1);
+			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id).checked_add(1).ok_or(Error::<T>::DepositNonceOverflow)?;
+			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce);
 
 			// convert the asset decimal
 			let decimal_converted_amount =
@@ -742,11 +744,11 @@ pub mod pallet {
 			}
 			let amount: u128 = U256::from_big_endian(&data[0..32])
 				.try_into()
-				.expect("Amount convert failed. qed.");
+				.expect("Amount conversion failed.");
 			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
-				.expect("Length convert failed. qed.");
-			if data.len() != (64 + recipient_len) {
+				.expect("Length conversion failed.");
+			if data.len() - 64 != recipient_len {
 				return None
 			}
 			let recipient = data[64..data.len()].to_vec();
