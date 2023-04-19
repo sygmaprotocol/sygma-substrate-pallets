@@ -738,24 +738,24 @@ pub mod pallet {
 		/// Only fungible transfer is supported so far.
 		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, MultiLocation), Error<T>> {
 			if data.len() < 64 {
-					return Err(Error::<T>::InvalidDepositData);
+				return Err(Error::<T>::InvalidDepositData)
 			}
 
 			let amount: u128 = match U256::from_big_endian(&data[0..32]).try_into() {
-					Ok(v) => v,
-					Err(_) => return Err(Error::<T>::InvalidDepositData),
+				Ok(v) => v,
+				Err(_) => return Err(Error::<T>::InvalidDepositData),
 			};
 			let recipient_len: usize = match U256::from_big_endian(&data[32..64]).try_into() {
-					Ok(v) => v,
-					Err(_) => return Err(Error::<T>::InvalidDepositData),
+				Ok(v) => v,
+				Err(_) => return Err(Error::<T>::InvalidDepositData),
 			};
 			if (data.len() - 64) != recipient_len {
-					return Err(Error::<T>::InvalidDepositData);
+				return Err(Error::<T>::InvalidDepositData)
 			}
 
 			let recipient = data[64..data.len()].to_vec();
 			if let Ok(location) = <MultiLocation>::decode(&mut recipient.as_slice()) {
-					Ok((amount, location))
+				Ok((amount, location))
 			} else {
 				Err(Error::<T>::InvalidDepositData)
 			}
@@ -1674,7 +1674,7 @@ pub mod pallet {
 					invalid_domainid_proposal,
 					invalid_resourceid_proposal,
 					invalid_recipient_proposal,
-					empty_data_proposal
+					empty_data_proposal,
 				];
 
 				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
