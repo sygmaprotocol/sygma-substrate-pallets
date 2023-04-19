@@ -485,7 +485,9 @@ pub mod pallet {
 			}
 
 			// Bump deposit nonce
-			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id).checked_add(1).ok_or(Error::<T>::DepositNonceOverflow)?;
+			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id)
+				.checked_add(1)
+				.ok_or(Error::<T>::DepositNonceOverflow)?;
 			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce);
 
 			// convert the asset decimal
@@ -748,7 +750,7 @@ pub mod pallet {
 			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
 				.expect("Length conversion failed.");
-			if data.len() - 64 != recipient_len {
+			if (data.len() - 64) != recipient_len {
 				return None
 			}
 			let recipient = data[64..data.len()].to_vec();
