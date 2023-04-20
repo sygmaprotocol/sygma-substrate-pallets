@@ -73,13 +73,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			// Ensure bridge committee or the account that has permission to grant access to an
 			// extrinsic
-			if T::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				let who = ensure_signed(origin)?;
-				ensure!(
-					Self::has_access(T::PalletIndex::get(), b"grant_access".to_vec(), who),
-					Error::<T>::GrantAccessFailed
-				);
-			}
+			ensure!(
+				Self::has_access(T::PalletIndex::get(), b"grant_access".to_vec(), origin),
+				Error::<T>::GrantAccessFailed
+			);
 
 			// Apply access
 			ExtrinsicAccess::<T>::insert((pallet_index, extrinsic_name.clone()), &who);
@@ -91,7 +88,16 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn has_access(pallet_index: u8, extrinsic_name: Vec<u8>, caller: T::AccountId) -> bool {
+		pub fn has_access(pallet_index: u8, extrinsic_name: Vec<u8>, origin: OriginFor<T>) -> bool {
+			if T::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_ok() {
+				return true
+			}
+
+			let caller = match ensure_signed(origin) {
+				Ok(caller) => caller,
+				_ => return false,
+			};
+
 			Self::has_registered(pallet_index, extrinsic_name.clone()) &&
 				ExtrinsicAccess::<T>::get((pallet_index, extrinsic_name))
 					.map_or(false, |who| who == caller)
@@ -128,10 +134,11 @@ pub mod pallet {
 					),
 					sygma_access_segregator::Error::<Test>::GrantAccessFailed
 				);
+
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
@@ -142,10 +149,10 @@ pub mod pallet {
 				assert!(AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 
-				// ALICE grants access permission to BOB for an extrinsic (PalletIndex::get(),
+				// ALICE grants access permission to BOB for an e xtrinsic (PalletIndex::get(),
 				// "unknown_extrinsic")
 				assert_ok!(AccessSegregator::grant_access(
 					Some(ALICE).into(),
@@ -156,12 +163,12 @@ pub mod pallet {
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"unknown_extrinsic".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 				assert!(AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"unknown_extrinsic".to_vec(),
-					BOB
+					Some(BOB).into()
 				));
 
 				assert_events(vec![
@@ -197,12 +204,12 @@ pub mod pallet {
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					BOB
+					Some(BOB).into()
 				));
 
 				// Root origin grants access to BOB of the access extrinsic `grant_access`, not
@@ -217,12 +224,17 @@ pub mod pallet {
 				assert!(AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					BOB
+					Some(BOB).into()
+				));
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"grant_access".to_vec(),
+					Origin::root()
 				));
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 
 				// BOB grants access to CHARLIE of access to extrinsic `unknown_extrinsic`, should
@@ -230,7 +242,12 @@ pub mod pallet {
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"unknown_extrinsic".to_vec(),
-					CHARLIE
+					Some(CHARLIE).into()
+				));
+				assert!(AccessSegregator::has_access(
+					PalletIndex::get(),
+					b"unknown_extrinsic".to_vec(),
+					Origin::root()
 				));
 				assert_ok!(AccessSegregator::grant_access(
 					Some(BOB).into(),
@@ -243,7 +260,7 @@ pub mod pallet {
 				assert!(AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					BOB
+					Some(BOB).into()
 				));
 
 				// CHARLIE should not have access to any extrinsic other then extrinsic
@@ -251,24 +268,24 @@ pub mod pallet {
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"grant_access".to_vec(),
-					CHARLIE
+					Some(CHARLIE).into()
 				));
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"unknown_extrinsic2".to_vec(),
-					CHARLIE
+					Some(CHARLIE).into()
 				));
 				assert!(AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"unknown_extrinsic".to_vec(),
-					CHARLIE
+					Some(CHARLIE).into()
 				));
 
 				// AlICE does not have access to extrinsic `unknown_extrinsic` at this moment
 				assert!(!AccessSegregator::has_access(
 					PalletIndex::get(),
 					b"unknown_extrinsic".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 				// Since CHARLIE has the access to extrinsic `unknown_extrinsic`, not extrinsic
 				// `grant_access`, CHARLIE tries to grant access to ALICE of extrinsic

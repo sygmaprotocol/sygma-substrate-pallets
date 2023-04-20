@@ -253,18 +253,14 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(0)]
 		pub fn pause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to pause bridge
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"pause_bridge".to_vec(),
-						who
-					),
-					Error::<T>::AccessDenied
-				);
-			}
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"pause_bridge".to_vec(),
+					origin
+				),
+				Error::<T>::AccessDenied
+			);
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			// Mark as paused
@@ -279,19 +275,14 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(1)]
 		pub fn unpause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to unpause bridge
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"unpause_bridge".to_vec(),
-						who
-					),
-					Error::<T>::AccessDenied
-				);
-			}
-
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"unpause_bridge".to_vec(),
+					origin
+				),
+				Error::<T>::AccessDenied
+			);
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			// make sure the current status is paused
@@ -309,18 +300,14 @@ pub mod pallet {
 		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(2)]
 		pub fn set_mpc_address(origin: OriginFor<T>, addr: MpcAddress) -> DispatchResult {
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to set mpc address
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"set_mpc_address".to_vec(),
-						who
-					),
-					Error::<T>::AccessDenied
-				);
-			}
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"set_mpc_address".to_vec(),
+					origin
+				),
+				Error::<T>::AccessDenied
+			);
 			// Cannot set MPC address as it's already set
 			ensure!(MpcAddr::<T>::get().is_clear(), Error::<T>::MpcAddrNotUpdatable);
 
@@ -341,26 +328,23 @@ pub mod pallet {
 			dest_domain_id: DomainID,
 			dest_chain_id: ChainID,
 		) -> DispatchResult {
-			let mut sender: T::AccountId = [0u8; 32].into();
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to register the dest
-				// domain
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"register_domain".to_vec(),
-						who.clone()
-					),
-					Error::<T>::AccessDenied
-				);
-				sender = who;
-			}
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"register_domain".to_vec(),
+					origin.clone()
+				),
+				Error::<T>::AccessDenied
+			);
 
 			DestDomainIds::<T>::insert(dest_domain_id, true);
 			DestChainIds::<T>::insert(dest_domain_id, dest_chain_id);
 
 			// Emit register dest domain event
+			let sender = match ensure_signed(origin) {
+				Ok(sender) => sender,
+				_ => [0u8; 32].into(),
+			};
 			Self::deposit_event(Event::RegisterDestDomain {
 				sender,
 				domain_id: dest_domain_id,
@@ -377,22 +361,14 @@ pub mod pallet {
 			dest_domain_id: DomainID,
 			dest_chain_id: ChainID,
 		) -> DispatchResult {
-			let mut sender: T::AccountId = [0u8; 32].into();
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to unregister the dest
-				// domain
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"unregister_domain".to_vec(),
-						who.clone()
-					),
-					Error::<T>::AccessDenied
-				);
-				sender = who;
-			}
-
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"unregister_domain".to_vec(),
+					origin.clone()
+				),
+				Error::<T>::AccessDenied
+			);
 			ensure!(
 				DestDomainIds::<T>::get(dest_domain_id) &&
 					DestChainIds::<T>::get(dest_domain_id).is_some(),
@@ -406,6 +382,10 @@ pub mod pallet {
 			DestChainIds::<T>::remove(dest_domain_id);
 
 			// Emit unregister dest domain event
+			let sender = match ensure_signed(origin) {
+				Ok(sender) => sender,
+				_ => [0u8; 32].into(),
+			};
 			Self::deposit_event(Event::UnregisterDestDomain {
 				sender,
 				domain_id: dest_domain_id,
@@ -514,27 +494,23 @@ pub mod pallet {
 			deposit_on_block_height: u128,
 			dest_domain_id: DomainID,
 		) -> DispatchResult {
-			let mut sender: T::AccountId = [0u8; 32].into();
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permission to register the dest
-				// domain
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"retry".to_vec(),
-						who.clone()
-					),
-					Error::<T>::AccessDenied
-				);
-				sender = who;
-			}
-
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"retry".to_vec(),
+					origin.clone()
+				),
+				Error::<T>::AccessDenied
+			);
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 			ensure!(!IsPaused::<T>::get(dest_domain_id), Error::<T>::BridgePaused);
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
 			// Emit retry event
+			let sender = match ensure_signed(origin) {
+				Ok(sender) => sender,
+				_ => [0u8; 32].into(),
+			};
 			Self::deposit_event(Event::<T>::Retry {
 				deposit_on_block_height,
 				dest_domain_id,

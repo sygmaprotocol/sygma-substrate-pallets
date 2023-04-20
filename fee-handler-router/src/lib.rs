@@ -80,18 +80,14 @@ pub mod pallet {
 			handler_type: FeeHandlerType,
 		) -> DispatchResult {
 			let asset: AssetId = *asset;
-			if <T as Config>::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_err() {
-				// Ensure bridge committee or the account that has permisson to set fee
-				let who = ensure_signed(origin)?;
-				ensure!(
-					<sygma_access_segregator::pallet::Pallet<T>>::has_access(
-						<T as Config>::PalletIndex::get(),
-						b"set_fee_handler".to_vec(),
-						who
-					),
-					Error::<T>::AccessDenied
-				);
-			}
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"set_fee_handler".to_vec(),
+					origin
+				),
+				Error::<T>::AccessDenied
+			);
 
 			// Update fee handler
 			HandlerType::<T>::insert((domain, &asset), &handler_type);
@@ -158,7 +154,7 @@ pub mod pallet {
 				assert!(!AccessSegregator::has_access(
 					FeeHandlerRouterPalletIndex::get(),
 					b"set_fee_handler".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
@@ -169,7 +165,7 @@ pub mod pallet {
 				assert!(AccessSegregator::has_access(
 					FeeHandlerRouterPalletIndex::get(),
 					b"set_fee_handler".to_vec(),
-					ALICE
+					Some(ALICE).into()
 				));
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Some(ALICE).into(),
