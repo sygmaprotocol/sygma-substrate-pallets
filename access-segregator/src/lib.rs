@@ -152,7 +152,7 @@ pub mod pallet {
 					Some(ALICE).into()
 				));
 
-				// ALICE grants access permission to BOB for an e xtrinsic (PalletIndex::get(),
+				// ALICE grants access permission to BOB for an extrinsic (PalletIndex::get(),
 				// "unknown_extrinsic")
 				assert_ok!(AccessSegregator::grant_access(
 					Some(ALICE).into(),
