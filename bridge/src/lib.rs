@@ -486,9 +486,7 @@ pub mod pallet {
 
 			// Bump deposit nonce
 			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
-			let incremented_nonce =
-				deposit_nonce.checked_add(1).ok_or(Error::<T>::DepositNonceOverflow)?;
-			DepositCounts::<T>::insert(dest_domain_id, incremented_nonce);
+			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce.checked_add(1).ok_or(Error::<T>::DepositNonceOverflow)?);
 
 			// convert the asset decimal
 			let decimal_converted_amount =
