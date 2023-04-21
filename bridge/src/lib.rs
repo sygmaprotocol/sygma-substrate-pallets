@@ -736,28 +736,26 @@ pub mod pallet {
 		/// recipient data            bytes       bytes  64 - END
 		///
 		/// Only fungible transfer is supported so far.
-		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, MultiLocation), Error<T>> {
+		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, MultiLocation), DispatchError> {
 			if data.len() < 64 {
-				return Err(Error::<T>::InvalidDepositData)
+				return Err(Error::<T>::InvalidDepositData.into())
 			}
 
-			let amount: u128 = match U256::from_big_endian(&data[0..32]).try_into() {
-				Ok(v) => v,
-				Err(_) => return Err(Error::<T>::InvalidDepositData),
-			};
-			let recipient_len: usize = match U256::from_big_endian(&data[32..64]).try_into() {
-				Ok(v) => v,
-				Err(_) => return Err(Error::<T>::InvalidDepositData),
-			};
+			let amount: u128 = U256::from_big_endian(&data[0..32])
+				.try_into()
+				.map_err(|_| Error::<T>::InvalidDepositData)?;
+			let recipient_len: usize = U256::from_big_endian(&data[32..64])
+				.try_into()
+				.map_err(|_| Error::<T>::InvalidDepositData)?;
 			if (data.len() - 64) != recipient_len {
-				return Err(Error::<T>::InvalidDepositData)
+				return Err(Error::<T>::InvalidDepositData.into())
 			}
 
 			let recipient = data[64..data.len()].to_vec();
 			if let Ok(location) = <MultiLocation>::decode(&mut recipient.as_slice()) {
 				Ok((amount, location))
 			} else {
-				Err(Error::<T>::InvalidDepositData)
+				Err(Error::<T>::InvalidDepositData.into())
 			}
 		}
 
