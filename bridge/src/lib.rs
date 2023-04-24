@@ -741,24 +741,26 @@ pub mod pallet {
 		/// recipient data            bytes       bytes  64 - END
 		///
 		/// Only fungible transfer is supported so far.
-		fn extract_deposit_data(data: &Vec<u8>) -> Option<(u128, MultiLocation)> {
+		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, MultiLocation), DispatchError> {
 			if data.len() < 64 {
-				return None
+				return Err(Error::<T>::InvalidDepositData.into())
 			}
+
 			let amount: u128 = U256::from_big_endian(&data[0..32])
 				.try_into()
-				.expect("Amount conversion failed.");
+				.map_err(|_| Error::<T>::InvalidDepositData)?;
 			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
-				.expect("Length conversion failed.");
+				.map_err(|_| Error::<T>::InvalidDepositData)?;
 			if (data.len() - 64) != recipient_len {
-				return None
+				return Err(Error::<T>::InvalidDepositData.into())
 			}
+
 			let recipient = data[64..data.len()].to_vec();
 			if let Ok(location) = <MultiLocation>::decode(&mut recipient.as_slice()) {
-				Some((amount, location))
+				Ok((amount, location))
 			} else {
-				None
+				Err(Error::<T>::InvalidDepositData.into())
 			}
 		}
 
@@ -805,8 +807,7 @@ pub mod pallet {
 			let asset_id =
 				Self::rid_to_assetid(&proposal.resource_id).ok_or(Error::<T>::AssetNotBound)?;
 			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
-			let (amount, location) =
-				Self::extract_deposit_data(&proposal.data).ok_or(Error::<T>::InvalidDepositData)?;
+			let (amount, location) = Self::extract_deposit_data(&proposal.data)?;
 
 			// convert the asset decimal
 			let decimal_converted_asset =
@@ -1662,6 +1663,12 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(amount, b"invalid recipient".to_vec()),
 				};
+				let empty_data_proposal = Proposal {
+					origin_domain_id: DEST_DOMAIN_ID,
+					deposit_nonce: 3,
+					resource_id: UsdcResourceId::get(),
+					data: vec![],
+				};
 
 				let proposals = vec![
 					valid_native_transfer_proposal,
@@ -1670,6 +1677,7 @@ pub mod pallet {
 					invalid_domainid_proposal,
 					invalid_resourceid_proposal,
 					invalid_recipient_proposal,
+					empty_data_proposal,
 				];
 
 				let final_message = SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals);
