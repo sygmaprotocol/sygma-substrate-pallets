@@ -18,7 +18,7 @@ pub mod pallet {
 	use sygma_traits::{DomainID, FeeHandler};
 	use xcm::latest::AssetId;
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 	pub enum FeeHandlerType {
 		BasicFeeHandler,
 		DynamicFeeHandler,
@@ -28,7 +28,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
