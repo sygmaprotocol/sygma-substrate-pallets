@@ -198,6 +198,8 @@ pub mod pallet {
 		ExtractDestDataFailed,
 		/// Failed on the decimal converter
 		DecimalConversionFail,
+		/// Deposit nonce has reached max integer qvalue
+		DepositNonceOverflow,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -484,7 +486,10 @@ pub mod pallet {
 
 			// Bump deposit nonce
 			let deposit_nonce = DepositCounts::<T>::get(dest_domain_id);
-			DepositCounts::<T>::insert(dest_domain_id, deposit_nonce + 1);
+			DepositCounts::<T>::insert(
+				dest_domain_id,
+				deposit_nonce.checked_add(1).ok_or(Error::<T>::DepositNonceOverflow)?,
+			);
 
 			// convert the asset decimal
 			let decimal_converted_amount =
