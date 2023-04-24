@@ -22,7 +22,20 @@ pub enum TransferType {
 	GenericTransfer,
 }
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy, Default, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	Copy,
+	Default,
+	MaxEncodedLen,
+)]
 pub struct MpcAddress(pub [u8; 20]);
 
 pub trait ExtractDestinationData {
