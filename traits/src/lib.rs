@@ -3,7 +3,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::dispatch::TypeInfo;
 use primitive_types::{H160, U256};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
@@ -22,7 +23,7 @@ pub enum TransferType {
 	GenericTransfer,
 }
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy, Default)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, Copy, Default, MaxEncodedLen)]
 pub struct MpcAddress(pub [u8; 20]);
 
 pub trait ExtractDestinationData {
