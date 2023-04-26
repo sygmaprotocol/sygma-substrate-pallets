@@ -135,12 +135,14 @@ impl sygma_access_segregator::Config for Test {
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = AccessSegregatorPalletIndex;
 	type Extrinsics = RegisteredExtrinsics;
+	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Test>;
 }
 
 impl basic_fee_handler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
+	type WeightInfo = basic_fee_handler::weights::SygmaWeightInfo<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

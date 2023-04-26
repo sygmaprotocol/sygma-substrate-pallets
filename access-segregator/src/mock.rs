@@ -103,6 +103,7 @@ impl sygma_access_segregator::Config for Test {
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = PalletIndex;
 	type Extrinsics = RegisteredExtrinsics;
+	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

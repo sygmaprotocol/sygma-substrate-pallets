@@ -5,6 +5,11 @@
 
 pub use self::pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
+
 #[cfg(test)]
 mod mock;
 
@@ -26,6 +31,10 @@ pub mod pallet {
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
+	pub trait WeightInfo {
+		fn set_fee_handler() -> Weight;
+	}
+
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
@@ -44,6 +53,9 @@ pub mod pallet {
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -71,8 +83,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set fee handler specific (domain, asset) pair
-		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_fee_handler())]
 		pub fn set_fee_handler(
 			origin: OriginFor<T>,
 			domain: DomainID,

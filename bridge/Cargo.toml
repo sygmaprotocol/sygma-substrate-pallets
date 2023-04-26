@@ -15,6 +15,7 @@ funty = { version = "3.0.0-rc1", default-features = false }
 hex = {version = "0.4.3", default-features = false, features = ["alloc"] }
 fixed = {version = "1.23.0", default-features = false }
 bounded-collections = { version = "0.1.4", default-features = false }
+hex-literal = { version = "0.3", default-features =  false }
 
 # Substrate
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false }
@@ -35,6 +36,8 @@ xcm-executor = { git = "https://github.com/paritytech/polkadot", branch = "relea
 
 sygma-traits = { path = "../traits", default-features = false }
 sygma-access-segregator = { path = "../access-segregator", default-features = false }
+sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
+sygma-fee-handler-router = { path = "../fee-handler-router", default-features = false }
 
 [dev-dependencies]
 assert_matches = "1.4.0"
@@ -90,5 +93,7 @@ std = [
     "pallet-assets/std",
 	"sygma-traits/std",
 	"sygma-access-segregator/std",
+	"sygma-basic-feehandler/std",
+	"sygma-fee-handler-router/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

@@ -127,6 +127,12 @@ runtime-benchmarks = [
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
+	"xcm-builder/runtime-benchmarks",
+	"sygma-bridge/runtime-benchmarks",
+	"sygma-access-segregator/runtime-benchmarks",
+	"sygma-basic-feehandler/runtime-benchmarks",
+	"sygma-fee-handler-router/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",

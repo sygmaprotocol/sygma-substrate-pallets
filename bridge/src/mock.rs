@@ -171,12 +171,14 @@ impl sygma_access_segregator::Config for Runtime {
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = AccessSegregatorPalletIndex;
 	type Extrinsics = RegisteredExtrinsics;
+	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Runtime>;
 }
 
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
+	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
 parameter_types! {
@@ -478,6 +480,7 @@ impl sygma_bridge::Config for Runtime {
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
+	type WeightInfo = sygma_bridge::weights::SygmaWeightInfo<Runtime>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);

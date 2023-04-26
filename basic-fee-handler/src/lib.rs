@@ -5,6 +5,11 @@
 
 pub use self::pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
+
 #[cfg(test)]
 mod mock;
 
@@ -25,6 +30,10 @@ pub mod pallet {
 	#[pallet::getter(fn asset_fees)]
 	pub type AssetFees<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u128>;
 
+	pub trait WeightInfo {
+		fn set_fee() -> Weight;
+	}
+
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
@@ -39,6 +48,9 @@ pub mod pallet {
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -61,7 +73,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Set bridge fee for a specific asset
 		#[pallet::call_index(0)]
-		#[pallet::weight(195_000_000)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_fee())]
 		pub fn set_fee(
 			origin: OriginFor<T>,
 			domain: DomainID,
