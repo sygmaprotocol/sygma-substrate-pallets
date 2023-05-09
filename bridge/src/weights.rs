@@ -153,13 +153,16 @@ impl<T: frame_system::Config> super::WeightInfo for SygmaWeightInfo<T> {
 	/// Proof Skipped: SygmaBridge UsedNonces (max_values: None, max_size: None, mode: Measured)
 	/// Storage: System Account (r:1 w:1)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
-	fn execute_proposal() -> Weight {
+	/// The range of component `n` is `[1, 1000]`.
+	fn execute_proposal(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `16593`
-		// Minimum execution time: 214_000_000 picoseconds.
-		Weight::from_parts(222_000_000, 0)
+		// Minimum execution time: 123_000_000 picoseconds.
+		Weight::from_parts(151_050_908, 0)
 			.saturating_add(Weight::from_parts(0, 16593))
+			// Standard Error: 18_882
+			.saturating_add(Weight::from_parts(10_748_102, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}

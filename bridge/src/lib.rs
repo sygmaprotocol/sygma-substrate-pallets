@@ -72,7 +72,7 @@ pub mod pallet {
 		fn unregister_domain() -> Weight;
 		fn deposit() -> Weight;
 		fn retry() -> Weight;
-		fn execute_proposal() -> Weight;
+		fn execute_proposal(n: u32) -> Weight;
 	}
 
 	#[pallet::pallet]
@@ -545,7 +545,7 @@ pub mod pallet {
 		/// Executes a batch of deposit proposals (only if signature is signed by MPC).
 		#[transactional]
 		#[pallet::call_index(7)]
-		#[pallet::weight(<T as Config>::WeightInfo::execute_proposal())]
+		#[pallet::weight(<T as Config>::WeightInfo::execute_proposal(proposals.len() as u32))]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
 			proposals: Vec<Proposal>,

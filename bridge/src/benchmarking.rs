@@ -181,7 +181,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn execute_proposal() {
+	fn execute_proposal(n: Linear<1, 1_000>) {
 		let caller = whitelisted_caller::<AccountId32>();
 		let amount = 200_000_000_000_000u128;
 		let dest_domain_id: DomainID = 1;
@@ -223,18 +223,10 @@ mod benchmarks {
 			),
 		};
 
-		let proposals = vec![
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal.clone(),
-			native_transfer_proposal,
-		];
+		let mut proposals = vec![];
+		for _ in 0..n {
+			proposals.push(native_transfer_proposal.clone());
+		}
 
 		let final_message: [u8; 32] =
 			SygmaBridge::<T>::construct_ecdsa_signing_proposals_data(&proposals);
