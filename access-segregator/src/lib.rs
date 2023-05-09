@@ -22,11 +22,11 @@ pub mod pallet {
 	/// (pallet_index, extrinsic_name) => account
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_access)]
+	#[pallet::unbounded]
 	pub type ExtrinsicAccess<T: Config> = StorageMap<_, Twox64Concat, (u8, Vec<u8>), T::AccountId>;
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
