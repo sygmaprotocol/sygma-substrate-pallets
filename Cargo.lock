@@ -8482,6 +8482,7 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 name = "sygma-access-segregator"
 version = "0.1.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
@@ -8496,6 +8497,7 @@ dependencies = [
 name = "sygma-basic-feehandler"
 version = "0.1.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-assets",
@@ -8542,6 +8544,7 @@ dependencies = [
  "sp-std",
  "sygma-access-segregator",
  "sygma-basic-feehandler",
+ "sygma-fee-handler-router",
  "sygma-traits",
  "xcm",
  "xcm-builder",
@@ -8552,6 +8555,7 @@ dependencies = [
 name = "sygma-fee-handler-router"
 version = "0.1.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-assets",

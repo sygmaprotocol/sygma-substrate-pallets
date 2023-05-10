@@ -5,6 +5,11 @@
 
 pub use self::pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
+
 #[cfg(test)]
 mod mock;
 
@@ -25,6 +30,10 @@ pub mod pallet {
 	#[pallet::unbounded]
 	pub type ExtrinsicAccess<T: Config> = StorageMap<_, Twox64Concat, (u8, Vec<u8>), T::AccountId>;
 
+	pub trait WeightInfo {
+		fn grant_access() -> Weight;
+	}
+
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
@@ -42,6 +51,9 @@ pub mod pallet {
 		/// Registered extrinsics
 		/// List of (pallet_index, extrinsic_name)
 		type Extrinsics: Get<Vec<(u8, Vec<u8>)>>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -64,7 +76,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Grants access to an account for a extrinsic.
 		#[pallet::call_index(0)]
-		#[pallet::weight(195_000_000)]
+		#[pallet::weight(T::WeightInfo::grant_access())]
 		pub fn grant_access(
 			origin: OriginFor<T>,
 			pallet_index: u8,

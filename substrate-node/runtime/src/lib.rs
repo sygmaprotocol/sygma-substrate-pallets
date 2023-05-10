@@ -355,12 +355,14 @@ impl sygma_access_segregator::Config for Runtime {
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = AccessSegregatorPalletIndex;
 	type Extrinsics = RegisteredExtrinsics;
+	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Runtime>;
 }
 
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
+	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
 impl sygma_fee_handler_router::Config for Runtime {
@@ -369,6 +371,7 @@ impl sygma_fee_handler_router::Config for Runtime {
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
 	type PalletIndex = FeeHandlerRouterPalletIndex;
+	type WeightInfo = sygma_fee_handler_router::weights::SygmaWeightInfo<Runtime>;
 }
 
 // This address is defined in the substrate E2E test of sygma-relayer
@@ -707,6 +710,7 @@ impl sygma_bridge::Config for Runtime {
 	type PalletId = SygmaBridgePalletId;
 	type PalletIndex = BridgePalletIndex;
 	type DecimalConverter = SygmaDecimalConverter<AssetDecimalPairs>;
+	type WeightInfo = sygma_bridge::weights::SygmaWeightInfo<Runtime>;
 }
 
 pub fn slice_to_generalkey(key: &[u8]) -> Junction {
@@ -793,7 +797,10 @@ mod benches {
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
-		[pallet_template, TemplateModule]
+		[sygma_bridge, SygmaBridge::<Runtime>]
+		[sygma_access_segregator, SygmaAccessSegregator::<Runtime>]
+		[sygma_basic_feehandler, SygmaBasicFeeHandler::<Runtime>]
+		[sygma_fee_handler_router, SygmaFeeHandlerRouter::<Runtime>]
 	);
 }
 
@@ -973,6 +980,10 @@ impl_runtime_apis! {
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
+			use sygma_bridge::Pallet as SygmaBridge;
+			use sygma_access_segregator::Pallet as SygmaAccessSegregator;
+			use sygma_basic_feehandler::Pallet as SygmaBasicFeeHandler;
+			use sygma_fee_handler_router::Pallet as SygmaFeeHandlerRouter;
 
 			let mut list = Vec::<BenchmarkList>::new();
 			list_benchmarks!(list, extra);
@@ -989,6 +1000,10 @@ impl_runtime_apis! {
 
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
+			use sygma_bridge::Pallet as SygmaBridge;
+			use sygma_access_segregator::Pallet as SygmaAccessSegregator;
+			use sygma_basic_feehandler::Pallet as SygmaBasicFeeHandler;
+			use sygma_fee_handler_router::Pallet as SygmaFeeHandlerRouter;
 
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}

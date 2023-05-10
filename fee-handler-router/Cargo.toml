@@ -11,6 +11,7 @@ scale-info = { version = "2.0", default-features = false, features = ["derive", 
 # Substrate
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false }
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.40", default-features = false, optional = true }
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.40", default-features = false }
 
 # Polkadot
@@ -42,11 +43,17 @@ std = [
 	"scale-info/std",
     "frame-support/std",
     "frame-system/std",
+    "frame-benchmarking/std",
 	"sp-std/std",
 	"xcm/std",
 	"xcm-builder/std",
     "sygma-traits/std",
 	"sygma-basic-feehandler/std",
 	"sygma-access-segregator/std",
+]
+runtime-benchmarks = [
+	'frame-benchmarking',
+	'frame-support/runtime-benchmarks',
+	'frame-system/runtime-benchmarks',
 ]
 try-runtime = ["frame-support/try-runtime"]

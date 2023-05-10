@@ -3,7 +3,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 pub mod migration;
+pub mod weights;
+pub use weights::*;
 
 #[macro_use]
 extern crate arrayref;
@@ -54,10 +58,21 @@ pub mod pallet {
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 	pub struct Proposal {
-		origin_domain_id: DomainID,
-		deposit_nonce: DepositNonce,
-		resource_id: ResourceId,
-		data: Vec<u8>,
+		pub origin_domain_id: DomainID,
+		pub deposit_nonce: DepositNonce,
+		pub resource_id: ResourceId,
+		pub data: Vec<u8>,
+	}
+
+	pub trait WeightInfo {
+		fn pause_bridge() -> Weight;
+		fn unpause_bridge() -> Weight;
+		fn set_mpc_address() -> Weight;
+		fn register_domain() -> Weight;
+		fn unregister_domain() -> Weight;
+		fn deposit() -> Weight;
+		fn retry() -> Weight;
+		fn execute_proposal(n: u32) -> Weight;
 	}
 
 	#[pallet::pallet]
@@ -112,6 +127,9 @@ pub mod pallet {
 
 		/// Asset decimal converter
 		type DecimalConverter: DecimalConverter;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[allow(dead_code)]
@@ -251,8 +269,8 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
-		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::pause_bridge())]
 		pub fn pause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -273,8 +291,8 @@ pub mod pallet {
 		}
 
 		/// Unpause bridge.
-		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(1)]
+		#[pallet::weight(<T as Config>::WeightInfo::unpause_bridge())]
 		pub fn unpause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -298,8 +316,8 @@ pub mod pallet {
 		}
 
 		/// Mark an ECDSA address as a MPC account.
-		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(2)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_mpc_address())]
 		pub fn set_mpc_address(origin: OriginFor<T>, addr: MpcAddress) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -322,8 +340,8 @@ pub mod pallet {
 		}
 
 		/// Mark the give dest domainID with chainID to be enabled
-		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(3)]
+		#[pallet::weight(<T as Config>::WeightInfo::register_domain())]
 		pub fn register_domain(
 			origin: OriginFor<T>,
 			dest_domain_id: DomainID,
@@ -355,8 +373,8 @@ pub mod pallet {
 		}
 
 		/// Mark the give dest domainID with chainID to be disabled
-		#[pallet::weight(195_000_000)]
 		#[pallet::call_index(4)]
+		#[pallet::weight(<T as Config>::WeightInfo::unregister_domain())]
 		pub fn unregister_domain(
 			origin: OriginFor<T>,
 			dest_domain_id: DomainID,
@@ -396,9 +414,9 @@ pub mod pallet {
 		}
 
 		/// Initiates a transfer.
-		#[pallet::weight(195_000_000)]
 		#[transactional]
 		#[pallet::call_index(5)]
+		#[pallet::weight(<T as Config>::WeightInfo::deposit())]
 		pub fn deposit(
 			origin: OriginFor<T>,
 			asset: Box<MultiAsset>,
@@ -490,9 +508,9 @@ pub mod pallet {
 		}
 
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
-		#[pallet::weight(195_000_000)]
 		#[transactional]
 		#[pallet::call_index(6)]
+		#[pallet::weight(<T as Config>::WeightInfo::retry())]
 		pub fn retry(
 			origin: OriginFor<T>,
 			deposit_on_block_height: u128,
@@ -524,9 +542,9 @@ pub mod pallet {
 		}
 
 		/// Executes a batch of deposit proposals (only if signature is signed by MPC).
-		#[pallet::weight(195_000_000)]
 		#[transactional]
 		#[pallet::call_index(7)]
+		#[pallet::weight(<T as Config>::WeightInfo::execute_proposal(proposals.len() as u32))]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
 			proposals: Vec<Proposal>,
@@ -699,7 +717,7 @@ pub mod pallet {
 			}
 		}
 
-		fn create_deposit_data(amount: u128, recipient: Vec<u8>) -> Vec<u8> {
+		pub fn create_deposit_data(amount: u128, recipient: Vec<u8>) -> Vec<u8> {
 			[
 				&Self::hex_zero_padding_32(amount),
 				&Self::hex_zero_padding_32(recipient.len() as u128),
@@ -1553,7 +1571,7 @@ pub mod pallet {
 
 				// Deposit some native asset in advance
 				let fee = 1_000_000_000_000u128;
-				let amount = 200_000_000_000_000u128;
+				let amount: u128 = 200_000_000_000_000u128;
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,

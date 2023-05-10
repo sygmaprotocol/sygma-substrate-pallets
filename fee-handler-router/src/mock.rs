@@ -141,6 +141,7 @@ impl sygma_basic_feehandler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
+	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Test>;
 }
 
 impl sygma_access_segregator::Config for Test {
@@ -148,6 +149,7 @@ impl sygma_access_segregator::Config for Test {
 	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = AccessSegregatorPalletIndex;
 	type Extrinsics = RegisteredExtrinsics;
+	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Test>;
 }
 
 impl fee_handler_router::Config for Test {
@@ -156,6 +158,7 @@ impl fee_handler_router::Config for Test {
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
 	type PalletIndex = FeeHandlerRouterPalletIndex;
+	type WeightInfo = fee_handler_router::weights::SygmaWeightInfo<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
