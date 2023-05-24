@@ -364,14 +364,12 @@ impl sygma_access_segregator::Config for Runtime {
 
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
 	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
 impl sygma_fee_handler_router::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
 	type PalletIndex = FeeHandlerRouterPalletIndex;
@@ -701,7 +699,6 @@ impl ExtractDestinationData for DestinationDataParser {
 
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type TransferReserveAccount = BridgeAccount;
 	type FeeReserveAccount = TreasuryAccount;
 	type EIP712ChainID = EIP712ChainID;
