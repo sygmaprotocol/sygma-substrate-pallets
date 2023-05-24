@@ -83,9 +83,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + sygma_access_segregator::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Origin used to administer the pallet
-		type BridgeCommitteeOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// Bridge transfer reserve account
 		#[pallet::constant]
 		type TransferReserveAccount: Get<Self::AccountId>;

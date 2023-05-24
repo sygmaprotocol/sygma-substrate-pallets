@@ -4372,7 +4372,7 @@ dependencies = [
 
 [[package]]
 name = "node-template"
-version = "4.0.1-dev"
+version = "4.0.3-dev"
 dependencies = [
  "clap",
  "frame-benchmarking",
@@ -4418,7 +4418,7 @@ dependencies = [
 
 [[package]]
 name = "node-template-runtime"
-version = "4.0.1-dev"
+version = "4.0.3-dev"
 dependencies = [
  "fixed",
  "frame-benchmarking",
@@ -8674,7 +8674,7 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "sygma-access-segregator"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8689,7 +8689,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-basic-feehandler"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8709,7 +8709,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-bridge"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "arrayref",
  "assert_matches",
@@ -8747,7 +8747,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-fee-handler-router"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8768,7 +8768,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-rpc"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
@@ -8784,7 +8784,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-runtime-api"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "sp-api",
  "sygma-bridge",
@@ -8793,7 +8793,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-traits"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ethabi",
  "frame-support",

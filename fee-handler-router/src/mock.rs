@@ -143,7 +143,6 @@ parameter_types! {
 
 impl sygma_basic_feehandler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
 	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Test>;
 }
@@ -158,7 +157,6 @@ impl sygma_access_segregator::Config for Test {
 
 impl fee_handler_router::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
 	type PalletIndex = FeeHandlerRouterPalletIndex;

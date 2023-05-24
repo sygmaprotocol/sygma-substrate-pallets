@@ -144,7 +144,6 @@ impl sygma_access_segregator::Config for Test {
 
 impl basic_fee_handler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type BridgeCommitteeOrigin = EnsureRoot<Self::AccountId>;
 	type PalletIndex = FeeHandlerPalletIndex;
 	type WeightInfo = basic_fee_handler::weights::SygmaWeightInfo<Test>;
 }
