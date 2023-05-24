@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-fee-handler-router-v0.2.0...sygma-fee-handler-router-v0.3.0) (2023-05-24)
+
+
+### Features
+
+* Remove BridgeCommitteeOrigin from some pallets' config ([#104](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/104)) ([abfe1ff](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/abfe1ffdf1d992d33be4cad9374bd5be92b87343))
+
 ## [0.2.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-fee-handler-router-v0.1.0...sygma-fee-handler-router-v0.2.0) (2023-05-11)
 
 
