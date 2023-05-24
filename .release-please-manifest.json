@@ -1,1 +1,1 @@
-{"access-segregator":"0.2.0","basic-fee-handler":"0.2.0","bridge":"0.2.0","fee-handler-router":"0.2.0","rpc":"0.2.0","runtime-api":"0.2.0","traits":"0.2.0","substrate-node/node":"4.0.2-dev","substrate-node/runtime":"4.0.2-dev"}
+{"access-segregator":"0.2.0","basic-fee-handler":"0.3.0","bridge":"0.3.0","fee-handler-router":"0.3.0","rpc":"0.2.1","runtime-api":"0.2.1","traits":"0.2.0","substrate-node/node":"4.0.3-dev","substrate-node/runtime":"4.0.3-dev"}

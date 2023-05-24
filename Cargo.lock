@@ -4372,7 +4372,7 @@ dependencies = [
 
 [[package]]
 name = "node-template"
-version = "4.0.2-dev"
+version = "4.0.3-dev"
 dependencies = [
  "clap",
  "frame-benchmarking",
@@ -4418,7 +4418,7 @@ dependencies = [
 
 [[package]]
 name = "node-template-runtime"
-version = "4.0.2-dev"
+version = "4.0.3-dev"
 dependencies = [
  "fixed",
  "frame-benchmarking",
@@ -8689,7 +8689,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-basic-feehandler"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8709,7 +8709,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-bridge"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "arrayref",
  "assert_matches",
@@ -8747,7 +8747,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-fee-handler-router"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8768,7 +8768,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-rpc"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
@@ -8784,7 +8784,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-runtime-api"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "sp-api",
  "sygma-bridge",

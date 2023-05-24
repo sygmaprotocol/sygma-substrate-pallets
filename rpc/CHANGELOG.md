@@ -1,5 +1,7 @@
 # Changelog
 
+
+
 ## [0.2.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-rpc-v0.1.0...sygma-rpc-v0.2.0) (2023-05-11)
 
 

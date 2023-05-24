@@ -1,5 +1,7 @@
 # Changelog
 
+
+
 ## [0.2.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-runtime-api-v0.1.0...sygma-runtime-api-v0.2.0) (2023-05-11)
 
 
