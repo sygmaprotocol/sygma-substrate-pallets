@@ -1,10 +1,10 @@
 # Sygma-Substrate-Pallets
 
-This repo contains several substrate pallet implementation for Sygma protocol
+This repo contains several substrate pallet implementation for Sygma protocol.
 
 ## About Sygma
 
-TODO
+[Sygma](https://buildwithsygma.com/) is a multi-purpose interoperability layer that supports developers in building cross-chain dApps.
 
 ## Build  & Test
 
