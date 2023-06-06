@@ -53,9 +53,6 @@ async function main() {
         provider: sygmaPalletProvider,
     });
 
-    const a = getUSDCAssetId(api)
-    console.log(a.toHex())
-
     await cryptoWaitReady();
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
