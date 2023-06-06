@@ -290,7 +290,7 @@ function getUSDCAssetId(api) {
     return api.createType('XcmV3MultiassetAssetId', {
         Concrete: api.createType('XcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('Junctions', {
+            interior: api.createType('XcmV3Junctions', {
                 X3: [
                     api.createType('XcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
@@ -321,7 +321,7 @@ function getERC20TSTAssetId(api) {
     return api.createType('XcmV3MultiassetAssetId', {
         Concrete: api.createType('XcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('Junctions', {
+            interior: api.createType('XcmV3Junctions', {
                 X3: [
                     api.createType('XcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
@@ -348,7 +348,7 @@ function getERC20TSTD20AssetId(api) {
     return api.createType('XcmV3MultiassetAssetId', {
         Concrete: api.createType('XcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('Junctions', {
+            interior: api.createType('XcmV3Junctions', {
                 X3: [
                     api.createType('XcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
@@ -375,7 +375,7 @@ function getNativeAssetId(api) {
     return api.createType('XcmV3MultiassetAssetId', {
         Concrete: api.createType('XcmV3MultiLocation', {
             parents: 0,
-            interior: api.createType('Junctions', 'Here')
+            interior: api.createType('XcmV3Junctions', 'Here')
         })
     })
 }
