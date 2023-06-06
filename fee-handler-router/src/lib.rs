@@ -70,7 +70,7 @@ pub mod pallet {
 		Unimplemented,
 	}
 
-	/// Mark whether a deposit nonce was used. Used to mark execution status of a proposal.
+	/// Return the Fee handler type based on domainID and assetID
 	#[pallet::storage]
 	#[pallet::getter(fn handler_type)]
 	pub type HandlerType<T: Config> =

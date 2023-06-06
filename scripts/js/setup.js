@@ -53,6 +53,9 @@ async function main() {
         provider: sygmaPalletProvider,
     });
 
+    const a = getUSDCAssetId(api)
+    console.log(a.toHex())
+
     await cryptoWaitReady();
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
@@ -61,64 +64,64 @@ async function main() {
 
     // register dest domains
     for (const domain of supportedDestDomains) {
-        await registerDomain(api, domain.domainID, domain.chainID, true, sudo);
+        // await registerDomain(api, domain.domainID, domain.chainID, true, sudo);
     }
 
     // set fee for native asset for domains
     for (const domain of supportedDestDomains) {
-        await setFeeHandler(api, domain.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-        await setFee(api, domain.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
+        // await setFeeHandler(api, domain.domainID, getNativeAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        // await setFee(api, domain.domainID, getNativeAssetId(api), basicFeeAmount, true, sudo);
     }
 
-    // create USDC test asset (foreign asset)
-    // UsdcAssetId: AssetId defined in runtime.rs
-    const usdcAssetID = 2000;
-    const usdcAdmin = sudo.address;
-    const usdcMinBalance = 100;
-    const usdcName = "USDC test asset";
-    const usdcSymbol = "USDC";
-    const usdcDecimal = 12;
-    await createAsset(api, usdcAssetID, usdcAdmin, usdcMinBalance, true, sudo);
-    await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
-    await mintAsset(api, usdcAssetID, usdcAdmin, bn1e12.mul(new BN(100)), true, sudo); // mint 100 USDC to Alice
-
-    // create ERC20TST test asset (foreign asset)
-    const erc20tstAssetID = 2001;
-    const erc20tstAdmin = sudo.address;
-    const erc20tstMinBalance = 100;
-    const erc20tstName = "erc20tst test asset";
-    const erc20tstSymbol = "ERC20TST";
-    const erc20tstDecimal = 18;
-    await createAsset(api, erc20tstAssetID, erc20tstAdmin, erc20tstMinBalance, true, sudo);
-    await setAssetMetadata(api, erc20tstAssetID, erc20tstName, erc20tstSymbol, erc20tstDecimal, true, sudo);
-    await mintAsset(api, erc20tstAssetID, erc20tstAdmin, bn1e18.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to Alice
-
-    // create ERC20TSTD20 test asset (foreign asset)
-    const erc20tstd20AssetID = 2002;
-    const erc20tstd20Admin = sudo.address;
-    const erc20tstd20MinBalance = 100;
-    const erc20tstd20Name = "erc20tstd20 test asset";
-    const erc20tstd20Symbol = "ERC20TSTD20";
-    const erc20tstd20Decimal = 20;
-    await createAsset(api, erc20tstd20AssetID, erc20tstd20Admin, erc20tstd20MinBalance, true, sudo);
-    await setAssetMetadata(api, erc20tstd20AssetID, erc20tstd20Name, erc20tstd20Symbol, erc20tstd20Decimal, true, sudo);
-    await mintAsset(api, erc20tstd20AssetID, erc20tstd20Admin, bn1e20.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to Alice
+    // // create USDC test asset (foreign asset)
+    // // UsdcAssetId: AssetId defined in runtime.rs
+    // const usdcAssetID = 2000;
+    // const usdcAdmin = sudo.address;
+    // const usdcMinBalance = 100;
+    // const usdcName = "USDC test asset";
+    // const usdcSymbol = "USDC";
+    // const usdcDecimal = 12;
+    // await createAsset(api, usdcAssetID, usdcAdmin, usdcMinBalance, true, sudo);
+    // await setAssetMetadata(api, usdcAssetID, usdcName, usdcSymbol, usdcDecimal, true, sudo);
+    // await mintAsset(api, usdcAssetID, usdcAdmin, bn1e12.mul(new BN(100)), true, sudo); // mint 100 USDC to Alice
+    //
+    // // create ERC20TST test asset (foreign asset)
+    // const erc20tstAssetID = 2001;
+    // const erc20tstAdmin = sudo.address;
+    // const erc20tstMinBalance = 100;
+    // const erc20tstName = "erc20tst test asset";
+    // const erc20tstSymbol = "ERC20TST";
+    // const erc20tstDecimal = 18;
+    // await createAsset(api, erc20tstAssetID, erc20tstAdmin, erc20tstMinBalance, true, sudo);
+    // await setAssetMetadata(api, erc20tstAssetID, erc20tstName, erc20tstSymbol, erc20tstDecimal, true, sudo);
+    // await mintAsset(api, erc20tstAssetID, erc20tstAdmin, bn1e18.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to Alice
+    //
+    // // create ERC20TSTD20 test asset (foreign asset)
+    // const erc20tstd20AssetID = 2002;
+    // const erc20tstd20Admin = sudo.address;
+    // const erc20tstd20MinBalance = 100;
+    // const erc20tstd20Name = "erc20tstd20 test asset";
+    // const erc20tstd20Symbol = "ERC20TSTD20";
+    // const erc20tstd20Decimal = 20;
+    // await createAsset(api, erc20tstd20AssetID, erc20tstd20Admin, erc20tstd20MinBalance, true, sudo);
+    // await setAssetMetadata(api, erc20tstd20AssetID, erc20tstd20Name, erc20tstd20Symbol, erc20tstd20Decimal, true, sudo);
+    // await mintAsset(api, erc20tstd20AssetID, erc20tstd20Admin, bn1e20.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to Alice
 
     // set fee for tokens with domains
     for (const domain of supportedDestDomains) {
         await setFeeHandler(api, domain.domainID, getUSDCAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-        await setFee(api, domain.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
+        // await setFee(api, domain.domainID, getUSDCAssetId(api), basicFeeAmount, true, sudo);
 
-        await setFeeHandler(api, domain.domainID, getERC20TSTAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-        await setFee(api, domain.domainID, getERC20TSTAssetId(api), basicFeeAmount, true, sudo);
-
-        await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
-        await setFee(api, domain.domainID, getERC20TSTD20AssetId(api), basicFeeAmount, true, sudo);
+        // await setFeeHandler(api, domain.domainID, getERC20TSTAssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        // await setFee(api, domain.domainID, getERC20TSTAssetId(api), basicFeeAmount, true, sudo);
+        //
+        // await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.BasicFeeHandler, true, sudo)
+        // await setFee(api, domain.domainID, getERC20TSTD20AssetId(api), basicFeeAmount, true, sudo);
     }
 
     // transfer some native asset to FeeReserveAccount and TransferReserveAccount as Existential Deposit(aka ED)
-    await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
-    await setBalance(api, TransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
+    // await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
+    // await setBalance(api, TransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
     // set up MPC address(will also unpause all registered domains)
     if (mpcAddr) {
