@@ -11,7 +11,7 @@ async function setBalance(api, who, value, finalization, sudo) {
             `--- Submitting extrinsic to set balance of ${who} to ${value}. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
-            .sudo(api.tx.balances.setBalance(who, value, 0))
+            .sudo(api.tx.balances.forceSetBalance(who, value))
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
@@ -287,23 +287,29 @@ async function registerDomain(api, domainID, chainID, finalization, sudo) {
 }
 
 function getUSDCAssetId(api) {
-    return api.createType('XcmV1MultiassetAssetId', {
-        Concrete: api.createType('XcmV1MultiLocation', {
+    return api.createType('XcmV3MultiassetAssetId', {
+        Concrete: api.createType('XcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('Junctions', {
+            interior: api.createType('XcmV3Junctions', {
                 X3: [
-                    api.createType('XcmV1Junction', {
+                    api.createType('XcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
                     }),
-                    api.createType('XcmV1Junction', {
+                    api.createType('XcmV3Junction', {
                         // 0x7379676d61 is general key of USDC defined in sygma substrate pallet runtime for testing
-                        // see UsdcLocation defination in runtime.rs
-                        GeneralKey: '0x7379676d61'
+                        // see UsdcLocation definition in runtime.rs
+                        GeneralKey: {
+                            length: 5,
+                            data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
+                        }
                     }),
-                    api.createType('XcmV1Junction', {
+                    api.createType('XcmV3Junction', {
                         // 0x75736463 is general key of USDC defined in sygma substrate pallet runtime for testing
-                        // see UsdcLocation defination in runtime.rs
-                        GeneralKey: '0x75736463'
+                        // see UsdcLocation definition in runtime.rs
+                        GeneralKey: {
+                            length: 4,
+                            data: '0x7573646300000000000000000000000000000000000000000000000000000000'
+                        }
                     }),
                 ]
             })
@@ -312,19 +318,25 @@ function getUSDCAssetId(api) {
 }
 
 function getERC20TSTAssetId(api) {
-    return api.createType('XcmV1MultiassetAssetId', {
-        Concrete: api.createType('XcmV1MultiLocation', {
+    return api.createType('XcmV3MultiassetAssetId', {
+        Concrete: api.createType('XcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('Junctions', {
+            interior: api.createType('XcmV3Junctions', {
                 X3: [
-                    api.createType('XcmV1Junction', {
+                    api.createType('XcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
                     }),
-                    api.createType('XcmV1Junction', {
-                        GeneralKey: '0x7379676d61' // sygma
+                    api.createType('XcmV3Junction', {
+                        GeneralKey: {
+                            length: 5,
+                            data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
+                        } // sygma
                     }),
-                    api.createType('XcmV1Junction', {
-                        GeneralKey: '0x6572633230747374' // erc20tst
+                    api.createType('XcmV3Junction', {
+                        GeneralKey: {
+                            length: 8,
+                            data: '0x6572633230747374000000000000000000000000000000000000000000000000'
+                        } // erc20tst
                     }),
                 ]
             })
@@ -333,19 +345,25 @@ function getERC20TSTAssetId(api) {
 }
 
 function getERC20TSTD20AssetId(api) {
-    return api.createType('XcmV1MultiassetAssetId', {
-        Concrete: api.createType('XcmV1MultiLocation', {
+    return api.createType('XcmV3MultiassetAssetId', {
+        Concrete: api.createType('XcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('Junctions', {
+            interior: api.createType('XcmV3Junctions', {
                 X3: [
-                    api.createType('XcmV1Junction', {
+                    api.createType('XcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
                     }),
-                    api.createType('XcmV1Junction', {
-                        GeneralKey: '0x7379676d61' // sygma
+                    api.createType('XcmV3Junction', {
+                        GeneralKey: {
+                            length: 5,
+                            data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
+                        } // sygma
                     }),
-                    api.createType('XcmV1Junction', {
-                        GeneralKey: '0x6572633230747374643230' // erc20tstd20
+                    api.createType('XcmV3Junction', {
+                        GeneralKey: {
+                            length: 11,
+                            data: '0x6572633230747374643230000000000000000000000000000000000000000000'
+                        } // erc20tstd20
                     }),
                 ]
             })
@@ -354,10 +372,10 @@ function getERC20TSTD20AssetId(api) {
 }
 
 function getNativeAssetId(api) {
-    return api.createType('XcmV1MultiassetAssetId', {
-        Concrete: api.createType('XcmV1MultiLocation', {
+    return api.createType('XcmV3MultiassetAssetId', {
+        Concrete: api.createType('XcmV3MultiLocation', {
             parents: 0,
-            interior: api.createType('Junctions', 'Here')
+            interior: api.createType('XcmV3Junctions', 'Here')
         })
     })
 }
