@@ -1,6 +1,7 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
+use cumulus_primitives_core::ParaId;
 use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
 	SystemConfig, WASM_BINARY,
@@ -135,6 +136,8 @@ fn testnet_genesis(
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
 ) -> GenesisConfig {
+	// hardcoded dummy parachainID
+	let id: ParaId = ParaId::from(1000);
 	GenesisConfig {
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
@@ -154,6 +157,7 @@ fn testnet_genesis(
 			// Assign network admin rights.
 			key: Some(root_key),
 		},
+		parachain_info: node_template_runtime::ParachainInfoConfig { parachain_id: id },
 		transaction_payment: Default::default(),
 	}
 }
