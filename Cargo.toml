@@ -11,6 +11,7 @@ members = [
     "rpc",
     "substrate-node/node",
     "substrate-node/runtime",
+    "parachain-info",
 ]
 
 exclude = [

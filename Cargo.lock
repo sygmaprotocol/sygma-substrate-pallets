@@ -4375,6 +4375,7 @@ name = "node-template"
 version = "4.0.3-dev"
 dependencies = [
  "clap",
+ "cumulus-primitives-core",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -4436,6 +4437,7 @@ dependencies = [
  "pallet-balances",
  "pallet-grandpa",
  "pallet-insecure-randomness-collective-flip",
+ "pallet-parachain-info",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -4889,6 +4891,17 @@ dependencies = [
  "scale-info",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-parachain-info"
+version = "0.1.0"
+dependencies = [
+ "cumulus-primitives-core",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
 ]
 
 [[package]]

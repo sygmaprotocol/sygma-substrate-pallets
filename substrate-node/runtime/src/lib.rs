@@ -221,6 +221,8 @@ impl frame_system::Config for Runtime {
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
+impl pallet_parachain_info::Config for Runtime {}
+
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
@@ -748,6 +750,7 @@ construct_runtime!(
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
+		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config} = 20,
 	}
 );
 
