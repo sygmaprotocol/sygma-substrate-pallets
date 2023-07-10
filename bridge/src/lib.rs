@@ -644,13 +644,12 @@ pub mod pallet {
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
-			// Emit register dest domain event
 			let sender = match ensure_signed(origin) {
 				Ok(sender) => sender,
 				_ => [0u8; 32].into(),
 			};
 
-			// Emit WithdrawLiquidity
+			// Emit WithdrawLiquidity event
 			Self::deposit_event(Event::WithdrawLiquidity { sender, asset: *asset, to });
 
 			Ok(())
