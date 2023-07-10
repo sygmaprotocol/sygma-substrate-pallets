@@ -23,7 +23,7 @@
 // --repeat
 // 20
 // --output
-// bridge_weight.rs
+// ./bridge/weights.rs
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
@@ -164,6 +164,21 @@ impl<T: frame_system::Config> super::WeightInfo for SygmaWeightInfo<T> {
 			// Standard Error: 18_882
 			.saturating_add(Weight::from_parts(10_748_102, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(2))
+	}
+
+	/// Storage: SygmaBridge MpcAddr (r:1 w:0)
+	/// Proof: SygmaBridge MpcAddr (max_values: Some(1), max_size: Some(20), added: 515, mode: MaxEncodedLen)
+	/// Storage: System Account (r:2 w:2)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	fn withdraw_liquidity() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `189`
+		//  Estimated: `6196`
+		// Minimum execution time: 84_000_000 picoseconds.
+		Weight::from_parts(85_000_000, 0)
+			.saturating_add(Weight::from_parts(0, 6196))
+			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 }

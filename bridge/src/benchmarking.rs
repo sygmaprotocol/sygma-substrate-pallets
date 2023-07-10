@@ -167,6 +167,32 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn withdraw_liquidity() {
+		let native_location: MultiLocation = MultiLocation::here();
+		let bridge_account: AccountId32 = AccountId32::new([101u8; 32]);
+		let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+		let to_account: AccountId32 = AccountId32::new([100u8; 32]);
+		let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+
+		SygmaBridge::<T>::set_mpc_address(SystemOrigin::Root.into(), test_mpc_addr).unwrap();
+
+		let _ = <Balances<T, _> as Currency<_>>::make_free_balance_be(
+			&bridge_account.clone().into(),
+			(amount).into(),
+		);
+		assert_eq!(Balances::<T, _>::free_balance(bridge_account.clone()), (amount).into());
+
+		#[extrinsic_call]
+		withdraw_liquidity(
+			SystemOrigin::Root,
+			Box::new((Concrete(native_location), Fungible(amount)).into()),
+			to_account.clone(),
+		);
+
+		assert_eq!(Balances::<T, _>::free_balance(to_account), amount.into());
+	}
+
+	#[benchmark]
 	fn retry() {
 		let dest_domain_id: DomainID = 1;
 		let dest_chain_id: ChainID = U256::from(1);
