@@ -2625,7 +2625,7 @@ pub mod pallet {
 					bridge::Error::<Runtime>::AccessDenied
 				);
 
-				// Grant ALICE the access admin extrinsics
+				// Grant ALICE the access admin extrinsic
 				assert_ok!(AccessSegregator::grant_access(
 					Origin::root(),
 					BridgePalletIndex::get(),
@@ -2649,6 +2649,44 @@ pub mod pallet {
 					SygmaBridgeEvent::WithdrawLiquidity {
 						sender: ALICE,
 						asset: (Concrete(NativeLocation::get()), Fungible(100_000_000_000_000u128))
+							.into(),
+						to: receiver.clone(),
+					},
+				)]);
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint some USDC to token reserved account for test
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					BridgeAccount::get(),
+					amount,
+				));
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), amount);
+
+				assert_ok!(SygmaBridge::withdraw_liquidity(
+					Origin::signed(ALICE),
+					Box::new(
+						(Concrete(UsdcLocation::get()), Fungible(100_000_000_000_000u128)).into()
+					),
+					receiver.clone()
+				));
+
+				// check receiver balance after withdraw
+				assert_eq!(
+					Assets::balance(UsdcAssetId::get(), receiver.clone()),
+					100_000_000_000_000u128
+				);
+
+				// should emit WithdrawLiquidity event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::WithdrawLiquidity {
+						sender: ALICE,
+						asset: (Concrete(UsdcLocation::get()), Fungible(100_000_000_000_000u128))
 							.into(),
 						to: receiver,
 					},
