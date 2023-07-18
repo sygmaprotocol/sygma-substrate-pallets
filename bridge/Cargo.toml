@@ -15,7 +15,7 @@ funty = { version = "3.0.0-rc1", default-features = false }
 hex = {version = "0.4.3", default-features = false, features = ["alloc"] }
 fixed = {version = "1.23.0", default-features = false }
 bounded-collections = { version = "0.1.4", default-features = false }
-hex-literal = { version = "0.3", default-features =  false }
+hex-literal = { version = "0.4.1", default-features =  false }
 
 # Substrate
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
@@ -41,7 +41,7 @@ sygma-fee-handler-router = { path = "../fee-handler-router", default-features = 
 
 [dev-dependencies]
 assert_matches = "1.4.0"
-hex-literal = "0.3"
+hex-literal = "0.4.1"
 
 # Substrate
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
