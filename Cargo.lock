@@ -8950,7 +8950,7 @@ dependencies = [
  "frame-system",
  "funty 3.0.0-rc2",
  "hex",
- "hex-literal 0.3.4",
+ "hex-literal 0.4.1",
  "log",
  "pallet-assets",
  "pallet-balances",

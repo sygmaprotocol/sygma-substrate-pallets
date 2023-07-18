@@ -40,7 +40,7 @@ pub mod pallet {
 	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 	use sp_runtime::{
 		traits::{AccountIdConversion, Clear},
-		RuntimeDebug,
+		AccountId32, RuntimeDebug,
 	};
 	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
 	use xcm::latest::{prelude::*, MultiLocation};
@@ -73,6 +73,7 @@ pub mod pallet {
 		fn deposit() -> Weight;
 		fn retry() -> Weight;
 		fn execute_proposal(n: u32) -> Weight;
+		fn withdraw_liquidity() -> Weight;
 	}
 
 	#[pallet::pallet]
@@ -170,6 +171,8 @@ pub mod pallet {
 		RegisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
 		/// When unregistering a dest domainID with its corresponding chainID
 		UnregisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
+		/// When withdraw liquidity happen
+		WithdrawLiquidity { sender: T::AccountId, asset: MultiAsset, to: AccountId32 },
 	}
 
 	#[pallet::error]
@@ -600,6 +603,57 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Withdraw liquidity from TransferReserveAccount to the provided account
+		#[pallet::call_index(8)]
+		#[pallet::weight(<T as Config>::WeightInfo::withdraw_liquidity())]
+		pub fn withdraw_liquidity(
+			origin: OriginFor<T>,
+			asset: Box<MultiAsset>,
+			to: AccountId32,
+		) -> DispatchResult {
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"withdraw_liquidity".to_vec(),
+					origin.clone()
+				),
+				Error::<T>::AccessDenied
+			);
+			// Check MPC address
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			// Withdraw asset from TransferReserveAccount
+			T::AssetTransactor::withdraw_asset(
+				&asset,
+				&Junction::AccountId32 {
+					network: None,
+					id: T::TransferReserveAccount::get().into(),
+				}
+				.into(),
+				None,
+			)
+			.map_err(|_| Error::<T>::TransactFailed)?;
+
+			// Deposit asset to provided account
+			T::AssetTransactor::deposit_asset(
+				&asset,
+				&Junction::AccountId32 { network: None, id: to.clone().into() }.into(),
+				// Put empty message hash here because we are not sending XCM message
+				&XcmContext::with_message_hash([0; 32]),
+			)
+			.map_err(|_| Error::<T>::TransactFailed)?;
+
+			let sender = match ensure_signed(origin) {
+				Ok(sender) => sender,
+				_ => [0u8; 32].into(),
+			};
+
+			// Emit WithdrawLiquidity event
+			Self::deposit_event(Event::WithdrawLiquidity { sender, asset: *asset, to });
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T>
@@ -860,6 +914,7 @@ pub mod pallet {
 		};
 		use primitive_types::U256;
 		use sp_core::{ecdsa, Pair};
+		use sp_runtime::AccountId32 as SPAccountId32;
 		use sp_std::{boxed::Box, vec};
 		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
@@ -2532,6 +2587,110 @@ pub mod pallet {
 				// proposal amount is in 18 decimal 0.000200000000000000, will be convert to 12
 				// decimal 0.000200000000(200000000) because native asset is defined in 12 decimal
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + 200000000);
+			})
+		}
+
+		#[test]
+		fn withdraw_liquidity_test() {
+			new_test_ext().execute_with(|| {
+				let receiver: SPAccountId32 = SPAccountId32::new([200u8; 32]);
+				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+
+				// set mpc address
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// make sure receiver balance before withdraw
+				assert_eq!(Balances::free_balance(receiver.clone()), 0);
+
+				// set 200 native token to token reserved account
+				assert_ok!(Balances::force_set_balance(
+					Origin::root(),
+					BridgeAccount::get(),
+					amount
+				));
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount);
+
+				// try to 100 native token withdraw liquidity to receiver account, failed due to
+				// permission
+				assert_noop!(
+					SygmaBridge::withdraw_liquidity(
+						Origin::signed(ALICE),
+						Box::new(
+							(Concrete(NativeLocation::get()), Fungible(100_000_000_000_000u128))
+								.into()
+						),
+						receiver.clone()
+					),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+
+				// Grant ALICE the access admin extrinsic
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"withdraw_liquidity".to_vec(),
+					ALICE
+				));
+
+				assert_ok!(SygmaBridge::withdraw_liquidity(
+					Origin::signed(ALICE),
+					Box::new(
+						(Concrete(NativeLocation::get()), Fungible(100_000_000_000_000u128)).into()
+					),
+					receiver.clone()
+				));
+
+				// check receiver balance after withdraw
+				assert_eq!(Balances::free_balance(receiver.clone()), 100_000_000_000_000u128);
+
+				// should emit WithdrawLiquidity event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::WithdrawLiquidity {
+						sender: ALICE,
+						asset: (Concrete(NativeLocation::get()), Fungible(100_000_000_000_000u128))
+							.into(),
+						to: receiver.clone(),
+					},
+				)]);
+
+				// Register foreign asset (USDC) with asset id 0
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint some USDC to token reserved account for test
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					BridgeAccount::get(),
+					amount,
+				));
+				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), amount);
+
+				assert_ok!(SygmaBridge::withdraw_liquidity(
+					Origin::signed(ALICE),
+					Box::new(
+						(Concrete(UsdcLocation::get()), Fungible(100_000_000_000_000u128)).into()
+					),
+					receiver.clone()
+				));
+
+				// check receiver balance after withdraw
+				assert_eq!(
+					Assets::balance(UsdcAssetId::get(), receiver.clone()),
+					100_000_000_000_000u128
+				);
+
+				// should emit WithdrawLiquidity event
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::WithdrawLiquidity {
+						sender: ALICE,
+						asset: (Concrete(UsdcLocation::get()), Fungible(100_000_000_000_000u128))
+							.into(),
+						to: receiver,
+					},
+				)]);
 			})
 		}
 	}
