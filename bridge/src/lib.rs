@@ -170,6 +170,13 @@ pub mod pallet {
 		RegisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
 		/// When unregistering a dest domainID with its corresponding chainID
 		UnregisterDestDomain { sender: T::AccountId, domain_id: DomainID, chain_id: ChainID },
+		/// When bridge fee is collected
+		FeeCollected {
+			fee_payer: T::AccountId,
+			dest_domain_id: DomainID,
+			resource_id: ResourceId,
+			fee_amount: u128,
+		},
 	}
 
 	#[pallet::error]
@@ -459,6 +466,14 @@ pub mod pallet {
 				&XcmContext::with_message_hash([0; 32]),
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
+
+			// Emit FeeCollected event
+			Self::deposit_event(Event::FeeCollected {
+				fee_payer: sender.clone(),
+				dest_domain_id,
+				resource_id,
+				fee_amount: fee,
+			});
 
 			let bridge_amount = amount - fee;
 
