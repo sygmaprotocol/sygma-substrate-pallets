@@ -86,7 +86,7 @@ pub mod pallet {
 	impl<T: Config> FeeHandler for Pallet<T> {
 		fn get_fee(domain: DomainID, asset: &MultiAsset) -> Option<u8> {
 			let fee_rate_basis_point = AssetFeeRate::<T>::get((domain, asset.id));
-			asset.fun - asset.fun * fee_rate_basis_point / 1e4
+			asset.fun * fee_rate_basis_point / 1e4
 		}
 	}
 }
