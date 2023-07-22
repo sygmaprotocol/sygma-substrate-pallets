@@ -7,7 +7,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{H160, U256};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
-use xcm::latest::{prelude::*, AssetId, MultiLocation};
+use xcm::latest::{prelude::*, MultiLocation};
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;
@@ -44,11 +44,11 @@ pub trait ExtractDestinationData {
 
 pub trait FeeHandler {
 	// Return fee represent by a specific asset
-	fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128>;
+	fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128>;
 }
 
 impl FeeHandler for () {
-	fn get_fee(_domain: DomainID, _asset: &AssetId) -> Option<u128> {
+	fn get_fee(_domain: DomainID, _asset: MultiAsset) -> Option<u128> {
 		None
 	}
 }

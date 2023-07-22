@@ -21,7 +21,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
-	use xcm::latest::AssetId;
+	use xcm::latest::{AssetId, MultiAsset};
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 	pub enum FeeHandlerType {
@@ -107,8 +107,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128> {
-			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset)) {
+		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
+			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset.id)) {
 				match handler_type {
 					FeeHandlerType::BasicFeeHandler =>
 						sygma_basic_feehandler::Pallet::<T>::get_fee(domain, asset),

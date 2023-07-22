@@ -22,6 +22,7 @@ pub mod pallet {
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
 	use xcm::latest::AssetId;
+	use xcm::latest::MultiAsset;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -96,8 +97,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128> {
-			AssetFees::<T>::get((domain, asset))
+		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
+			AssetFees::<T>::get((domain, &asset.id))
 		}
 	}
 

@@ -442,9 +442,9 @@ pub mod pallet {
 			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
 			// transfer type
 			let (resource_id, amount, transfer_type) =
-				Self::extract_asset(&asset).ok_or(Error::<T>::AssetNotBound)?;
+				Self::extract_asset(&asset.clone()).ok_or(Error::<T>::AssetNotBound)?;
 			// Return error if no fee handler set
-			let fee = T::FeeHandler::get_fee(dest_domain_id, &asset.id)
+			let fee = T::FeeHandler::get_fee(dest_domain_id, *asset.clone())
 				.ok_or(Error::<T>::MissingFeeConfig)?;
 
 			ensure!(amount > fee, Error::<T>::FeeTooExpensive);

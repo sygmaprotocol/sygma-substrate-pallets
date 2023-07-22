@@ -10,6 +10,7 @@ pub use weights::*;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
+	use xcm::latest::MultiAsset;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -40,8 +41,8 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Fee set rate for a specific asset and domain
-		/// args: [domain, asset, rate]
-		FeeSetRate { domain: DomainID, asset: AssetId, rate: u8 },
+		/// args: [domain, asset, rate_basis_point]
+		FeeRateSet { domain: DomainID, asset: AssetId, rate_basis_point: u8 },
 	}
 
 	#[pallet::error]
@@ -54,22 +55,38 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Set bridge fee rate for a specific asset and domain
+		/// Set bridge fee rate for a specific asset and domain. Note the fee rate is in Basis Point representation
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::set_fee_rate())]
 		pub fn set_fee_rate(
 			origin: OriginFor<T>,
 			domain: DomainID,
 			asset: Box<AssetId>,
-			fee_rate: u8,
+			fee_rate_basis_point: u8,
 		) -> DispatchResult {
-			Error::<T>::Unimplemented
+			let asset: AssetId = *asset;
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"set_fee_rate".to_vec(),
+					origin
+				),
+				Error::<T>::AccessDenied
+			);
+
+			// Update asset fee rate
+			AssetFeeRate::<T>::insert((domain, &asset), rate_basis_point);
+
+			// Emit FeeRateSet event
+			Self::deposit_event(Event::FeeRateSet { domain, asset, rate_basis_point: fee_rate_basis_point });
+			Ok(())
 		}
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u8> {
-			Error::<T>::Unimplemented
+		fn get_fee(domain: DomainID, asset: &MultiAsset) -> Option<u8> {
+			let fee_rate_basis_point = AssetFeeRate::<T>::get((domain, asset.id));
+			asset.fun - asset.fun * fee_rate_basis_point / 1e4
 		}
 	}
 }
