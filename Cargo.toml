@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "access-segregator",
     "basic-fee-handler",
+    "percentage-fee-handler",
     "bridge",
     "fee-handler-router",
     "traits",

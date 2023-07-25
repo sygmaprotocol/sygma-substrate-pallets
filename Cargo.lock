@@ -4615,6 +4615,7 @@ dependencies = [
  "sygma-basic-feehandler",
  "sygma-bridge",
  "sygma-fee-handler-router",
+ "sygma-percentage-feehandler",
  "sygma-runtime-api",
  "sygma-traits",
  "xcm",
@@ -8990,6 +8991,27 @@ dependencies = [
  "sp-std",
  "sygma-access-segregator",
  "sygma-basic-feehandler",
+ "sygma-percentage-feehandler",
+ "sygma-traits",
+ "xcm",
+ "xcm-builder",
+]
+
+[[package]]
+name = "sygma-percentage-feehandler"
+version = "0.3.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sygma-access-segregator",
  "sygma-traits",
  "xcm",
  "xcm-builder",

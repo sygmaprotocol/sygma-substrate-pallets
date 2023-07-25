@@ -1,9 +1,54 @@
 [package]
-name = "percentage-fee-handler"
+name = "sygma-percentage-feehandler"
 version = "0.3.0"
-edition = "2023"
+edition = "2021"
 license = "LGPL-3.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde", "decode"] }
+
+# Substrate
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43", default-features = false }
+frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43", default-features = false }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43", default-features = false, optional = true }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.43", default-features = false }
+
+# Polkadot
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.43", default-features = false }
+xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.43", default-features = false }
+
+# Local
+sygma-traits = { path = "../traits", default-features = false }
+sygma-access-segregator = { path = "../access-segregator", default-features = false }
+
+[dev-dependencies]
+# Substrate
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
+sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
+frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
+pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
+pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
+
+[features]
+default = ["std"]
+std = [
+    "codec/std",
+    "scale-info/std",
+    "frame-support/std",
+    "frame-system/std",
+    "frame-benchmarking/std",
+    "sp-std/std",
+    "xcm/std",
+    "xcm-builder/std",
+    "sygma-traits/std",
+    "sygma-access-segregator/std",
+]
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+]
+try-runtime = ["frame-support/try-runtime"]
+

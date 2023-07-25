@@ -26,6 +26,7 @@ pub mod pallet {
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 	pub enum FeeHandlerType {
 		BasicFeeHandler,
+		PercentageFeeHandler,
 		DynamicFeeHandler,
 	}
 
@@ -40,7 +41,9 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + sygma_basic_feehandler::Config {
+	pub trait Config:
+		frame_system::Config + sygma_basic_feehandler::Config + sygma_percentage_feehandler::Config
+	{
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Fee handlers
@@ -112,6 +115,8 @@ pub mod pallet {
 				match handler_type {
 					FeeHandlerType::BasicFeeHandler =>
 						sygma_basic_feehandler::Pallet::<T>::get_fee(domain, asset),
+					FeeHandlerType::PercentageFeeHandler =>
+						sygma_percentage_feehandler::Pallet::<T>::get_fee(domain, asset),
 					FeeHandlerType::DynamicFeeHandler => {
 						// TODO: Support dynamic fee handler
 						None
@@ -191,6 +196,7 @@ pub mod pallet {
 		#[test]
 		fn fee_router_should_work() {
 			new_test_ext().execute_with(|| {
+				print!("{:?}", 1e4);
 				// config dest of (ethereum, PHA) use basic fee handler
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),
@@ -215,13 +221,19 @@ pub mod pallet {
 				));
 
 				assert_eq!(
-					FeeHandlerRouter::get_fee(EthereumDomainID::get(), &PhaLocation::get().into())
-						.unwrap(),
+					FeeHandlerRouter::get_fee(
+						EthereumDomainID::get(),
+						(PhaLocation::get(), 10000u128).into()
+					)
+					.unwrap(),
 					10000
 				);
 				// We don't support dynamic fee handler, return None
 				assert_eq!(
-					FeeHandlerRouter::get_fee(MoonbeamDomainID::get(), &PhaLocation::get().into()),
+					FeeHandlerRouter::get_fee(
+						MoonbeamDomainID::get(),
+						(PhaLocation::get(), 10000u128).into()
+					),
 					None
 				);
 				assert_events(vec![

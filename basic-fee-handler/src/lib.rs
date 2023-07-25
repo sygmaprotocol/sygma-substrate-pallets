@@ -21,8 +21,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
-	use xcm::latest::AssetId;
-	use xcm::latest::MultiAsset;
+	use xcm::latest::{AssetId, MultiAsset};
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 

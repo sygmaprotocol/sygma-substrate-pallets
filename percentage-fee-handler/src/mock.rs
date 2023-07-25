@@ -14,10 +14,8 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU128},
 };
 use frame_system::{self as system, EnsureRoot, EnsureSigned};
-use sygma_traits::DomainID;
-use xcm::latest::MultiLocation;
 
-use crate as fee_handler_router;
+use crate as percentage_fee_handler;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -36,9 +34,7 @@ frame_support::construct_runtime!(
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 3,
-		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 4,
-		FeeHandlerRouter: fee_handler_router::{Pallet, Call, Storage, Event<T>} = 5,
-		SygamPercenrageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 6,
+		PercentageFeeHandler: percentage_fee_handler::{Pallet, Call, Storage, Event<T>} = 4,
 	}
 );
 
@@ -129,23 +125,13 @@ impl pallet_assets::Config for Test {
 }
 
 parameter_types! {
-	pub const EthereumDomainID: DomainID = 0;
-	pub const MoonbeamDomainID: DomainID = 1;
 	// Make sure put same value with `construct_runtime`
 	pub const AccessSegregatorPalletIndex: u8 = 3;
-	pub const FeeHandlerPalletIndex: u8 = 4;
-	pub const FeeHandlerRouterPalletIndex: u8 = 5;
+	pub const PercentageFeeHandlerPalletIndex: u8 = 4;
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
-		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
+		(PercentageFeeHandlerPalletIndex::get(), b"set_fee_rate".to_vec()),
 	].to_vec();
-	pub PhaLocation: MultiLocation = MultiLocation::here();
-}
-
-impl sygma_basic_feehandler::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type PalletIndex = FeeHandlerPalletIndex;
-	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Test>;
 }
 
 impl sygma_access_segregator::Config for Test {
@@ -156,17 +142,10 @@ impl sygma_access_segregator::Config for Test {
 	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Test>;
 }
 
-impl fee_handler_router::Config for Test {
+impl percentrage_fee_handler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type BasicFeeHandler = SygmaBasicFeeHandler;
-	type DynamicFeeHandler = ();
-	type PalletIndex = FeeHandlerRouterPalletIndex;
-	type WeightInfo = fee_handler_router::weights::SygmaWeightInfo<Test>;
-}
-
-impl sygma_percentage_feehandler::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type PalletIndex = FeeHandlerPalletIndex;
+	type PalletIndex = PercentageFeeHandlerPalletIndex;
+	type WeightInfo = percentrage_fee_handler::weights::SygmaWeightInfo<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

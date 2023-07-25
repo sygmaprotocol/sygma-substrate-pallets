@@ -342,6 +342,7 @@ parameter_types! {
 	pub const FeeHandlerPalletIndex: u8 = 10;
 	pub const BridgePalletIndex: u8 = 11;
 	pub const FeeHandlerRouterPalletIndex: u8 = 12;
+	pub const PercentageFeeHandlerRouterPalletIndex: u8 = 13;
 	// RegisteredExtrinsics here registers all valid (pallet index, extrinsic_name) paris
 	// make sure to update this when adding new access control extrinsic
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
@@ -354,6 +355,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
 		(BridgePalletIndex::get(), b"retry".to_vec()),
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
+		(PercentageFeeHandlerRouterPalletIndex::get(), b"set_fee_rate".to_vec()),
 	].to_vec();
 }
 
@@ -369,6 +371,11 @@ impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletIndex = FeeHandlerPalletIndex;
 	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Runtime>;
+}
+
+impl sygma_percentage_feehandler::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type PalletIndex = PercentageFeeHandlerRouterPalletIndex;
 }
 
 impl sygma_fee_handler_router::Config for Runtime {
@@ -751,6 +758,7 @@ construct_runtime!(
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
+		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 13,
 		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config} = 20,
 	}
 );

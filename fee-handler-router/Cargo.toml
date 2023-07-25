@@ -21,6 +21,7 @@ xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "releas
 # Local
 sygma-traits = { path = "../traits", default-features = false }
 sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
+sygma-percentage-feehandler = { path = "../percentage-fee-handler", default-features = false }
 sygma-access-segregator = { path = "../access-segregator", default-features = false }
 
 [dev-dependencies]
@@ -49,6 +50,7 @@ std = [
 	"xcm-builder/std",
     "sygma-traits/std",
 	"sygma-basic-feehandler/std",
+	"sygma-percentage-feehandler/std",
 	"sygma-access-segregator/std",
 ]
 runtime-benchmarks = [
