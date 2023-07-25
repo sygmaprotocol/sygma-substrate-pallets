@@ -5,6 +5,9 @@
 
 pub use self::pallet::*;
 
+#[cfg(test)]
+mod mock;
+
 #[allow(unused_variables)]
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
@@ -17,9 +20,9 @@ pub mod pallet {
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
-	/// Mapping fungible asset id and domain id to fee percentage
+	/// Mapping fungible asset id with domain id to fee rate
 	#[pallet::storage]
-	pub type AssetFeeRate<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u8>;
+	pub type AssetFeeRate<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u32>;
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -38,7 +41,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Fee set rate for a specific asset and domain
 		/// args: [domain, asset, rate_basis_point]
-		FeeRateSet { domain: DomainID, asset: AssetId, rate_basis_point: u8 },
+		FeeRateSet { domain: DomainID, asset: AssetId, rate_basis_point: u32 },
 	}
 
 	#[pallet::error]
@@ -59,7 +62,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			domain: DomainID,
 			asset: Box<AssetId>,
-			fee_rate_basis_point: u8,
+			fee_rate_basis_point: u32,
 		) -> DispatchResult {
 			let asset: AssetId = *asset;
 			ensure!(
@@ -94,6 +97,126 @@ pub mod pallet {
 				},
 				_ => None,
 			}
+		}
+	}
+
+	#[cfg(test)]
+	mod test {
+		use crate as percentage_fee_handler;
+		use crate::{AssetFeeRate, Event as PercentageFeeHandlerEvent};
+		use frame_support::{assert_noop, assert_ok};
+		use percentage_fee_handler::mock::{
+			assert_events, new_test_ext, AccessSegregator, PercentageFeeHandler,
+			PercentageFeeHandlerPalletIndex, RuntimeEvent as Event, RuntimeOrigin as Origin, Test,
+			ALICE,
+		};
+		use sp_std::boxed::Box;
+		use sygma_traits::DomainID;
+		use xcm::latest::{prelude::*, MultiLocation};
+
+		#[test]
+		fn set_get_fee() {
+			new_test_ext().execute_with(|| {
+				let dest_domain_id: DomainID = 0;
+				let another_dest_domain_id: DomainID = 1;
+				let asset_id_a = Concrete(MultiLocation::new(1, Here));
+				let asset_id_b = Concrete(MultiLocation::new(2, Here));
+				let asset_a_deposit: MultiAsset = (asset_id_a, 100u128).into();
+				let asset_b_deposit: MultiAsset = (asset_id_b, 200u128).into();
+
+				// set fee rate as 50 basis point aka 0.5% with assetId asset_id_a for one domain
+				assert_ok!(PercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					dest_domain_id,
+					Box::new(asset_id_a),
+					50u32
+				));
+				// set fee rate as 200 basis point aka 2% with assetId asset_id_a for another domain
+				assert_ok!(PercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					another_dest_domain_id,
+					Box::new(asset_id_b),
+					200u32
+				));
+
+				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)).unwrap(), 50);
+				assert_eq!(
+					AssetFeeRate::<Test>::get((another_dest_domain_id, asset_id_b)).unwrap(),
+					200
+				);
+
+				// permission test: unauthorized account should not be able to set fee
+				let unauthorized_account = Origin::from(Some(ALICE));
+				assert_noop!(
+					PercentageFeeHandler::set_fee_rate(
+						unauthorized_account,
+						dest_domain_id,
+						Box::new(asset_id_a),
+						100u32
+					),
+					percentage_fee_handler::Error::<Test>::AccessDenied
+				);
+
+				assert_events(vec![
+					Event::PercentageFeeHandler(PercentageFeeHandlerEvent::FeeRateSet {
+						domain: dest_domain_id,
+						asset: asset_id_a,
+						rate_basis_point: 50u32,
+					}),
+					Event::PercentageFeeHandler(PercentageFeeHandlerEvent::FeeRateSet {
+						domain: another_dest_domain_id,
+						asset: asset_id_b,
+						rate_basis_point: 200u32,
+					}),
+				]);
+			})
+		}
+
+		#[test]
+		fn access_control() {
+			new_test_ext().execute_with(|| {
+				let dest_domain_id: DomainID = 0;
+				let asset_id = Concrete(MultiLocation::new(0, Here));
+
+				assert_ok!(PercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					dest_domain_id,
+					Box::new(asset_id),
+					100u32
+				),);
+				assert_noop!(
+					PercentageFeeHandler::set_fee_rate(
+						Some(ALICE).into(),
+						dest_domain_id,
+						Box::new(asset_id),
+						200u32
+					),
+					percentage_fee_handler::Error::<Test>::AccessDenied
+				);
+				assert!(!AccessSegregator::has_access(
+					PercentageFeeHandlerPalletIndex::get(),
+					b"set_fee_rate".to_vec(),
+					Some(ALICE).into()
+				));
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					PercentageFeeHandlerPalletIndex::get(),
+					b"set_fee_rate".to_vec(),
+					ALICE
+				));
+				assert!(AccessSegregator::has_access(
+					PercentageFeeHandlerPalletIndex::get(),
+					b"set_fee_rate".to_vec(),
+					Some(ALICE).into()
+				));
+				assert_ok!(PercentageFeeHandler::set_fee_rate(
+					Some(ALICE).into(),
+					dest_domain_id,
+					Box::new(asset_id),
+					200u32
+				),);
+				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id)).unwrap(), 200u32);
+			})
 		}
 	}
 }

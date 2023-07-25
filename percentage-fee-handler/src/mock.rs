@@ -142,10 +142,9 @@ impl sygma_access_segregator::Config for Test {
 	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Test>;
 }
 
-impl percentrage_fee_handler::Config for Test {
+impl percentage_fee_handler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletIndex = PercentageFeeHandlerPalletIndex;
-	type WeightInfo = percentrage_fee_handler::weights::SygmaWeightInfo<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
