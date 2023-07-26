@@ -202,6 +202,7 @@ impl sygma_basic_feehandler::Config for Runtime {
 impl sygma_percentage_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletIndex = PercentageFeeHandlerPalletIndex;
+	type WeightInfo = sygma_percentage_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
 parameter_types! {

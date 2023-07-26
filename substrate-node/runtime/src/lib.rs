@@ -376,6 +376,7 @@ impl sygma_basic_feehandler::Config for Runtime {
 impl sygma_percentage_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletIndex = PercentageFeeHandlerRouterPalletIndex;
+	type WeightInfo = sygma_percentage_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
 impl sygma_fee_handler_router::Config for Runtime {
@@ -814,6 +815,7 @@ mod benches {
 		[sygma_bridge, SygmaBridge::<Runtime>]
 		[sygma_access_segregator, SygmaAccessSegregator::<Runtime>]
 		[sygma_basic_feehandler, SygmaBasicFeeHandler::<Runtime>]
+		[sygma_percentage_feehandler, SygmaPercentageFeeHandler::<Runtime>]
 		[sygma_fee_handler_router, SygmaFeeHandlerRouter::<Runtime>]
 	);
 }
@@ -1006,6 +1008,7 @@ impl_runtime_apis! {
 			use sygma_access_segregator::Pallet as SygmaAccessSegregator;
 			use sygma_basic_feehandler::Pallet as SygmaBasicFeeHandler;
 			use sygma_fee_handler_router::Pallet as SygmaFeeHandlerRouter;
+			use sygma_percentage_feehandler::Pallet as SygmaPercentageFeeHandler;
 
 			let mut list = Vec::<BenchmarkList>::new();
 			list_benchmarks!(list, extra);
@@ -1025,6 +1028,7 @@ impl_runtime_apis! {
 			use sygma_bridge::Pallet as SygmaBridge;
 			use sygma_access_segregator::Pallet as SygmaAccessSegregator;
 			use sygma_basic_feehandler::Pallet as SygmaBasicFeeHandler;
+			use sygma_percentage_feehandler::Pallet as SygmaPercentageFeeHandler;
 			use sygma_fee_handler_router::Pallet as SygmaFeeHandlerRouter;
 
 			impl frame_system_benchmarking::Config for Runtime {}

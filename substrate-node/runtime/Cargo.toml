@@ -135,6 +135,7 @@ runtime-benchmarks = [
 	"sygma-bridge/runtime-benchmarks",
 	"sygma-access-segregator/runtime-benchmarks",
 	"sygma-basic-feehandler/runtime-benchmarks",
+	"sygma-percentage-feehandler/runtime-benchmarks",
 	"sygma-fee-handler-router/runtime-benchmarks",
 ]
 try-runtime = [
@@ -151,6 +152,7 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"pallet-assets/try-runtime",
 	"sygma-basic-feehandler/try-runtime",
+	"sygma-percentage-feehandler/try-runtime",
 	"sygma-bridge/try-runtime",
 	"sygma-access-segregator/try-runtime",
 	"sygma-fee-handler-router/try-runtime",

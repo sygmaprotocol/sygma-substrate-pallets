@@ -2734,18 +2734,20 @@ pub mod pallet {
 					Box::new(NativeLocation::get().into()),
 					fee_rate_2
 				));
-				assert_noop!(SygmaBridge::deposit(
-					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
-						parents: 0,
-						interior: X2(
-							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
-					}),
-				),
-				 bridge::Error::<Runtime>::FeeTooExpensive);
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(MultiLocation {
+							parents: 0,
+							interior: X2(
+								slice_to_generalkey(b"ethereum recipient"),
+								slice_to_generalkey(&[1]),
+							)
+						}),
+					),
+					bridge::Error::<Runtime>::FeeTooExpensive
+				);
 
 				// test 99.99%
 				// override 100% to 99.99%
@@ -2803,7 +2805,51 @@ pub mod pallet {
 					Box::new(NativeLocation::get().into()),
 					fee_rate_5
 				));
-				assert_noop!(SygmaBridge::deposit(
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(MultiLocation {
+							parents: 0,
+							interior: X2(
+								slice_to_generalkey(b"ethereum recipient"),
+								slice_to_generalkey(&[1]),
+							)
+						}),
+					),
+					bridge::Error::<Runtime>::FeeTooExpensive
+				);
+				// Check reserved native token, should remain as 390.020000000000
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
+				// Check fee collected, should remain as 209.980000000000
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
+			})
+		}
+
+		#[test]
+		fn percentage_fee_rate_not_set_for_domain_and_asset() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// only set fee handler but not set fee rate for domain and asset
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::PercentageFeeHandler,
+				));
+
+				// deposit should go through, 200 native token all goes into TokenReservedAccount,
+				// no fee collected
+				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
 					Box::new(MultiLocation {
@@ -2813,12 +2859,14 @@ pub mod pallet {
 							slice_to_generalkey(&[1]),
 						)
 					}),
-				),
-				bridge::Error::<Runtime>::FeeTooExpensive);
-				// Check reserved native token, should remain as 390.020000000000
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
-				// Check fee collected, should remain as 209.980000000000
-				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
+				));
+
+				// Check balances
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
+				// Check reserved native token, should increase by 200
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount);
+				// Check fee collected, should increase by 0
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 0);
 			})
 		}
 
@@ -2892,11 +2940,17 @@ pub mod pallet {
 					}),
 				));
 				// Check balances
-				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount*2);
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount * 2);
 				// Check reserved native token, should increase by 190
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee + 190_000_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(BridgeAccount::get()),
+					amount - fee + 190_000_000_000_000u128
+				);
 				// Check fee collected, should increase by 10
-				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee + 10_000_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(TreasuryAccount::get()),
+					fee + 10_000_000_000_000u128
+				);
 			})
 		}
 	}

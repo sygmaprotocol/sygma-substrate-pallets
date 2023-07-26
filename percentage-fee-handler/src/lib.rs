@@ -5,6 +5,11 @@
 
 pub use self::pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
+
 #[cfg(test)]
 mod mock;
 
@@ -24,6 +29,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type AssetFeeRate<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u32>;
 
+	pub trait WeightInfo {
+		fn set_fee_rate() -> Weight;
+	}
+
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
@@ -34,6 +43,9 @@ pub mod pallet {
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -57,7 +69,7 @@ pub mod pallet {
 		/// Set bridge fee rate for a specific asset and domain. Note the fee rate is in Basis Point
 		/// representation
 		#[pallet::call_index(0)]
-		#[pallet::weight(195_000_000)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_fee_rate())]
 		pub fn set_fee_rate(
 			origin: OriginFor<T>,
 			domain: DomainID,
@@ -91,6 +103,7 @@ pub mod pallet {
 		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
 			match (asset.fun, asset.id) {
 				(Fungible(amount), _) => {
+					// return fee rate as 0 when it is not set in the storage
 					let fee_rate_basis_point =
 						AssetFeeRate::<T>::get((domain, asset.id)).unwrap_or_default();
 					Some(amount.saturating_mul(fee_rate_basis_point as u128).saturating_div(10000))
@@ -123,6 +136,9 @@ pub mod pallet {
 				let asset_id_b = Concrete(MultiLocation::new(2, Here));
 				let asset_a_deposit: MultiAsset = (asset_id_a, 100u128).into();
 				let asset_b_deposit: MultiAsset = (asset_id_b, 200u128).into();
+
+				// if not set fee rate, return None
+				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)), None);
 
 				// set fee rate as 50 basis point aka 0.5% with assetId asset_id_a for one domain
 				assert_ok!(PercentageFeeHandler::set_fee_rate(

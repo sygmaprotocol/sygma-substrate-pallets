@@ -169,6 +169,7 @@ impl fee_handler_router::Config for Test {
 impl sygma_percentage_feehandler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletIndex = PercentageFeeHandlerPalletIndex;
+	type WeightInfo = sygma_percentage_feehandler::weights::SygmaWeightInfo<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
