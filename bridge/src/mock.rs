@@ -48,6 +48,8 @@ frame_support::construct_runtime!(
 		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 4,
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 5,
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 6,
+		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 7,
+		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 8,
 	}
 );
 
@@ -156,11 +158,15 @@ impl pallet_timestamp::Config for Runtime {
 parameter_types! {
 	// Make sure put same value with `construct_runtime`
 	pub const AccessSegregatorPalletIndex: u8 = 4;
-	pub const FeeHandlerPalletIndex: u8 = 5;
+	pub const BaiscFeeHandlerPalletIndex: u8 = 5;
 	pub const BridgePalletIndex: u8 = 6;
+	pub const PercentageFeeHandlerPalletIndex: u8 = 7;
+	pub const FeeHandlerRouterPalletIndex: u8 = 8;
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
-		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(BaiscFeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(PercentageFeeHandlerPalletIndex::get(), b"set_fee_rate".to_vec()),
+		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
@@ -178,10 +184,24 @@ impl sygma_access_segregator::Config for Runtime {
 	type WeightInfo = sygma_access_segregator::weights::SygmaWeightInfo<Runtime>;
 }
 
+impl sygma_fee_handler_router::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type BasicFeeHandler = SygmaBasicFeeHandler;
+	type DynamicFeeHandler = ();
+	type PercentageFeeHandler = SygmaPercentageFeeHandler;
+	type PalletIndex = FeeHandlerRouterPalletIndex;
+	type WeightInfo = sygma_fee_handler_router::weights::SygmaWeightInfo<Runtime>;
+}
+
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletIndex = FeeHandlerPalletIndex;
+	type PalletIndex = BaiscFeeHandlerPalletIndex;
 	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Runtime>;
+}
+
+impl sygma_percentage_feehandler::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type PalletIndex = PercentageFeeHandlerPalletIndex;
 }
 
 parameter_types! {
@@ -474,7 +494,7 @@ impl sygma_bridge::Config for Runtime {
 	type FeeReserveAccount = TreasuryAccount;
 	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
-	type FeeHandler = SygmaBasicFeeHandler;
+	type FeeHandler = SygmaFeeHandlerRouter;
 	type AssetTransactor = AssetTransactors;
 	type ResourcePairs = ResourcePairs;
 	type IsReserve = ReserveChecker;

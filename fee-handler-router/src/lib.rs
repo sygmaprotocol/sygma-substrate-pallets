@@ -49,6 +49,7 @@ pub mod pallet {
 		/// Fee handlers
 		type BasicFeeHandler: FeeHandler;
 		type DynamicFeeHandler: FeeHandler;
+		type PercentageFeeHandler: FeeHandler;
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;

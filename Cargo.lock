@@ -8969,6 +8969,7 @@ dependencies = [
  "sygma-access-segregator",
  "sygma-basic-feehandler",
  "sygma-fee-handler-router",
+ "sygma-percentage-feehandler",
  "sygma-traits",
  "xcm",
  "xcm-builder",

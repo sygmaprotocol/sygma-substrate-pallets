@@ -865,8 +865,8 @@ pub mod pallet {
 			assert_events, new_test_ext, slice_to_generalkey, AccessSegregator, Assets, Balances,
 			BridgeAccount, BridgePalletIndex, NativeLocation, NativeResourceId, Runtime,
 			RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge,
-			TreasuryAccount, UsdcAssetId, UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB,
-			DEST_DOMAIN_ID, ENDOWED_BALANCE,
+			SygmaFeeHandlerRouter, SygmaPercentageFeeHandler, TreasuryAccount, UsdcAssetId,
+			UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID, ENDOWED_BALANCE,
 		};
 		use codec::{self, Encode};
 		use frame_support::{
@@ -876,6 +876,7 @@ pub mod pallet {
 		use primitive_types::U256;
 		use sp_core::{ecdsa, Pair};
 		use sp_std::{boxed::Box, vec};
+		use sygma_fee_handler_router::FeeHandlerType;
 		use sygma_traits::{MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
 
@@ -1133,16 +1134,22 @@ pub mod pallet {
 				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
 				let final_amount_in_deposit_event = 199_000_000_000_000_000_000; // 200 - 1 then adjust to 18 decimals
 
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
 					fee
 				));
-				assert_ok!(SygmaBridge::register_domain(
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					U256::from(1)
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 
@@ -1164,23 +1171,24 @@ pub mod pallet {
 				// Check event
 				assert_events(vec![
 					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DEST_DOMAIN_ID,
-					resource_id: NativeResourceId::get(),
-					deposit_nonce: 0,
-					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer,
-					deposit_data: SygmaBridge::create_deposit_data(
-						final_amount_in_deposit_event,
-						b"ethereum recipient".to_vec(),
-					),
-					handler_response: vec![],
-				}),
-				RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
-					fee_payer:ALICE,
-					dest_domain_id: DEST_DOMAIN_ID,
-					resource_id: NativeResourceId::get(),
-					fee_amount:fee,
-				})]);
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						deposit_nonce: 0,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							final_amount_in_deposit_event,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						fee_amount: fee,
+					}),
+				]);
 			})
 		}
 
@@ -1238,6 +1246,12 @@ pub mod pallet {
 					Box::new(UsdcLocation::get().into()),
 					fee
 				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(UsdcLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -1275,18 +1289,26 @@ pub mod pallet {
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), 0);
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &TreasuryAccount::get()), fee);
 				// Check event
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DEST_DOMAIN_ID,
-					resource_id: UsdcResourceId::get(),
-					deposit_nonce: 0,
-					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer,
-					deposit_data: SygmaBridge::create_deposit_data(
-						amount - fee,
-						b"ethereum recipient".to_vec(),
-					),
-					handler_response: vec![],
-				})]);
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: UsdcResourceId::get(),
+						deposit_nonce: 0,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							amount - fee,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: UsdcResourceId::get(),
+						fee_amount: fee,
+					}),
+				]);
 			})
 		}
 
@@ -1405,6 +1427,12 @@ pub mod pallet {
 					Box::new(NativeLocation::get().into()),
 					fee
 				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -1439,6 +1467,12 @@ pub mod pallet {
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
 					fee
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
 				));
 				// register domain
 				assert_ok!(SygmaBridge::register_domain(
@@ -1596,6 +1630,12 @@ pub mod pallet {
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
 					fee
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -1962,6 +2002,24 @@ pub mod pallet {
 					Box::new(AstrLocation::get().into()),
 					fee_astr_asset
 				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(UsdcLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(AstrLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
 
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
@@ -1993,18 +2051,26 @@ pub mod pallet {
 				// TreasuryAccount is collecting the bridging fee
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee_native_asset);
 				// Check event
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DEST_DOMAIN_ID,
-					resource_id: NativeResourceId::get(),
-					deposit_nonce: 0,
-					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer,
-					deposit_data: SygmaBridge::create_deposit_data(
-						adjusted_amount_native_asset,
-						b"ethereum recipient".to_vec(),
-					),
-					handler_response: vec![],
-				})]);
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						deposit_nonce: 0,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							adjusted_amount_native_asset,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						fee_amount: fee_native_asset,
+					}),
+				]);
 
 				// deposit usdc asset which has 18 decimal
 				// Register foreign asset (usdc) with asset id 0
@@ -2047,18 +2113,26 @@ pub mod pallet {
 				);
 
 				// Check event
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DEST_DOMAIN_ID,
-					resource_id: UsdcResourceId::get(),
-					deposit_nonce: 1,
-					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer,
-					deposit_data: SygmaBridge::create_deposit_data(
-						adjusted_amount_usdc_asset,
-						b"ethereum recipient".to_vec(),
-					),
-					handler_response: vec![],
-				})]);
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: UsdcResourceId::get(),
+						deposit_nonce: 1,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							adjusted_amount_usdc_asset,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: UsdcResourceId::get(),
+						fee_amount: fee_usdc_asset,
+					}),
+				]);
 
 				// deposit astr asset which has 24 decimal
 				// Register foreign asset (astr) with asset id 1
@@ -2105,18 +2179,26 @@ pub mod pallet {
 				);
 
 				// Check event
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
-					dest_domain_id: DEST_DOMAIN_ID,
-					resource_id: AstrResourceId::get(),
-					deposit_nonce: 2,
-					sender: ALICE,
-					transfer_type: TransferType::FungibleTransfer,
-					deposit_data: SygmaBridge::create_deposit_data(
-						adjusted_amount_astr_asset,
-						b"ethereum recipient".to_vec(),
-					),
-					handler_response: vec![],
-				})]);
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: AstrResourceId::get(),
+						deposit_nonce: 2,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							adjusted_amount_astr_asset,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: AstrResourceId::get(),
+						fee_amount: fee_astr_asset,
+					}),
+				]);
 
 				// deposit astr asset which has 24 decimal, extreme small amount edge case
 				let amount_astr_asset_extreme_small_amount = 100_000; // 0.000000000000000000100000 astr
@@ -2173,6 +2255,12 @@ pub mod pallet {
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
 					fee
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
 				));
 				// deposit in advance to make sure the native asset has enough funds in
 				// TransferReserveAccount by doing this, Alice will deposit (half of her native
@@ -2515,6 +2603,12 @@ pub mod pallet {
 					Box::new(NativeLocation::get().into()),
 					fee
 				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
@@ -2554,6 +2648,74 @@ pub mod pallet {
 				// proposal amount is in 18 decimal 0.000200000000000000, will be convert to 12
 				// decimal 0.000200000000(200000000) because native asset is defined in 12 decimal
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + 200000000);
+			})
+		}
+
+		#[test]
+		fn deposit_native_asset_with_percentage_fee_should_work() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+				let fee_rate_1 = 500u32; // 5%
+
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_1
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::PercentageFeeHandler,
+				));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check balances of Alice after deposit 200 native token
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
+				// Check reserved native token
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), 190_000_000_000_000u128);
+				// Check fee collected
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 10_000_000_000_000u128);
+				// Check event
+				let final_amount_in_deposit_event_1 = 190_000_000_000_000_000_000; // 200 cut 5% then adjust to 18 decimals
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						deposit_nonce: 0,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							final_amount_in_deposit_event_1,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						fee_amount: 10_000_000_000_000u128,
+					}),
+				]);
 			})
 		}
 	}

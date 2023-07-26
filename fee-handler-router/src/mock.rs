@@ -133,8 +133,9 @@ parameter_types! {
 	pub const MoonbeamDomainID: DomainID = 1;
 	// Make sure put same value with `construct_runtime`
 	pub const AccessSegregatorPalletIndex: u8 = 3;
-	pub const FeeHandlerPalletIndex: u8 = 4;
+	pub const BasicFeeHandlerPalletIndex: u8 = 4;
 	pub const FeeHandlerRouterPalletIndex: u8 = 5;
+	pub const PercentageFeeHandlerPalletIndex: u8 = 6;
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
@@ -144,7 +145,7 @@ parameter_types! {
 
 impl sygma_basic_feehandler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletIndex = FeeHandlerPalletIndex;
+	type PalletIndex = BasicFeeHandlerPalletIndex;
 	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Test>;
 }
 
@@ -160,13 +161,14 @@ impl fee_handler_router::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
+	type PercentageFeeHandler = SygamPercenrageFeeHandler;
 	type PalletIndex = FeeHandlerRouterPalletIndex;
 	type WeightInfo = fee_handler_router::weights::SygmaWeightInfo<Test>;
 }
 
 impl sygma_percentage_feehandler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletIndex = FeeHandlerPalletIndex;
+	type PalletIndex = PercentageFeeHandlerPalletIndex;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

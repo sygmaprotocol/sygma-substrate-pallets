@@ -37,6 +37,7 @@ xcm-executor = { git = "https://github.com/paritytech/polkadot", branch = "relea
 sygma-traits = { path = "../traits", default-features = false }
 sygma-access-segregator = { path = "../access-segregator", default-features = false }
 sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
+sygma-percentage-feehandler = { path = "../percentage-fee-handler", default-features = false }
 sygma-fee-handler-router = { path = "../fee-handler-router", default-features = false }
 
 [dev-dependencies]
@@ -94,6 +95,7 @@ std = [
 	"sygma-traits/std",
 	"sygma-access-segregator/std",
 	"sygma-basic-feehandler/std",
+	"sygma-percentage-feehandler/std",
 	"sygma-fee-handler-router/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
