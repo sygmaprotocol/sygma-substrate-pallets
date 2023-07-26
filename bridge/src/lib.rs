@@ -467,14 +467,6 @@ pub mod pallet {
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
-			// Emit FeeCollected event
-			Self::deposit_event(Event::FeeCollected {
-				fee_payer: sender.clone(),
-				dest_domain_id,
-				resource_id,
-				fee_amount: fee,
-			});
-
 			let bridge_amount = amount - fee;
 
 			// Deposit `bridge_amount` of asset to reserve account if asset is reserved in local
@@ -510,10 +502,18 @@ pub mod pallet {
 				dest_domain_id,
 				resource_id,
 				deposit_nonce,
-				sender,
+				sender: sender.clone(),
 				transfer_type,
 				deposit_data: Self::create_deposit_data(decimal_converted_amount, recipient),
 				handler_response: vec![],
+			});
+
+			// Emit FeeCollected event
+			Self::deposit_event(Event::FeeCollected {
+				fee_payer: sender,
+				dest_domain_id,
+				resource_id,
+				fee_amount: fee,
 			});
 
 			Ok(())
@@ -1162,7 +1162,8 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 				// Check event
-				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 					dest_domain_id: DEST_DOMAIN_ID,
 					resource_id: NativeResourceId::get(),
 					deposit_nonce: 0,
@@ -1173,6 +1174,12 @@ pub mod pallet {
 						b"ethereum recipient".to_vec(),
 					),
 					handler_response: vec![],
+				}),
+				RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+					fee_payer:ALICE,
+					dest_domain_id: DEST_DOMAIN_ID,
+					resource_id: NativeResourceId::get(),
+					fee_amount:fee,
 				})]);
 			})
 		}
