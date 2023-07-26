@@ -2652,17 +2652,25 @@ pub mod pallet {
 		}
 
 		#[test]
-		fn deposit_native_asset_with_percentage_fee_should_work() {
+		fn deposit_native_asset_with_percentage_fee() {
 			new_test_ext().execute_with(|| {
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+
+				// test cases
 				let fee_rate_1 = 500u32; // 5%
+				let fee_rate_2 = 10000u32; // 100%
+				let fee_rate_3 = 9999u32; // 99.99%
+				let fee_rate_4 = 0u32; // 0%
+				let fee_rate_5 = 15000u32; // 150%
 
 				assert_ok!(SygmaBridge::register_domain(
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					U256::from(1)
 				));
+
+				// test 5%
 				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -2716,6 +2724,179 @@ pub mod pallet {
 						fee_amount: 10_000_000_000_000u128,
 					}),
 				]);
+
+				// test 100%
+				// override 5% to 100%
+				// should not work because deposit amount need to be greater then fee
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_2
+				));
+				assert_noop!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				),
+				 bridge::Error::<Runtime>::FeeTooExpensive);
+
+				// test 99.99%
+				// override 100% to 99.99%
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_3
+				));
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check reserved native token, should increase by 0.02 to 190.020000000000
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), 190_020_000_000_000u128);
+				// Check fee collected, should increase by 199.98 to 209.980000000000
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
+
+				// test 0%
+				// override 99.99% to 0%
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_4
+				));
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check reserved native token, should increase by 200 to 390.020000000000
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
+				// Check fee collected, should increase by 0 to 209.980000000000
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
+
+				// test 150%
+				// override 0% to 150%
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_5
+				));
+				assert_noop!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				),
+				bridge::Error::<Runtime>::FeeTooExpensive);
+				// Check reserved native token, should remain as 390.020000000000
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
+				// Check fee collected, should remain as 209.980000000000
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
+			})
+		}
+
+		#[test]
+		fn deposit_native_asset_with_percentage_fee_override_basic_fee_handler() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+				let fee = 1_000_000_000_000u128; // 1 with 12 decimals
+
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// set fee handler with basic fee handler and fixed fee
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee
+				));
+
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check balances
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
+
+				// Override Basic fee handler to Percentage fee handler with 5% fee rate
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::PercentageFeeHandler,
+				));
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					500u32
+				));
+
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check balances
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount*2);
+				// Check reserved native token, should increase by 190
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee + 190_000_000_000_000u128);
+				// Check fee collected, should increase by 10
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee + 10_000_000_000_000u128);
 			})
 		}
 	}
