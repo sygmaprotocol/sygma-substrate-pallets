@@ -34,4 +34,4 @@ ENV MPCADDR $mpc_address
 
 RUN ["./scripts/e2e_setup.sh"]
 
-ENTRYPOINT ["./node-template", "--dev", "--ws-external", "--base-path", "./db/"]
+ENTRYPOINT ["./node-template", "--dev", "--rpc-external", "--base-path", "./db/"]

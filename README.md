@@ -35,7 +35,7 @@ This repo contains several substrate pallet implementation for Sygma protocol.
 - Run docker container as local testnet
 
 ```sh
- $ docker run -p 9944:9944 -it sygma-substrate-pallet --dev --ws-external
+ $ docker run -p 9944:9944 -it sygma-substrate-pallet --dev --rpc-external
 ```
 
 ## Interact via Polkadot JS App

@@ -31,7 +31,7 @@ build-benchmark:
 ############################## Local node ############################
 # launch the local node in dev mode
 start-dev:
-	./target/release/node-template --dev
+	./target/release/node-template --dev --rpc-external
 
 # run setup js script to setup the local substrate node
 # substrate node is required, run make start-dev first
