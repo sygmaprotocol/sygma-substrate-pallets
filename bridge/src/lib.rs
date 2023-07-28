@@ -2669,14 +2669,6 @@ pub mod pallet {
 					DEST_DOMAIN_ID,
 					U256::from(1)
 				));
-
-				// test 5%
-				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
-					Origin::root(),
-					DEST_DOMAIN_ID,
-					Box::new(NativeLocation::get().into()),
-					fee_rate_1
-				));
 				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -2685,6 +2677,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 
+				// test 5%
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_1
+				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
@@ -2726,31 +2725,19 @@ pub mod pallet {
 				]);
 
 				// test 100%
-				// override 5% to 100%
-				// should not work because deposit amount need to be greater then fee
-				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
-					Origin::root(),
-					DEST_DOMAIN_ID,
-					Box::new(NativeLocation::get().into()),
-					fee_rate_2
-				));
+				// should not work because 100% is out of fee rate
 				assert_noop!(
-					SygmaBridge::deposit(
-						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
-							parents: 0,
-							interior: X2(
-								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
-						}),
+					SygmaPercentageFeeHandler::set_fee_rate(
+						Origin::root(),
+						DEST_DOMAIN_ID,
+						Box::new(NativeLocation::get().into()),
+						fee_rate_2
 					),
-					bridge::Error::<Runtime>::FeeTooExpensive
+					sygma_percentage_feehandler::Error::<Runtime>::FeeRateOutOfRange
 				);
 
 				// test 99.99%
-				// override 100% to 99.99%
+				// override 5%% to 99.99%
 				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -2798,27 +2785,17 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
 
 				// test 150%
-				// override 0% to 150%
-				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
-					Origin::root(),
-					DEST_DOMAIN_ID,
-					Box::new(NativeLocation::get().into()),
-					fee_rate_5
-				));
+				// should not work because 150% is out of fee rate
 				assert_noop!(
-					SygmaBridge::deposit(
-						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
-							parents: 0,
-							interior: X2(
-								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
-						}),
+					SygmaPercentageFeeHandler::set_fee_rate(
+						Origin::root(),
+						DEST_DOMAIN_ID,
+						Box::new(NativeLocation::get().into()),
+						fee_rate_5
 					),
-					bridge::Error::<Runtime>::FeeTooExpensive
+					sygma_percentage_feehandler::Error::<Runtime>::FeeRateOutOfRange
 				);
+
 				// Check reserved native token, should remain as 390.020000000000
 				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
 				// Check fee collected, should remain as 209.980000000000

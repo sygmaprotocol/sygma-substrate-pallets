@@ -62,12 +62,14 @@ pub mod pallet {
 		Unimplemented,
 		/// Account has not gained access permission
 		AccessDenied,
+		/// Fee rate is out of range [0, 10000)
+		FeeRateOutOfRange,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set bridge fee rate for a specific asset and domain. Note the fee rate is in Basis Point
-		/// representation
+		/// representation, and the valid fee rate is [0, 10000)
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::set_fee_rate())]
 		pub fn set_fee_rate(
@@ -85,6 +87,9 @@ pub mod pallet {
 				),
 				Error::<T>::AccessDenied
 			);
+
+			// Make sure fee rate is valid
+			ensure!(fee_rate_basis_point < 10_000u32, Error::<T>::FeeRateOutOfRange);
 
 			// Update asset fee rate
 			AssetFeeRate::<T>::insert((domain, &asset), fee_rate_basis_point);
@@ -139,6 +144,26 @@ pub mod pallet {
 
 				// if not set fee rate, return None
 				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)), None);
+
+				// test the min fee rate case: 0u32 => 0%, should work
+				// set fee rate as 0 basis point aka 0% with assetId asset_id_a for one domain
+				assert_ok!(PercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					dest_domain_id,
+					Box::new(asset_id_a),
+					0u32
+				));
+
+				// test the max fee rate case: 10000 => 100%, should raise FeeRateOutOfRange error
+				assert_noop!(
+					PercentageFeeHandler::set_fee_rate(
+						Origin::root(),
+						dest_domain_id,
+						Box::new(asset_id_a),
+						10_000u32
+					),
+					percentage_fee_handler::Error::<Test>::FeeRateOutOfRange
+				);
 
 				// set fee rate as 50 basis point aka 0.5% with assetId asset_id_a for one domain
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
