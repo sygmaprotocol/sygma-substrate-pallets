@@ -1289,8 +1289,8 @@ pub mod pallet {
 				));
 				// Check balances
 				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), 0);
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &TreasuryAccount::get()), fee);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), BridgeAccount::get()), 0);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![
 					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
@@ -2110,7 +2110,7 @@ pub mod pallet {
 					ENDOWED_BALANCE - amount_usdc_asset
 				);
 				// usdc asset should not be reserved so that BridgeAccount should not hold it
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &BridgeAccount::get()), 0);
+				assert_eq!(Assets::balance(UsdcAssetId::get(), BridgeAccount::get()), 0);
 				// TreasuryAccount is collecting the bridging fee
 				assert_eq!(
 					Assets::balance(UsdcAssetId::get(), TreasuryAccount::get()),
@@ -2175,7 +2175,7 @@ pub mod pallet {
 				// astr asset should be reserved so that BridgeAccount should hold it(Astr is not
 				// defined in ConcrateSygmaAsset)
 				assert_eq!(
-					Assets::balance(AstrAssetId::get(), &BridgeAccount::get()),
+					Assets::balance(AstrAssetId::get(), BridgeAccount::get()),
 					amount_astr_asset - fee_astr_asset
 				);
 				// TreasuryAccount is collecting the bridging fee
