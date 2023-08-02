@@ -197,7 +197,6 @@ pub mod pallet {
 		#[test]
 		fn fee_router_should_work() {
 			new_test_ext().execute_with(|| {
-				print!("{:?}", 1e4);
 				// config dest of (ethereum, PHA) use basic fee handler
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),

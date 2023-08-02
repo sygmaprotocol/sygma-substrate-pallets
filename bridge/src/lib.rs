@@ -176,6 +176,7 @@ pub mod pallet {
 			dest_domain_id: DomainID,
 			resource_id: ResourceId,
 			fee_amount: u128,
+			fee_asset_id: AssetId,
 		},
 	}
 
@@ -514,6 +515,7 @@ pub mod pallet {
 				dest_domain_id,
 				resource_id,
 				fee_amount: fee,
+				fee_asset_id: asset.id,
 			});
 
 			Ok(())
@@ -1187,6 +1189,7 @@ pub mod pallet {
 						dest_domain_id: DEST_DOMAIN_ID,
 						resource_id: NativeResourceId::get(),
 						fee_amount: fee,
+						fee_asset_id: NativeLocation::get().into(),
 					}),
 				]);
 			})
@@ -1307,6 +1310,7 @@ pub mod pallet {
 						dest_domain_id: DEST_DOMAIN_ID,
 						resource_id: UsdcResourceId::get(),
 						fee_amount: fee,
+						fee_asset_id: UsdcLocation::get().into(),
 					}),
 				]);
 			})
@@ -2069,6 +2073,7 @@ pub mod pallet {
 						dest_domain_id: DEST_DOMAIN_ID,
 						resource_id: NativeResourceId::get(),
 						fee_amount: fee_native_asset,
+						fee_asset_id: NativeLocation::get().into(),
 					}),
 				]);
 
@@ -2131,6 +2136,7 @@ pub mod pallet {
 						dest_domain_id: DEST_DOMAIN_ID,
 						resource_id: UsdcResourceId::get(),
 						fee_amount: fee_usdc_asset,
+						fee_asset_id: UsdcLocation::get().into(),
 					}),
 				]);
 
@@ -2197,6 +2203,7 @@ pub mod pallet {
 						dest_domain_id: DEST_DOMAIN_ID,
 						resource_id: AstrResourceId::get(),
 						fee_amount: fee_astr_asset,
+						fee_asset_id: AstrLocation::get().into(),
 					}),
 				]);
 
@@ -2721,6 +2728,7 @@ pub mod pallet {
 						dest_domain_id: DEST_DOMAIN_ID,
 						resource_id: NativeResourceId::get(),
 						fee_amount: 10_000_000_000_000u128,
+						fee_asset_id: NativeLocation::get().into(),
 					}),
 				]);
 
