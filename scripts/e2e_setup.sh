@@ -8,7 +8,7 @@ NODE_DB_DIR=${PWD}/db
 
 # Run dev node
 echo "start the dev node up..."
-./node-template --dev --ws-external --base-path "$NODE_DB_DIR" > substrate_node.log 2>&1 &
+./node-template --dev --rpc-external --base-path "$NODE_DB_DIR" > substrate_node.log 2>&1 &
 
 echo "waiting for dev nodes start..."
 sleep 60

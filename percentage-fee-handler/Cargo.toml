@@ -1,5 +1,5 @@
 [package]
-name = "sygma-fee-handler-router"
+name = "sygma-percentage-feehandler"
 version = "0.3.0"
 edition = "2021"
 license = "LGPL-3.0"
@@ -20,8 +20,6 @@ xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "releas
 
 # Local
 sygma-traits = { path = "../traits", default-features = false }
-sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
-sygma-percentage-feehandler = { path = "../percentage-fee-handler", default-features = false }
 sygma-access-segregator = { path = "../access-segregator", default-features = false }
 
 [dev-dependencies]
@@ -33,29 +31,24 @@ frame-system = { git = "https://github.com/paritytech/substrate", branch = "polk
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.43" }
 
-sygma-access-segregator = { path = "../access-segregator" }
-sygma-basic-feehandler = { path = "../basic-fee-handler" }
-sygma-traits = { path = "../traits" }
-
 [features]
 default = ["std"]
 std = [
-	"codec/std",
-	"scale-info/std",
+    "codec/std",
+    "scale-info/std",
     "frame-support/std",
     "frame-system/std",
     "frame-benchmarking/std",
-	"sp-std/std",
-	"xcm/std",
-	"xcm-builder/std",
+    "sp-std/std",
+    "xcm/std",
+    "xcm-builder/std",
     "sygma-traits/std",
-	"sygma-basic-feehandler/std",
-	"sygma-percentage-feehandler/std",
-	"sygma-access-segregator/std",
+    "sygma-access-segregator/std",
 ]
 runtime-benchmarks = [
-	'frame-benchmarking',
-	'frame-support/runtime-benchmarks',
-	'frame-system/runtime-benchmarks',
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
 ]
 try-runtime = ["frame-support/try-runtime"]
+

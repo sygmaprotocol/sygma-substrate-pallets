@@ -63,6 +63,7 @@ parachains-common = { git = "https://github.com/paritytech/cumulus", branch = "p
 
 # Local Dependencies
 sygma-basic-feehandler = { path = "../../basic-fee-handler", default-features = false }
+sygma-percentage-feehandler = { path = "../../percentage-fee-handler", default-features = false }
 sygma-traits = { path = "../../traits", default-features = false }
 sygma-bridge = { path = "../../bridge", default-features = false }
 sygma-access-segregator = { path = "../../access-segregator", default-features = false }
@@ -93,6 +94,7 @@ std = [
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-sudo/std",
 	"sygma-basic-feehandler/std",
+	"sygma-percentage-feehandler/std",
 	"sygma-traits/std",
 	"sygma-bridge/std",
 	"sygma-access-segregator/std",
@@ -133,6 +135,7 @@ runtime-benchmarks = [
 	"sygma-bridge/runtime-benchmarks",
 	"sygma-access-segregator/runtime-benchmarks",
 	"sygma-basic-feehandler/runtime-benchmarks",
+	"sygma-percentage-feehandler/runtime-benchmarks",
 	"sygma-fee-handler-router/runtime-benchmarks",
 ]
 try-runtime = [
@@ -149,6 +152,7 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"pallet-assets/try-runtime",
 	"sygma-basic-feehandler/try-runtime",
+	"sygma-percentage-feehandler/try-runtime",
 	"sygma-bridge/try-runtime",
 	"sygma-access-segregator/try-runtime",
 	"sygma-fee-handler-router/try-runtime",

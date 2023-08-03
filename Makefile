@@ -11,6 +11,10 @@ fmt:
 test:
 	cargo test
 
+# run unit test with benchmark
+test-benchmark:
+	cargo test --features runtime-benchmarks
+
 # license-check Checks for missing license crates
 license-check:
 	@echo "  >  \033[Checking for license headers...\033[0m "
@@ -20,10 +24,14 @@ license-check:
 build:
 	cargo build --release
 
+# build the binary locally with benchmark
+build-benchmark:
+	cargo build --release --features runtime-benchmarks
+
 ############################## Local node ############################
 # launch the local node in dev mode
 start-dev:
-	./target/release/node-template --dev --ws-external
+	./target/release/node-template --dev --rpc-external
 
 # run setup js script to setup the local substrate node
 # substrate node is required, run make start-dev first

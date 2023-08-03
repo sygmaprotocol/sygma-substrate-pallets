@@ -108,6 +108,41 @@ async function setFee(api, domainID, asset, amount, finalization, sudo) {
     });
 }
 
+async function setFeeRate(api, domainID, asset, feeRate, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting extrinsic to set percentage fee rate on domainID ${domainID}. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.sudo
+            .sudo(api.tx.sygmaPercentageFeeHandler.setFeeRate(domainID, asset, feeRate))
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
 async function setMpcAddress(api, mpcAddr, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
@@ -441,6 +476,7 @@ module.exports = {
     queryBridgePauseStatus,
     setMpcAddress,
     setFee,
+    setFeeRate,
     setFeeHandler,
     setBalance,
     executeProposal,

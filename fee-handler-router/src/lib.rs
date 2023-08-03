@@ -21,11 +21,12 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
-	use xcm::latest::AssetId;
+	use xcm::latest::{AssetId, MultiAsset};
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 	pub enum FeeHandlerType {
 		BasicFeeHandler,
+		PercentageFeeHandler,
 		DynamicFeeHandler,
 	}
 
@@ -40,12 +41,15 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + sygma_basic_feehandler::Config {
+	pub trait Config:
+		frame_system::Config + sygma_basic_feehandler::Config + sygma_percentage_feehandler::Config
+	{
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Fee handlers
 		type BasicFeeHandler: FeeHandler;
 		type DynamicFeeHandler: FeeHandler;
+		type PercentageFeeHandler: FeeHandler;
 
 		/// Current pallet index defined in runtime
 		type PalletIndex: Get<u8>;
@@ -107,11 +111,13 @@ pub mod pallet {
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: &AssetId) -> Option<u128> {
-			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset)) {
+		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
+			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset.id)) {
 				match handler_type {
 					FeeHandlerType::BasicFeeHandler =>
 						sygma_basic_feehandler::Pallet::<T>::get_fee(domain, asset),
+					FeeHandlerType::PercentageFeeHandler =>
+						sygma_percentage_feehandler::Pallet::<T>::get_fee(domain, asset),
 					FeeHandlerType::DynamicFeeHandler => {
 						// TODO: Support dynamic fee handler
 						None
@@ -215,13 +221,19 @@ pub mod pallet {
 				));
 
 				assert_eq!(
-					FeeHandlerRouter::get_fee(EthereumDomainID::get(), &PhaLocation::get().into())
-						.unwrap(),
+					FeeHandlerRouter::get_fee(
+						EthereumDomainID::get(),
+						(PhaLocation::get(), 10000u128).into()
+					)
+					.unwrap(),
 					10000
 				);
 				// We don't support dynamic fee handler, return None
 				assert_eq!(
-					FeeHandlerRouter::get_fee(MoonbeamDomainID::get(), &PhaLocation::get().into()),
+					FeeHandlerRouter::get_fee(
+						MoonbeamDomainID::get(),
+						(PhaLocation::get(), 10000u128).into()
+					),
 					None
 				);
 				assert_events(vec![

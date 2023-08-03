@@ -339,14 +339,15 @@ impl pallet_assets::Config for Runtime {
 parameter_types! {
 	// Make sure put same value with `construct_runtime`
 	pub const AccessSegregatorPalletIndex: u8 = 9;
-	pub const FeeHandlerPalletIndex: u8 = 10;
+	pub const BasicFeeHandlerPalletIndex: u8 = 10;
 	pub const BridgePalletIndex: u8 = 11;
 	pub const FeeHandlerRouterPalletIndex: u8 = 12;
+	pub const PercentageFeeHandlerRouterPalletIndex: u8 = 13;
 	// RegisteredExtrinsics here registers all valid (pallet index, extrinsic_name) paris
 	// make sure to update this when adding new access control extrinsic
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
-		(FeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
+		(BasicFeeHandlerPalletIndex::get(), b"set_fee".to_vec()),
 		(BridgePalletIndex::get(), b"set_mpc_address".to_vec()),
 		(BridgePalletIndex::get(), b"pause_bridge".to_vec()),
 		(BridgePalletIndex::get(), b"unpause_bridge".to_vec()),
@@ -354,6 +355,7 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
 		(BridgePalletIndex::get(), b"retry".to_vec()),
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
+		(PercentageFeeHandlerRouterPalletIndex::get(), b"set_fee_rate".to_vec()),
 	].to_vec();
 }
 
@@ -367,14 +369,21 @@ impl sygma_access_segregator::Config for Runtime {
 
 impl sygma_basic_feehandler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletIndex = FeeHandlerPalletIndex;
+	type PalletIndex = BasicFeeHandlerPalletIndex;
 	type WeightInfo = sygma_basic_feehandler::weights::SygmaWeightInfo<Runtime>;
+}
+
+impl sygma_percentage_feehandler::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type PalletIndex = PercentageFeeHandlerRouterPalletIndex;
+	type WeightInfo = sygma_percentage_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
 impl sygma_fee_handler_router::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
+	type PercentageFeeHandler = SygmaPercentageFeeHandler;
 	type PalletIndex = FeeHandlerRouterPalletIndex;
 	type WeightInfo = sygma_fee_handler_router::weights::SygmaWeightInfo<Runtime>;
 }
@@ -751,6 +760,7 @@ construct_runtime!(
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
+		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 13,
 		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config} = 20,
 	}
 );
@@ -805,6 +815,7 @@ mod benches {
 		[sygma_bridge, SygmaBridge::<Runtime>]
 		[sygma_access_segregator, SygmaAccessSegregator::<Runtime>]
 		[sygma_basic_feehandler, SygmaBasicFeeHandler::<Runtime>]
+		[sygma_percentage_feehandler, SygmaPercentageFeeHandler::<Runtime>]
 		[sygma_fee_handler_router, SygmaFeeHandlerRouter::<Runtime>]
 	);
 }
@@ -997,6 +1008,7 @@ impl_runtime_apis! {
 			use sygma_access_segregator::Pallet as SygmaAccessSegregator;
 			use sygma_basic_feehandler::Pallet as SygmaBasicFeeHandler;
 			use sygma_fee_handler_router::Pallet as SygmaFeeHandlerRouter;
+			use sygma_percentage_feehandler::Pallet as SygmaPercentageFeeHandler;
 
 			let mut list = Vec::<BenchmarkList>::new();
 			list_benchmarks!(list, extra);
@@ -1016,6 +1028,7 @@ impl_runtime_apis! {
 			use sygma_bridge::Pallet as SygmaBridge;
 			use sygma_access_segregator::Pallet as SygmaAccessSegregator;
 			use sygma_basic_feehandler::Pallet as SygmaBasicFeeHandler;
+			use sygma_percentage_feehandler::Pallet as SygmaPercentageFeeHandler;
 			use sygma_fee_handler_router::Pallet as SygmaFeeHandlerRouter;
 
 			impl frame_system_benchmarking::Config for Runtime {}
