@@ -25,9 +25,9 @@ pub mod pallet {
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
-	/// Mapping fungible asset id with domain id to fee rate
+	/// Mapping fungible asset id with domain id to fee rate and its lower bound, upperbound
 	#[pallet::storage]
-	pub type AssetFeeRate<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), u32>;
+	pub type AssetFeeRate<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), (u32, u128, u128)>;
 
 	pub trait WeightInfo {
 		fn set_fee_rate() -> Weight;
@@ -52,8 +52,8 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Fee set rate for a specific asset and domain
-		/// args: [domain, asset, rate_basis_point]
-		FeeRateSet { domain: DomainID, asset: AssetId, rate_basis_point: u32 },
+		/// args: [domain, asset, rate_basis_point, fee_lower_bound, fee_upper_bound]
+		FeeRateSet { domain: DomainID, asset: AssetId, rate_basis_point: u32, fee_lower_bound: u128, fee_upper_bound: u128},
 	}
 
 	#[pallet::error]
@@ -64,6 +64,9 @@ pub mod pallet {
 		AccessDenied,
 		/// Fee rate is out of range [0, 10000)
 		FeeRateOutOfRange,
+
+		/// Percentage fee bound is invalid
+		InvalidFeeBound
 	}
 
 	#[pallet::call]
@@ -77,6 +80,8 @@ pub mod pallet {
 			domain: DomainID,
 			asset: Box<AssetId>,
 			fee_rate_basis_point: u32,
+			fee_lower_bound: u128,
+			fee_upper_bound: u128,
 		) -> DispatchResult {
 			let asset: AssetId = *asset;
 			ensure!(
@@ -91,14 +96,19 @@ pub mod pallet {
 			// Make sure fee rate is valid
 			ensure!(fee_rate_basis_point < 10_000u32, Error::<T>::FeeRateOutOfRange);
 
-			// Update asset fee rate
-			AssetFeeRate::<T>::insert((domain, &asset), fee_rate_basis_point);
+			// Make sure fee bound is valid
+			ensure!(fee_lower_bound < fee_upper_bound, Error::<T>::InvalidFeeBound);
+
+			// Update asset fee rate with fee bound
+			AssetFeeRate::<T>::insert((domain, &asset), (fee_rate_basis_point, fee_lower_bound, fee_upper_bound));
 
 			// Emit FeeRateSet event
 			Self::deposit_event(Event::FeeRateSet {
 				domain,
 				asset,
 				rate_basis_point: fee_rate_basis_point,
+				fee_lower_bound,
+				fee_upper_bound
 			});
 			Ok(())
 		}
