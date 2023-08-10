@@ -2689,7 +2689,9 @@ pub mod pallet {
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
-					fee_rate_1
+					fee_rate_1,
+					0u128,
+					1_000_000_000_000_000u128
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -2739,18 +2741,22 @@ pub mod pallet {
 						Origin::root(),
 						DEST_DOMAIN_ID,
 						Box::new(NativeLocation::get().into()),
-						fee_rate_2
+						fee_rate_2,
+						0u128,
+						1_000_000_000_000_000u128
 					),
 					sygma_percentage_feehandler::Error::<Runtime>::FeeRateOutOfRange
 				);
 
 				// test 99.99%
-				// override 5%% to 99.99%
+				// override 5% to 99.99%
 				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
-					fee_rate_3
+					fee_rate_3,
+					0u128,
+					1_000_000_000_000_000u128
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -2774,7 +2780,9 @@ pub mod pallet {
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
-					fee_rate_4
+					fee_rate_4,
+					0u128,
+					1_000_000_000_000_000u128
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
@@ -2799,7 +2807,9 @@ pub mod pallet {
 						Origin::root(),
 						DEST_DOMAIN_ID,
 						Box::new(NativeLocation::get().into()),
-						fee_rate_5
+						fee_rate_5,
+						0u128,
+						1_000_000_000_000_000u128
 					),
 					sygma_percentage_feehandler::Error::<Runtime>::FeeRateOutOfRange
 				);
@@ -2808,6 +2818,63 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
 				// Check fee collected, should remain as 209.980000000000
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
+
+				// test fee bound: fee rate 5%
+				let fee_lower_bound = 100_000_000_000_000u128; // 100
+				let fee_upper_bound = 1_000_000_000_000_000u128; // 1000
+				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee_rate_1,
+					fee_lower_bound,
+					fee_upper_bound
+				));
+
+				// with higher fee lower bound
+				// 5% fee of 200 token should be 10 but fee lower bound is 100, so fee is 100 now
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check reserved native token, should increase by 100 to 490.020000000000
+				assert_eq!(Balances::free_balance(BridgeAccount::get()), 490_020_000_000_000u128);
+				// Check fee collected, should increase by 100 to 309.980000000000
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 309_980_000_000_000u128);
+
+				// with lower fee upper bound
+				// 5% fee of 200000 token should be 10000 but fee upper bound is 1000, so fee is
+				// 1000 now
+				assert_ok!(SygmaBridge::deposit(
+					Origin::signed(ALICE),
+					Box::new(
+						(Concrete(NativeLocation::get()), Fungible(200_000_000_000_000_000)).into()
+					),
+					Box::new(MultiLocation {
+						parents: 0,
+						interior: X2(
+							slice_to_generalkey(b"ethereum recipient"),
+							slice_to_generalkey(&[1]),
+						)
+					}),
+				));
+				// Check reserved native token, should increase by 199000 to 199490.020000000000
+				assert_eq!(
+					Balances::free_balance(BridgeAccount::get()),
+					199_490_020_000_000_000u128
+				);
+				// Check fee collected, should increase by 1000 to 1309.980000000000
+				assert_eq!(
+					Balances::free_balance(TreasuryAccount::get()),
+					1_309_980_000_000_000u128
+				);
 			})
 		}
 
@@ -2833,7 +2900,7 @@ pub mod pallet {
 				));
 
 				// deposit should go through, 200 native token all goes into TokenReservedAccount,
-				// no fee collected
+				// no fee collected, because fee rate is 0
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
@@ -2910,7 +2977,9 @@ pub mod pallet {
 					Origin::root(),
 					DEST_DOMAIN_ID,
 					Box::new(NativeLocation::get().into()),
-					500u32
+					500u32,
+					0u128,
+					1_000_000_000_000_000u128
 				));
 
 				assert_ok!(SygmaBridge::deposit(

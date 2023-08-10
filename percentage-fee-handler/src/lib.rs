@@ -27,7 +27,8 @@ pub mod pallet {
 
 	/// Mapping fungible asset id with domain id to fee rate and its lower bound, upperbound
 	#[pallet::storage]
-	pub type AssetFeeRate<T: Config> = StorageMap<_, Twox64Concat, (DomainID, AssetId), (u32, u128, u128)>;
+	pub type AssetFeeRate<T: Config> =
+		StorageMap<_, Twox64Concat, (DomainID, AssetId), (u32, u128, u128)>;
 
 	pub trait WeightInfo {
 		fn set_fee_rate() -> Weight;
@@ -53,7 +54,13 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Fee set rate for a specific asset and domain
 		/// args: [domain, asset, rate_basis_point, fee_lower_bound, fee_upper_bound]
-		FeeRateSet { domain: DomainID, asset: AssetId, rate_basis_point: u32, fee_lower_bound: u128, fee_upper_bound: u128},
+		FeeRateSet {
+			domain: DomainID,
+			asset: AssetId,
+			rate_basis_point: u32,
+			fee_lower_bound: u128,
+			fee_upper_bound: u128,
+		},
 	}
 
 	#[pallet::error]
@@ -66,7 +73,7 @@ pub mod pallet {
 		FeeRateOutOfRange,
 
 		/// Percentage fee bound is invalid
-		InvalidFeeBound
+		InvalidFeeBound,
 	}
 
 	#[pallet::call]
@@ -100,7 +107,10 @@ pub mod pallet {
 			ensure!(fee_lower_bound < fee_upper_bound, Error::<T>::InvalidFeeBound);
 
 			// Update asset fee rate with fee bound
-			AssetFeeRate::<T>::insert((domain, &asset), (fee_rate_basis_point, fee_lower_bound, fee_upper_bound));
+			AssetFeeRate::<T>::insert(
+				(domain, &asset),
+				(fee_rate_basis_point, fee_lower_bound, fee_upper_bound),
+			);
 
 			// Emit FeeRateSet event
 			Self::deposit_event(Event::FeeRateSet {
@@ -108,7 +118,7 @@ pub mod pallet {
 				asset,
 				rate_basis_point: fee_rate_basis_point,
 				fee_lower_bound,
-				fee_upper_bound
+				fee_upper_bound,
 			});
 			Ok(())
 		}
@@ -118,10 +128,18 @@ pub mod pallet {
 		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
 			match (asset.fun, asset.id) {
 				(Fungible(amount), _) => {
-					// return fee rate as 0 when it is not set in the storage
-					let fee_rate_basis_point =
+					// return fee_rate_basis_point as 0 when it is not set in the storage
+					let (fee_rate_basis_point, fee_lower_bound, fee_upper_bound) =
 						AssetFeeRate::<T>::get((domain, asset.id)).unwrap_or_default();
-					Some(amount.saturating_mul(fee_rate_basis_point as u128).saturating_div(10000))
+					let fee_amount =
+						amount.saturating_mul(fee_rate_basis_point as u128).saturating_div(10000);
+
+					if fee_amount > fee_upper_bound {
+						return Some(fee_upper_bound)
+					} else if fee_amount < fee_lower_bound {
+						return Some(fee_lower_bound)
+					}
+					Some(fee_amount)
 				},
 				_ => None,
 			}
@@ -161,7 +179,9 @@ pub mod pallet {
 					Origin::root(),
 					dest_domain_id,
 					Box::new(asset_id_a),
-					0u32
+					0u32,
+					0u128,
+					100u128
 				));
 
 				// test the max fee rate case: 10000 => 100%, should raise FeeRateOutOfRange error
@@ -170,7 +190,9 @@ pub mod pallet {
 						Origin::root(),
 						dest_domain_id,
 						Box::new(asset_id_a),
-						10_000u32
+						10_000u32,
+						0u128,
+						100u128
 					),
 					percentage_fee_handler::Error::<Test>::FeeRateOutOfRange
 				);
@@ -180,20 +202,27 @@ pub mod pallet {
 					Origin::root(),
 					dest_domain_id,
 					Box::new(asset_id_a),
-					50u32
+					50u32,
+					0u128,
+					100u128
 				));
 				// set fee rate as 200 basis point aka 2% with assetId asset_id_a for another domain
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					another_dest_domain_id,
 					Box::new(asset_id_b),
-					200u32
+					200u32,
+					0u128,
+					100u128
 				));
 
-				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)).unwrap(), 50);
+				assert_eq!(
+					AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)).unwrap(),
+					(50, 0, 100)
+				);
 				assert_eq!(
 					AssetFeeRate::<Test>::get((another_dest_domain_id, asset_id_b)).unwrap(),
-					200
+					(200, 0, 100)
 				);
 
 				// permission test: unauthorized account should not be able to set fee
@@ -203,7 +232,9 @@ pub mod pallet {
 						unauthorized_account,
 						dest_domain_id,
 						Box::new(asset_id_a),
-						100u32
+						100u32,
+						0u128,
+						100u128
 					),
 					percentage_fee_handler::Error::<Test>::AccessDenied
 				);
@@ -213,11 +244,15 @@ pub mod pallet {
 						domain: dest_domain_id,
 						asset: asset_id_a,
 						rate_basis_point: 50u32,
+						fee_lower_bound: 0u128,
+						fee_upper_bound: 100u128,
 					}),
 					Event::PercentageFeeHandler(PercentageFeeHandlerEvent::FeeRateSet {
 						domain: another_dest_domain_id,
 						asset: asset_id_b,
 						rate_basis_point: 200u32,
+						fee_lower_bound: 0u128,
+						fee_upper_bound: 100u128,
 					}),
 				]);
 			})
@@ -233,14 +268,18 @@ pub mod pallet {
 					Origin::root(),
 					dest_domain_id,
 					Box::new(asset_id),
-					100u32
+					100u32,
+					0u128,
+					100u128
 				),);
 				assert_noop!(
 					PercentageFeeHandler::set_fee_rate(
 						Some(ALICE).into(),
 						dest_domain_id,
 						Box::new(asset_id),
-						200u32
+						200u32,
+						0u128,
+						100u128
 					),
 					percentage_fee_handler::Error::<Test>::AccessDenied
 				);
@@ -264,9 +303,14 @@ pub mod pallet {
 					Some(ALICE).into(),
 					dest_domain_id,
 					Box::new(asset_id),
-					200u32
+					200u32,
+					0u128,
+					100u128
 				),);
-				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id)).unwrap(), 200u32);
+				assert_eq!(
+					AssetFeeRate::<Test>::get((dest_domain_id, asset_id)).unwrap(),
+					(200u32, 0u128, 100u128)
+				);
 			})
 		}
 	}
