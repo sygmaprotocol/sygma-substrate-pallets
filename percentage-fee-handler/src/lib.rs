@@ -128,9 +128,8 @@ pub mod pallet {
 		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
 			match (asset.fun, asset.id) {
 				(Fungible(amount), _) => {
-					// return fee_rate_basis_point as 0 when it is not set in the storage
 					let (fee_rate_basis_point, fee_lower_bound, fee_upper_bound) =
-						AssetFeeRate::<T>::get((domain, asset.id)).unwrap_or_default();
+						AssetFeeRate::<T>::get((domain, asset.id))?;
 					let fee_amount =
 						amount.saturating_mul(fee_rate_basis_point as u128).saturating_div(10000);
 

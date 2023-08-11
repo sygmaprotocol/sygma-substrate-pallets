@@ -2899,26 +2899,22 @@ pub mod pallet {
 					FeeHandlerType::PercentageFeeHandler,
 				));
 
-				// deposit should go through, 200 native token all goes into TokenReservedAccount,
-				// no fee collected, because fee rate is 0
-				assert_ok!(SygmaBridge::deposit(
-					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
-						parents: 0,
-						interior: X2(
-							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
-					}),
-				));
-
-				// Check balances
-				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
-				// Check reserved native token, should increase by 200
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount);
-				// Check fee collected, should increase by 0
-				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 0);
+				// deposit should not go through because fee rate is not set in storage, so when
+				// get_fee, it returns None
+				assert_noop!(
+					SygmaBridge::deposit(
+						Origin::signed(ALICE),
+						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(MultiLocation {
+							parents: 0,
+							interior: X2(
+								slice_to_generalkey(b"ethereum recipient"),
+								slice_to_generalkey(&[1]),
+							)
+						}),
+					),
+					bridge::Error::<Runtime>::MissingFeeConfig
+				);
 			})
 		}
 
