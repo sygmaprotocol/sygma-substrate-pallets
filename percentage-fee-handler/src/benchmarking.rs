@@ -28,11 +28,13 @@ mod benchmarks {
 			dest_domain_id,
 			Box::new(native_location.clone().into()),
 			fee_rate,
+			0u128,
+			100_000_000_000_000u128,
 		);
 
 		assert_eq!(
 			AssetFeeRate::<T>::get(&(dest_domain_id, native_location.into())),
-			Some(fee_rate),
+			Some((fee_rate, 0u128, 100_000_000_000_000u128)),
 		);
 	}
 }

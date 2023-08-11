@@ -38,13 +38,13 @@ use core::marker::PhantomData;
 pub struct SygmaWeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Config> super::WeightInfo for SygmaWeightInfo<T> {
 	/// Storage: SygmaPercentageFeeHandler AssetFeeRate (r:0 w:1)
-	/// Proof: SygmaPercentageFeeHandler AssetFeeRate (max_values: None, max_size: Some(616), added: 3091, mode: MaxEncodedLen)
+	/// Proof: SygmaPercentageFeeHandler AssetFeeRate (max_values: None, max_size: Some(648), added: 3123, mode: MaxEncodedLen)
 	fn set_fee_rate() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 22_000_000 picoseconds.
-		Weight::from_parts(23_000_000, 0)
+		// Minimum execution time: 31_000_000 picoseconds.
+		Weight::from_parts(32_000_000, 0)
 			.saturating_add(Weight::from_parts(0, 0))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
