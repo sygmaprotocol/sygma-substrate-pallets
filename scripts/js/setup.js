@@ -60,6 +60,8 @@ async function main() {
     const sudo = keyring.addFromUri('//Alice');
     const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
     const percentageFeeRate = 500; // 5%
+    const feeRateLowerBound = 0;
+    const feeRateUpperBound = bn1e12.mul(new BN(1000)); // 1000 * 10 ** 12
     const mpcAddr = process.env.MPCADDR;
 
     // register dest domains
@@ -70,7 +72,7 @@ async function main() {
     // set fee rate for native asset for domains
     for (const domain of supportedDestDomains) {
         await setFeeHandler(api, domain.domainID, getNativeAssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
-        await setFeeRate(api, domain.domainID, getNativeAssetId(api), percentageFeeRate, true, sudo);
+        await setFeeRate(api, domain.domainID, getNativeAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound, true, sudo);
     }
 
     // create USDC test asset (foreign asset)
@@ -110,13 +112,13 @@ async function main() {
     // set fee for tokens with domains
     for (const domain of supportedDestDomains) {
         await setFeeHandler(api, domain.domainID, getUSDCAssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
-        await setFeeRate(api, domain.domainID, getUSDCAssetId(api), percentageFeeRate, true, sudo);
+        await setFeeRate(api, domain.domainID, getUSDCAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
 
         await setFeeHandler(api, domain.domainID, getERC20TSTAssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
-        await setFeeRate(api, domain.domainID, getERC20TSTAssetId(api), percentageFeeRate, true, sudo);
+        await setFeeRate(api, domain.domainID, getERC20TSTAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
 
         await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
-        await setFeeRate(api, domain.domainID, getERC20TSTD20AssetId(api), percentageFeeRate, true, sudo);
+        await setFeeRate(api, domain.domainID, getERC20TSTD20AssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
     }
 
     // transfer some native asset to FeeReserveAccount and TransferReserveAccount as Existential Deposit(aka ED)
