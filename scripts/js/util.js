@@ -108,7 +108,7 @@ async function setFee(api, domainID, asset, amount, finalization, sudo) {
     });
 }
 
-async function setFeeRate(api, domainID, asset, feeRate, finalization, sudo) {
+async function setFeeRate(api, domainID, asset, feeRate, feeRateLowerBound, feeRateUpperBound, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
@@ -116,7 +116,7 @@ async function setFeeRate(api, domainID, asset, feeRate, finalization, sudo) {
             `--- Submitting extrinsic to set percentage fee rate on domainID ${domainID}. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sudo
-            .sudo(api.tx.sygmaPercentageFeeHandler.setFeeRate(domainID, asset, feeRate))
+            .sudo(api.tx.sygmaPercentageFeeHandler.setFeeRate(domainID, asset, feeRate, feeRateLowerBound, feeRateUpperBound))
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
