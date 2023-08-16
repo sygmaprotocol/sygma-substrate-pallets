@@ -244,4 +244,84 @@ mod benchmarks {
 		assert_eq!(Balances::<T, _>::free_balance(caller), 200000000.into());
 		assert_eq!(Balances::<T, _>::free_balance(bridge_account), (amount - 200000000).into());
 	}
+
+	#[benchmark]
+	fn pause_all_bridges() {
+		let test_domain_1: DomainID = 1;
+		let test_chain_id_1: ChainID = U256::from(1);
+		let test_domain_2: DomainID = 2;
+		let test_chain_id_2: ChainID = U256::from(2);
+		let test_domain_3: DomainID = 3;
+		let test_chain_id_3: ChainID = U256::from(3);
+
+		SygmaBridge::<T>::register_domain(
+			SystemOrigin::Root.into(),
+			test_domain_1,
+			test_chain_id_1,
+		)
+		.unwrap();
+		SygmaBridge::<T>::register_domain(
+			SystemOrigin::Root.into(),
+			test_domain_2,
+			test_chain_id_2,
+		)
+		.unwrap();
+		SygmaBridge::<T>::register_domain(
+			SystemOrigin::Root.into(),
+			test_domain_3,
+			test_chain_id_3,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		pause_all_bridges(SystemOrigin::Root);
+
+		assert!(IsPaused::<T>::get(test_domain_1));
+		assert!(IsPaused::<T>::get(test_domain_2));
+		assert!(IsPaused::<T>::get(test_domain_3));
+	}
+
+	#[benchmark]
+	fn unpause_all_bridges() {
+		let test_domain_1: DomainID = 1;
+		let test_chain_id_1: ChainID = U256::from(1);
+		let test_domain_2: DomainID = 2;
+		let test_chain_id_2: ChainID = U256::from(2);
+		let test_domain_3: DomainID = 3;
+		let test_chain_id_3: ChainID = U256::from(3);
+
+		let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+
+		SygmaBridge::<T>::register_domain(
+			SystemOrigin::Root.into(),
+			test_domain_1,
+			test_chain_id_1,
+		)
+		.unwrap();
+		SygmaBridge::<T>::register_domain(
+			SystemOrigin::Root.into(),
+			test_domain_2,
+			test_chain_id_2,
+		)
+		.unwrap();
+		SygmaBridge::<T>::register_domain(
+			SystemOrigin::Root.into(),
+			test_domain_3,
+			test_chain_id_3,
+		)
+		.unwrap();
+
+		SygmaBridge::<T>::pause_bridge(SystemOrigin::Root.into(), test_domain_1).unwrap();
+		SygmaBridge::<T>::pause_bridge(SystemOrigin::Root.into(), test_domain_2).unwrap();
+		SygmaBridge::<T>::pause_bridge(SystemOrigin::Root.into(), test_domain_3).unwrap();
+
+		SygmaBridge::<T>::set_mpc_address(SystemOrigin::Root.into(), test_mpc_addr).unwrap();
+
+		#[extrinsic_call]
+		unpause_all_bridges(SystemOrigin::Root);
+
+		assert!(!IsPaused::<T>::get(test_domain_1));
+		assert!(!IsPaused::<T>::get(test_domain_2));
+		assert!(!IsPaused::<T>::get(test_domain_3));
+	}
 }

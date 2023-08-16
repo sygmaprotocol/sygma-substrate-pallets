@@ -73,6 +73,8 @@ pub mod pallet {
 		fn deposit() -> Weight;
 		fn retry() -> Weight;
 		fn execute_proposal(n: u32) -> Weight;
+		fn pause_all_bridges() -> Weight;
+		fn unpause_all_bridges() -> Weight;
 	}
 
 	#[pallet::pallet]
@@ -178,6 +180,10 @@ pub mod pallet {
 			fee_amount: u128,
 			fee_asset_id: AssetId,
 		},
+		/// When all bridges are paused
+		AllBridgePaused { sender: T::AccountId },
+		/// When all bridges are unpaused
+		AllBridgeUnpaused { sender: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -617,6 +623,61 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Pause all registered bridges
+		#[pallet::call_index(8)]
+		#[pallet::weight(<T as Config>::WeightInfo::pause_all_bridges())]
+		pub fn pause_all_bridges(origin: OriginFor<T>) -> DispatchResult {
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"pause_all_bridges".to_vec(),
+					origin.clone()
+				),
+				Error::<T>::AccessDenied
+			);
+
+			// Pause all bridges
+			Self::pause_all_domains();
+
+			// Emit AllBridgePaused
+			let sender = match ensure_signed(origin) {
+				Ok(sender) => sender,
+				_ => [0u8; 32].into(),
+			};
+			Self::deposit_event(Event::AllBridgePaused { sender });
+
+			Ok(())
+		}
+
+		/// Unpause all registered bridges
+		#[pallet::call_index(9)]
+		#[pallet::weight(<T as Config>::WeightInfo::unpause_all_bridges())]
+		pub fn unpause_all_bridges(origin: OriginFor<T>) -> DispatchResult {
+			ensure!(
+				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
+					<T as Config>::PalletIndex::get(),
+					b"unpause_all_bridges".to_vec(),
+					origin.clone()
+				),
+				Error::<T>::AccessDenied
+			);
+
+			// Make sure MPC address is setup
+			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
+
+			// Unpause all bridges
+			Self::unpause_all_domains();
+
+			// Emit AllBridgeUnpaused
+			let sender = match ensure_signed(origin) {
+				Ok(sender) => sender,
+				_ => [0u8; 32].into(),
+			};
+			Self::deposit_event(Event::AllBridgeUnpaused { sender });
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T>
@@ -849,8 +910,27 @@ pub mod pallet {
 
 		/// unpause all registered domains in the storage
 		fn unpause_all_domains() {
+			// iterate over the registered domain storage first and write all of them into IsPaused
+			// storage
+			for registered_domain_pair in DestDomainIds::<T>::iter() {
+				IsPaused::<T>::insert(registered_domain_pair.0, false);
+			}
+			// iterate over all IsPaused storage to set them as false(unpaused)
 			for bridge_pair in IsPaused::<T>::iter() {
 				IsPaused::<T>::insert(bridge_pair.0, false);
+			}
+		}
+
+		/// pause all registered domains in the storage
+		fn pause_all_domains() {
+			// iterate over the registered domain storage first and write all of them into IsPaused
+			// storage
+			for registered_domain_pair in DestDomainIds::<T>::iter() {
+				IsPaused::<T>::insert(registered_domain_pair.0, true);
+			}
+			// iterate over all IsPaused storage to set them as true(paused)
+			for bridge_pair in IsPaused::<T>::iter() {
+				IsPaused::<T>::insert(bridge_pair.0, true);
 			}
 		}
 	}
@@ -879,7 +959,7 @@ pub mod pallet {
 		use sp_core::{ecdsa, Pair};
 		use sp_std::{boxed::Box, vec};
 		use sygma_fee_handler_router::FeeHandlerType;
-		use sygma_traits::{MpcAddress, TransferType};
+		use sygma_traits::{DomainID, MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
 
 		#[test]
@@ -3001,6 +3081,107 @@ pub mod pallet {
 					Balances::free_balance(TreasuryAccount::get()),
 					fee + 10_000_000_000_000u128
 				);
+			})
+		}
+
+		#[test]
+		fn pause_all_bridges_test() {
+			new_test_ext().execute_with(|| {
+				let domain_1: DomainID = 1;
+				let domain_2: DomainID = 2;
+				let domain_3: DomainID = 3;
+
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), domain_1, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), domain_2, U256::from(2)));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), domain_3, U256::from(3)));
+
+				// all registered domains should be unpaused now
+				assert!(!IsPaused::<Runtime>::get(domain_1));
+				assert!(!IsPaused::<Runtime>::get(domain_2));
+				assert!(!IsPaused::<Runtime>::get(domain_3));
+
+				// permission test: unauthorized account should not be able to pause bridge
+				let unauthorized_account = Origin::from(Some(ALICE));
+				assert_noop!(
+					SygmaBridge::pause_all_bridges(unauthorized_account),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+				// Grant ALICE the access
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"pause_all_bridges".to_vec(),
+					ALICE
+				));
+
+				assert_ok!(SygmaBridge::pause_all_bridges(Origin::signed(ALICE)));
+
+				// all registered domains should be paused now
+				assert!(IsPaused::<Runtime>::get(domain_1));
+				assert!(IsPaused::<Runtime>::get(domain_2));
+				assert!(IsPaused::<Runtime>::get(domain_3));
+
+				assert_events(vec![RuntimeEvent::SygmaBridge(SygmaBridgeEvent::AllBridgePaused {
+					sender: ALICE,
+				})]);
+			})
+		}
+
+		#[test]
+		fn unpause_all_bridges_test() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+
+				let domain_1: DomainID = 1;
+				let domain_2: DomainID = 2;
+				let domain_3: DomainID = 3;
+
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), domain_1, U256::from(1)));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), domain_2, U256::from(2)));
+				assert_ok!(SygmaBridge::register_domain(Origin::root(), domain_3, U256::from(3)));
+
+				// mpc address not setup, should be error
+				assert_noop!(
+					SygmaBridge::unpause_all_bridges(Origin::root()),
+					bridge::Error::<Runtime>::MissingMpcAddress
+				);
+
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				// permission test: unauthorized account should not be able to pause bridge
+				let unauthorized_account = Origin::from(Some(ALICE));
+				assert_noop!(
+					SygmaBridge::unpause_all_bridges(unauthorized_account),
+					bridge::Error::<Runtime>::AccessDenied
+				);
+
+				// Grant ALICE the access
+				assert_ok!(AccessSegregator::grant_access(
+					Origin::root(),
+					BridgePalletIndex::get(),
+					b"unpause_all_bridges".to_vec(),
+					ALICE
+				));
+
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), domain_1));
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), domain_2));
+				assert_ok!(SygmaBridge::pause_bridge(Origin::root(), domain_3));
+
+				// all registered domains should be paused now
+				assert!(IsPaused::<Runtime>::get(domain_1));
+				assert!(IsPaused::<Runtime>::get(domain_2));
+				assert!(IsPaused::<Runtime>::get(domain_3));
+
+				assert_ok!(SygmaBridge::unpause_all_bridges(Origin::signed(ALICE)));
+
+				// all registered domains should be unpaused now
+				assert!(!IsPaused::<Runtime>::get(domain_1));
+				assert!(!IsPaused::<Runtime>::get(domain_2));
+				assert!(!IsPaused::<Runtime>::get(domain_3));
+
+				assert_events(vec![RuntimeEvent::SygmaBridge(
+					SygmaBridgeEvent::AllBridgeUnpaused { sender: ALICE },
+				)]);
 			})
 		}
 	}

@@ -354,6 +354,8 @@ parameter_types! {
 		(BridgePalletIndex::get(), b"register_domain".to_vec()),
 		(BridgePalletIndex::get(), b"unregister_domain".to_vec()),
 		(BridgePalletIndex::get(), b"retry".to_vec()),
+		(BridgePalletIndex::get(), b"pause_all_bridges".to_vec()),
+		(BridgePalletIndex::get(), b"unpause_all_bridges".to_vec()),
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
 		(PercentageFeeHandlerRouterPalletIndex::get(), b"set_fee_rate".to_vec()),
 	].to_vec();

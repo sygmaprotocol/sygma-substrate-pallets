@@ -166,4 +166,36 @@ impl<T: frame_system::Config> super::WeightInfo for SygmaWeightInfo<T> {
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
+
+	/// Storage: SygmaBridge DestDomainIds (r:4 w:0)
+	/// Proof: SygmaBridge DestDomainIds (max_values: None, max_size: Some(10), added: 2485, mode: MaxEncodedLen)
+	/// Storage: SygmaBridge IsPaused (r:4 w:3)
+	/// Proof: SygmaBridge IsPaused (max_values: None, max_size: Some(10), added: 2485, mode: MaxEncodedLen)
+	fn pause_all_bridges() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `302`
+		//  Estimated: `10930`
+		// Minimum execution time: 76_000_000 picoseconds.
+		Weight::from_parts(80_000_000, 0)
+			.saturating_add(Weight::from_parts(0, 10930))
+			.saturating_add(T::DbWeight::get().reads(8))
+			.saturating_add(T::DbWeight::get().writes(3))
+	}
+
+	/// Storage: SygmaBridge MpcAddr (r:1 w:0)
+	/// Proof: SygmaBridge MpcAddr (max_values: Some(1), max_size: Some(20), added: 515, mode: MaxEncodedLen)
+	/// Storage: SygmaBridge DestDomainIds (r:4 w:0)
+	/// Proof: SygmaBridge DestDomainIds (max_values: None, max_size: Some(10), added: 2485, mode: MaxEncodedLen)
+	/// Storage: SygmaBridge IsPaused (r:4 w:3)
+	/// Proof: SygmaBridge IsPaused (max_values: None, max_size: Some(10), added: 2485, mode: MaxEncodedLen)
+	fn unpause_all_bridges() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `342`
+		//  Estimated: `10930`
+		// Minimum execution time: 81_000_000 picoseconds.
+		Weight::from_parts(84_000_000, 0)
+			.saturating_add(Weight::from_parts(0, 10930))
+			.saturating_add(T::DbWeight::get().reads(9))
+			.saturating_add(T::DbWeight::get().writes(3))
+	}
 }
