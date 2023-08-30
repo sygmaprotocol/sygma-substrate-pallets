@@ -134,9 +134,9 @@ pub mod pallet {
 						amount.saturating_mul(fee_rate_basis_point as u128).saturating_div(10000);
 
 					if fee_amount > fee_upper_bound {
-						return Some(fee_upper_bound)
+						return Some(fee_upper_bound);
 					} else if fee_amount < fee_lower_bound {
-						return Some(fee_lower_bound)
+						return Some(fee_lower_bound);
 					}
 					Some(fee_amount)
 				},

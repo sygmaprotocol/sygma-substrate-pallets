@@ -114,10 +114,12 @@ pub mod pallet {
 		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
 			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset.id)) {
 				match handler_type {
-					FeeHandlerType::BasicFeeHandler =>
-						sygma_basic_feehandler::Pallet::<T>::get_fee(domain, asset),
-					FeeHandlerType::PercentageFeeHandler =>
-						sygma_percentage_feehandler::Pallet::<T>::get_fee(domain, asset),
+					FeeHandlerType::BasicFeeHandler => {
+						sygma_basic_feehandler::Pallet::<T>::get_fee(domain, asset)
+					},
+					FeeHandlerType::PercentageFeeHandler => {
+						sygma_percentage_feehandler::Pallet::<T>::get_fee(domain, asset)
+					},
 					FeeHandlerType::DynamicFeeHandler => {
 						// TODO: Support dynamic fee handler
 						None

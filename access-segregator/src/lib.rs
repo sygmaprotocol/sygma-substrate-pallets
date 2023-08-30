@@ -102,7 +102,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		pub fn has_access(pallet_index: u8, extrinsic_name: Vec<u8>, origin: OriginFor<T>) -> bool {
 			if T::BridgeCommitteeOrigin::ensure_origin(origin.clone()).is_ok() {
-				return true
+				return true;
 			}
 
 			let caller = match ensure_signed(origin) {
@@ -110,8 +110,8 @@ pub mod pallet {
 				_ => return false,
 			};
 
-			Self::has_registered(pallet_index, extrinsic_name.clone()) &&
-				ExtrinsicAccess::<T>::get((pallet_index, extrinsic_name))
+			Self::has_registered(pallet_index, extrinsic_name.clone())
+				&& ExtrinsicAccess::<T>::get((pallet_index, extrinsic_name))
 					.map_or(false, |who| who == caller)
 		}
 

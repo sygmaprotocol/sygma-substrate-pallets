@@ -400,8 +400,8 @@ pub mod pallet {
 				Error::<T>::AccessDenied
 			);
 			ensure!(
-				DestDomainIds::<T>::get(dest_domain_id) &&
-					DestChainIds::<T>::get(dest_domain_id).is_some(),
+				DestDomainIds::<T>::get(dest_domain_id)
+					&& DestChainIds::<T>::get(dest_domain_id).is_some(),
 				Error::<T>::DestDomainNotSupported
 			);
 
@@ -724,7 +724,7 @@ pub mod pallet {
 			);
 
 			if proposals.is_empty() {
-				return [0u8; 32]
+				return [0u8; 32];
 			}
 
 			let mut keccak_data = Vec::new();
@@ -784,10 +784,11 @@ pub mod pallet {
 		/// are supported.
 		fn extract_asset(asset: &MultiAsset) -> Option<(ResourceId, u128, TransferType)> {
 			match (&asset.fun, &asset.id) {
-				(Fungible(amount), _) =>
+				(Fungible(amount), _) => {
 					T::ResourcePairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
 						(T::ResourcePairs::get()[idx].1, *amount, TransferType::FungibleTransfer)
-					}),
+					})
+				},
 				_ => None,
 			}
 		}
@@ -811,7 +812,7 @@ pub mod pallet {
 		/// Only fungible transfer is supported so far.
 		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, MultiLocation), DispatchError> {
 			if data.len() < 64 {
-				return Err(Error::<T>::InvalidDepositData.into())
+				return Err(Error::<T>::InvalidDepositData.into());
 			}
 
 			let amount: u128 = U256::from_big_endian(&data[0..32])
@@ -821,7 +822,7 @@ pub mod pallet {
 				.try_into()
 				.map_err(|_| Error::<T>::InvalidDepositData)?;
 			if (data.len() - 64) != recipient_len {
-				return Err(Error::<T>::InvalidDepositData.into())
+				return Err(Error::<T>::InvalidDepositData.into());
 			}
 
 			let recipient = data[64..data.len()].to_vec();
@@ -910,28 +911,14 @@ pub mod pallet {
 
 		/// unpause all registered domains in the storage
 		fn unpause_all_domains() {
-			// iterate over the registered domain storage first and write all of them into IsPaused
-			// storage
-			for registered_domain_pair in DestDomainIds::<T>::iter() {
-				IsPaused::<T>::insert(registered_domain_pair.0, false);
-			}
-			// iterate over all IsPaused storage to set them as false(unpaused)
-			for bridge_pair in IsPaused::<T>::iter() {
-				IsPaused::<T>::insert(bridge_pair.0, false);
-			}
+			DestDomainIds::<T>::iter_keys().for_each(|d| IsPaused::<T>::insert(d, false));
+			IsPaused::<T>::iter_keys().for_each(|d| IsPaused::<T>::insert(d, false));
 		}
 
 		/// pause all registered domains in the storage
 		fn pause_all_domains() {
-			// iterate over the registered domain storage first and write all of them into IsPaused
-			// storage
-			for registered_domain_pair in DestDomainIds::<T>::iter() {
-				IsPaused::<T>::insert(registered_domain_pair.0, true);
-			}
-			// iterate over all IsPaused storage to set them as true(paused)
-			for bridge_pair in IsPaused::<T>::iter() {
-				IsPaused::<T>::insert(bridge_pair.0, true);
-			}
+			DestDomainIds::<T>::iter_keys().for_each(|d| IsPaused::<T>::insert(d, true));
+			IsPaused::<T>::iter_keys().for_each(|d| IsPaused::<T>::insert(d, true));
 		}
 	}
 

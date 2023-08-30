@@ -517,7 +517,7 @@ impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
-			(Fungible(ref amount), Concrete(ref id)) =>
+			(Fungible(ref amount), Concrete(ref id)) => {
 				if id == &UsdcLocation::get() {
 					Ok((UsdcAssetId::get(), *amount))
 				} else if id == &ERC20TSTLocation::get() {
@@ -526,7 +526,8 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 					Ok((ERC20TSTD20AssetId::get(), *amount))
 				} else {
 					Err(ExecutionError::AssetNotHandled)
-				},
+				}
+			},
 			_ => Err(ExecutionError::AssetNotHandled),
 		}
 	}
@@ -610,7 +611,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								let b = U112F16::from_num(*amount).checked_div(a);
 								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
 								if r == 0 {
-									return None
+									return None;
 								}
 								Some(r)
 							} else {
@@ -618,14 +619,14 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								// if source asset decimal is 12, the max amount sending to sygma
 								// relayer is 5192296858534827.628530496329
 								if *amount > U112F16::MAX {
-									return None
+									return None;
 								}
 								let a =
 									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
 								let b = U112F16::from_num(*amount).saturating_mul(a);
 								Some(b.to_num())
 							}
-						}
+						};
 					}
 				}
 				None
@@ -648,7 +649,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								// if dest asset decimal is 24, the max amount coming from sygma
 								// relayer is 5192296858.534827628530496329
 								if *amount > U112F16::MAX {
-									return None
+									return None;
 								}
 								let a =
 									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
@@ -661,11 +662,11 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								let b = U112F16::from_num(*amount).checked_div(a);
 								let r: u128 = b.unwrap_or_else(|| U112F16::from_num(0)).to_num();
 								if r == 0 {
-									return None
+									return None;
 								}
 								Some((asset.id, r).into())
 							}
-						}
+						};
 					}
 				}
 				None
@@ -680,7 +681,7 @@ impl ContainsPair<MultiAsset, MultiLocation> for ReserveChecker {
 	fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool {
 		if let Some(ref id) = ConcrateSygmaAsset::origin(asset) {
 			if id == origin {
-				return true
+				return true;
 			}
 		}
 		false
@@ -702,7 +703,7 @@ impl ExtractDestinationData for DestinationDataParser {
 				let d = u8::default();
 				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
 				if *domain_id == d {
-					return None
+					return None;
 				}
 				Some((recipient[..*recipient_len as usize].to_vec(), *domain_id))
 			},
