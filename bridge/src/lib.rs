@@ -912,9 +912,7 @@ pub mod pallet {
 		fn unpause_all_domains() {
 			// iterate over the registered domain storage first and write all of them into IsPaused
 			// storage
-			for registered_domain_pair in DestDomainIds::<T>::iter() {
-				IsPaused::<T>::insert(registered_domain_pair.0, false);
-			}
+			IsPaused::<T>::translate(|_, _| Some(false));
 			// iterate over all IsPaused storage to set them as false(unpaused)
 			for bridge_pair in IsPaused::<T>::iter() {
 				IsPaused::<T>::insert(bridge_pair.0, false);
