@@ -244,4 +244,43 @@ mod benchmarks {
 		assert_eq!(Balances::<T, _>::free_balance(caller), 200000000.into());
 		assert_eq!(Balances::<T, _>::free_balance(bridge_account), (amount - 200000000).into());
 	}
+
+	#[benchmark]
+	fn pause_all_bridges() {
+		let domain_size = 2;
+
+		for i in 1..domain_size + 1 {
+			SygmaBridge::<T>::register_domain(SystemOrigin::Root.into(), i, U256::from(i)).unwrap();
+		}
+
+		#[extrinsic_call]
+		pause_all_bridges(SystemOrigin::Root);
+
+		for i in 1..domain_size + 1 {
+			assert!(IsPaused::<T>::get(i));
+		}
+	}
+
+	#[benchmark]
+	fn unpause_all_bridges() {
+		let domain_size = 2;
+		let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+
+		for i in 1..domain_size + 1 {
+			SygmaBridge::<T>::register_domain(SystemOrigin::Root.into(), i, U256::from(i)).unwrap();
+		}
+
+		SygmaBridge::<T>::set_mpc_address(SystemOrigin::Root.into(), test_mpc_addr).unwrap();
+
+		for i in 1..domain_size + 1 {
+			SygmaBridge::<T>::pause_bridge(SystemOrigin::Root.into(), i).unwrap();
+		}
+
+		#[extrinsic_call]
+		unpause_all_bridges(SystemOrigin::Root);
+
+		for i in 1..domain_size + 1 {
+			assert!(!IsPaused::<T>::get(i));
+		}
+	}
 }

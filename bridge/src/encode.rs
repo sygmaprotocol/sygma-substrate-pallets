@@ -31,20 +31,22 @@ pub mod abi {
 			SolidityDataType::Address(a) => {
 				res.extend(a.0);
 			},
-			SolidityDataType::Number(n) =>
+			SolidityDataType::Number(n) => {
 				for b in n.0.iter().rev() {
 					let bytes = b.to_be_bytes();
 					res.extend(bytes);
-				},
+				}
+			},
 			SolidityDataType::Bytes(b) => {
 				res.extend(*b);
 			},
-			SolidityDataType::Bool(b) =>
+			SolidityDataType::Bool(b) => {
 				if *b {
 					res.push(1);
 				} else {
 					res.push(0);
-				},
+				}
+			},
 			SolidityDataType::NumberWithShift(n, to_take) => {
 				let local_res = n.0.iter().rev().fold(vec![], |mut acc, i| {
 					let bytes = i.to_be_bytes();
