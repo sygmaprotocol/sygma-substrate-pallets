@@ -470,7 +470,7 @@ pub mod pallet {
 				&Junction::AccountId32 { network: None, id: T::FeeReserveAccount::get().into() }
 					.into(),
 				// Put empty message hash here because we are not sending XCM message
-				&XcmContext::with_message_hash([0; 32]),
+				&XcmContext::with_message_id([0; 32]),
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
@@ -487,7 +487,7 @@ pub mod pallet {
 					}
 					.into(),
 					// Put empty message hash here because we are not sending XCM message
-					&XcmContext::with_message_hash([0; 32]),
+					&XcmContext::with_message_id([0; 32]),
 				)
 				.map_err(|_| Error::<T>::TransactFailed)?;
 			}
@@ -902,7 +902,7 @@ pub mod pallet {
 				&decimal_converted_asset,
 				&location,
 				// Put empty message hash here because we are not sending XCM message
-				&XcmContext::with_message_hash([0; 32]),
+				&XcmContext::with_message_id([0; 32]),
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
