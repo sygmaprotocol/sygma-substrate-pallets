@@ -85,9 +85,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + sygma_access_segregator::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Bridge transfer reserve account
+		/// Bridge transfer reserve accounts mapping with designated assets
 		#[pallet::constant]
-		type TransferReserveAccount: Get<Self::AccountId>;
+		type TransferReserveAccounts: Get<Vec<(Self::AccountId, Vec<MultiAsset>)>>;
 
 		/// EIP712 Verifying contract address
 		/// This is used in EIP712 typed data domain
@@ -476,14 +476,27 @@ pub mod pallet {
 
 			let bridge_amount = amount - fee;
 
+			let token_reserved_account = Self::get_token_reserved_account(asset.id).ok_or(Error::<T>::TransactFailed)?;
+
 			// Deposit `bridge_amount` of asset to reserve account if asset is reserved in local
 			// chain.
 			if T::IsReserve::contains(&asset, &MultiLocation::here()) {
+				// T::AssetTransactor::deposit_asset(
+				// 	&(asset.id, Fungible(bridge_amount)).into(),
+				// 	&Junction::AccountId32 {
+				// 		network: None,
+				// 		id: T::TransferReserveAccount::get().into(),
+				// 	}
+				// 	.into(),
+				// 	// Put empty message hash here because we are not sending XCM message
+				// 	&XcmContext::with_message_hash([0; 32]),
+				// )
+
 				T::AssetTransactor::deposit_asset(
 					&(asset.id, Fungible(bridge_amount)).into(),
 					&Junction::AccountId32 {
 						network: None,
-						id: T::TransferReserveAccount::get().into(),
+						id: token_reserved_account,
 					}
 					.into(),
 					// Put empty message hash here because we are not sending XCM message
@@ -705,6 +718,18 @@ pub mod pallet {
 			}
 		}
 
+		/// Return the TokenReservedAccount account by given token
+		pub fn get_token_reserved_account(token_location: AssetId) -> Option<[u8; 32]>  {
+			let idx = T::TransferReserveAccounts::get().iter().position(|a| {
+				let i: Option<usize> = a.1.iter().position(|b| b.id == token_location);
+				if i != None {
+					true;
+				}
+				false
+			})?;
+			Some(T::TransferReserveAccounts::get()[idx].0.clone().into())
+		}
+
 		/// convert the ECDSA 64-byte uncompressed pubkey to H160 address
 		pub fn public_key_to_address(public_key: &[u8]) -> [u8; 20] {
 			let hash = keccak_256(public_key);
@@ -883,13 +908,15 @@ pub mod pallet {
 				T::DecimalConverter::convert_from(&(asset_id, amount).into())
 					.ok_or(Error::<T>::DecimalConversionFail)?;
 
+			let token_reserved_account = Self::get_token_reserved_account(asset_id).ok_or(Error::<T>::TransactFailed)?;
+
 			// Withdraw `decimal_converted_asset` of asset from reserve account
 			if T::IsReserve::contains(&decimal_converted_asset, &MultiLocation::here()) {
 				T::AssetTransactor::withdraw_asset(
 					&decimal_converted_asset,
 					&Junction::AccountId32 {
 						network: None,
-						id: T::TransferReserveAccount::get().into(),
+						id: token_reserved_account,
 					}
 					.into(),
 					None,

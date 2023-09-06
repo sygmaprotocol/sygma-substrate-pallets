@@ -20,7 +20,7 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+		AccountIdConversion, AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
@@ -398,8 +398,20 @@ parameter_types! {
 	// TreasuryAccount address: 5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	// BridgeAccount is an account for holding transferred asset collection
+
 	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
-	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	// pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+
+	// derived bridgeAccount: 5EYCAe5jLbHcAAMKvLFSXgCTbPrLgBJusvPwfKcaKzuf5X5e
+	// derived account 0, seed 0u32 = empty seed
+	pub BridgeAccountNative: AccountId32 = SygmaBridgePalletId::get().into_account_truncating();
+
+	// derived account 1, seed 1u32  5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp
+	pub BridgeAccountUSDC: AccountId32 = SygmaBridgePalletId::get().into_sub_account_truncating(1u32);
+
+	pub UsdcAsset: MultiAsset = (Concrete(UsdcLocation::get()), 0u128).into();
+	pub BridgeAccounts: Vec<(AccountId32, Vec<MultiAsset>)> = vec![(BridgeAccountNative::get(), vec![NativeAsset::get()]), (BridgeAccountUSDC::get(), vec![UsdcAsset::get()])];
+
 	// EIP712ChainID is the chainID that pallet is assigned with, used in EIP712 typed data domain
 	pub EIP712ChainID: ChainID = U256::from(5);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
@@ -714,7 +726,7 @@ impl ExtractDestinationData for DestinationDataParser {
 
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type TransferReserveAccount = BridgeAccount;
+	type TransferReserveAccounts = BridgeAccounts;
 	type FeeReserveAccount = TreasuryAccount;
 	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
