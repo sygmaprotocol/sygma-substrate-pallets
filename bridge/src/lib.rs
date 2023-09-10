@@ -3172,6 +3172,7 @@ pub mod pallet {
 			})
 		}
 
+		#[test]
 		fn deposit_nonce_fix_should_work() {
 			new_test_ext().execute_with(|| {
 				// Nonce from source chain start from 1, set first batch of nonce under [1, 63]
@@ -3179,33 +3180,33 @@ pub mod pallet {
 					SygmaBridge::set_proposal_executed(nonce, 0);
 				}
 				// Nonce 0 should not be set
-				assert_eq!(SygmaBridge::is_proposal_executed(0, 0), false);
+				assert!(!SygmaBridge::is_proposal_executed(0, 0));
 				// Nonce 1 should be set
-				assert_eq!(SygmaBridge::is_proposal_executed(1, 0), true);
+				assert!(SygmaBridge::is_proposal_executed(1, 0));
 				// Nonce 63 should be set
-				assert_eq!(SygmaBridge::is_proposal_executed(63, 0), true);
+				assert!(SygmaBridge::is_proposal_executed(63, 0));
 
 				// set second batch of nonce under [64, 127]
 				for nonce in 64..128u64 {
 					SygmaBridge::set_proposal_executed(nonce, 0);
 				}
 				// Nonce 64 should be set
-				assert_eq!(SygmaBridge::is_proposal_executed(64, 0), true);
+				assert!(SygmaBridge::is_proposal_executed(64, 0));
 				// Nonce 127 should be set
-				assert_eq!(SygmaBridge::is_proposal_executed(127, 0), true);
+				assert!(SygmaBridge::is_proposal_executed(127, 0));
 				// Nonce 128 should not be set
-				assert_eq!(SygmaBridge::is_proposal_executed(128, 0), false);
+				assert!(!SygmaBridge::is_proposal_executed(128, 0));
 
 				// set future batch of nonce under [256, 300]
 				for nonce in 256..301u64 {
 					SygmaBridge::set_proposal_executed(nonce, 0);
 				}
 				// Nonce 256 should be set
-				assert_eq!(SygmaBridge::is_proposal_executed(256, 0), true);
+				assert!(SygmaBridge::is_proposal_executed(256, 0));
 				// Nonce 300 should be set
-				assert_eq!(SygmaBridge::is_proposal_executed(300, 0), true);
+				assert!(SygmaBridge::is_proposal_executed(300, 0));
 				// Nonce 301 should not be set
-				assert_eq!(SygmaBridge::is_proposal_executed(301, 0), false);
+				assert!(!SygmaBridge::is_proposal_executed(301, 0));
 			})
 		}
 	}
