@@ -1421,15 +1421,16 @@ pub mod pallet {
 				));
 				// Check balances
 				assert_eq!(Assets::balance(UsdtAssetId::get(), &ALICE), ENDOWED_BALANCE - amount);
+				// USDT in the mock runtime has been configured as the reserved token, so the corresponding account should hold the deposit balance
 				assert_eq!(
 					Assets::balance(
 						UsdtAssetId::get(),
 						AccountId::new(
-							SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
 								.unwrap()
 						)
 					),
-					0
+					amount - fee
 				);
 				assert_eq!(Assets::balance(UsdtAssetId::get(), TreasuryAccount::get()), fee);
 				// Check event
@@ -1799,6 +1800,36 @@ pub mod pallet {
 					<Runtime as frame_system::Config>::AccountId,
 				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
 
+				// Mint 400 USDT to liquidity holder for test
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					AccountId::new(
+						SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+							.unwrap()
+					),
+					400_000_000_000_000,
+				));
+				// alice deposit 200 - 1 token fee native token, so the native token holder should have 199 tokens
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					199_000_000_000_000
+				);
+				// USDT liquidity holder should have 400 USDT at this moment
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					400_000_000_000_000
+				);
+
 				// Generate proposals
 				// amount is in 18 decimal 0.000200000000000000, will be convert to 12 decimal
 				// 0.000200000000
@@ -1923,6 +1954,27 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + 200000000);
 				// usdt is defined in 18 decimal so that converted amount is the same as in proposal
 				assert_eq!(Assets::balance(UsdtAssetId::get(), &BOB), amount);
+
+				// liquidity holder accounts balance after proposals execution
+				// 199 - 0.0002 native token is 198.999800000000
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					199_000_000_000_000 - 200_000_000
+				);
+				// 400 USDT after transferring out the USDT proposal, should remain 200 USDT
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					200_000_000_000_000
+				);
 			})
 		}
 
@@ -2253,7 +2305,6 @@ pub mod pallet {
 					Assets::balance(UsdtAssetId::get(), &ALICE),
 					ENDOWED_BALANCE - amount_usdt_asset
 				);
-				// usdt asset should not be reserved so that BridgeAccount should not hold it
 				assert_eq!(
 					Assets::balance(
 						UsdtAssetId::get(),
@@ -2262,7 +2313,7 @@ pub mod pallet {
 								.unwrap()
 						)
 					),
-					0
+					122_456_789_123_456_789_123
 				);
 				// TreasuryAccount is collecting the bridging fee
 				assert_eq!(
@@ -2492,6 +2543,27 @@ pub mod pallet {
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
 				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint some USDT to liquidity holder for test
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					AccountId::new(
+						SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+							.unwrap()
+					),
+					ENDOWED_BALANCE,
+				));
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					ENDOWED_BALANCE
+				);
 
 				let p_usdt = Proposal {
 					origin_domain_id: 1,

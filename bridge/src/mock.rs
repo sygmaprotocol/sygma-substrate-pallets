@@ -223,7 +223,7 @@ parameter_types! {
 	pub UsdtLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
-			Parachain(2004),
+			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
 			slice_to_generalkey(b"usdt"),
 		),
