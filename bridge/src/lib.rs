@@ -484,17 +484,6 @@ pub mod pallet {
 			// Deposit `bridge_amount` of asset to reserve account if asset is reserved in local
 			// chain.
 			if T::IsReserve::contains(&asset, &MultiLocation::here()) {
-				// T::AssetTransactor::deposit_asset(
-				// 	&(asset.id, Fungible(bridge_amount)).into(),
-				// 	&Junction::AccountId32 {
-				// 		network: None,
-				// 		id: T::TransferReserveAccount::get().into(),
-				// 	}
-				// 	.into(),
-				// 	// Put empty message hash here because we are not sending XCM message
-				// 	&XcmContext::with_message_hash([0; 32]),
-				// )
-
 				T::AssetTransactor::deposit_asset(
 					&(asset.id, Fungible(bridge_amount)).into(),
 					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
