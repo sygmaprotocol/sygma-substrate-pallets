@@ -23,7 +23,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use cumulus_primitives_core::ParaId;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -40,19 +40,19 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub parachain_id: ParaId,
+		pub phantom: PhantomData<T>,
 	}
 
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { parachain_id: 100.into() }
+			Self { parachain_id: 100.into(), phantom: PhantomData }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			<ParachainId<T>>::put(self.parachain_id);
 		}
