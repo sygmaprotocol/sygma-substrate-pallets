@@ -26,6 +26,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity},
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -394,6 +395,15 @@ impl sygma_fee_handler_router::Config for Runtime {
 // This address is defined in the substrate E2E test of sygma-relayer
 const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
 
+fn bridge_accounts_generator() -> BTreeMap<XcmAssetId, AccountId32> {
+	let mut account_map: BTreeMap<XcmAssetId, AccountId32> = BTreeMap::new();
+	account_map.insert(NativeLocation::get().into(), BridgeAccountNative::get());
+	account_map.insert(UsdtLocation::get().into(), BridgeAccountOtherToken::get());
+	account_map.insert(ERC20TSTLocation::get().into(), BridgeAccountOtherToken::get());
+	account_map.insert(ERC20TSTD20Location::get().into(), BridgeAccountOtherToken::get());
+	account_map
+}
+
 parameter_types! {
 	// TreasuryAccount is an substrate account and currently used for substrate -> EVM bridging fee collection
 	// TreasuryAccount address: 5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3
@@ -403,7 +413,7 @@ parameter_types! {
 	// BridgeAccountOtherToken  5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp
 	pub BridgeAccountOtherToken: AccountId32 = SygmaBridgePalletId::get().into_sub_account_truncating(1u32);
 	// BridgeAccounts is a list of accounts for holding transferred asset collection
-	pub BridgeAccounts: Vec<(AccountId32, Vec<XcmAssetId>)> = vec![(BridgeAccountNative::get(), vec![NativeLocation::get().into()]), (BridgeAccountOtherToken::get(), vec![UsdtLocation::get().into(), ERC20TSTLocation::get().into(), ERC20TSTD20Location::get().into()])];
+	pub BridgeAccounts: BTreeMap<XcmAssetId, AccountId32> = bridge_accounts_generator();
 	// EIP712ChainID is the chainID that pallet is assigned with, used in EIP712 typed data domain
 	pub EIP712ChainID: ChainID = U256::from(5);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data

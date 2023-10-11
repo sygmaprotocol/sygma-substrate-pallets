@@ -18,6 +18,7 @@ use sp_runtime::{
 	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
 	AccountId32, Perbill,
 };
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
 use sygma_traits::{
 	ChainID, DecimalConverter, DomainID, ExtractDestinationData, ResourceId,
@@ -207,13 +208,21 @@ impl sygma_percentage_feehandler::Config for Runtime {
 	type WeightInfo = sygma_percentage_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
+fn bridge_accounts_generator() -> BTreeMap<XcmAssetId, AccountId32> {
+	let mut account_map: BTreeMap<XcmAssetId, AccountId32> = BTreeMap::new();
+	account_map.insert(NativeLocation::get().into(), BridgeAccountNative::get());
+	account_map.insert(UsdtLocation::get().into(), BridgeAccountOtherTokens::get());
+	account_map.insert(AstrLocation::get().into(), BridgeAccountOtherTokens::get());
+	account_map
+}
+
 parameter_types! {
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
 	pub BridgeAccountNative: AccountId32 = SygmaBridgePalletId::get().into_account_truncating();
 	pub BridgeAccountOtherTokens: AccountId32 = SygmaBridgePalletId::get().into_sub_account_truncating(1u32);
-	pub BridgeAccounts: Vec<(AccountId32, Vec<XcmAssetId>)> = vec![(BridgeAccountNative::get(), vec![NativeLocation::get().into()]), (BridgeAccountOtherTokens::get(), vec![UsdtLocation::get().into(), AstrLocation::get().into()])];
+	pub BridgeAccounts: BTreeMap<XcmAssetId, AccountId32> = bridge_accounts_generator();
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =

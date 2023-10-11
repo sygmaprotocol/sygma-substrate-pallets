@@ -47,6 +47,7 @@ pub mod pallet {
 	use xcm_executor::traits::TransactAsset;
 
 	use crate::eip712;
+	use sp_std::collections::btree_map::BTreeMap;
 	use sygma_traits::{
 		ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler,
 		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
@@ -87,7 +88,7 @@ pub mod pallet {
 
 		/// Bridge transfer reserve accounts mapping with designated assets
 		#[pallet::constant]
-		type TransferReserveAccounts: Get<Vec<(Self::AccountId, Vec<AssetId>)>>;
+		type TransferReserveAccounts: Get<BTreeMap<AssetId, Self::AccountId>>;
 
 		/// EIP712 Verifying contract address
 		/// This is used in EIP712 typed data domain
@@ -708,14 +709,9 @@ pub mod pallet {
 
 		/// Return the TokenReservedAccount address by the given token
 		pub fn get_token_reserved_account(token_id: &AssetId) -> Option<[u8; 32]> {
-			let idx = T::TransferReserveAccounts::get().iter().position(|a| {
-				let i: Option<usize> = a.1.iter().position(|b| b == token_id);
-				if i.is_some() {
-					return true;
-				}
-				false
-			})?;
-			Some(T::TransferReserveAccounts::get()[idx].0.clone().into())
+			T::TransferReserveAccounts::get()
+				.get(token_id)
+				.map(|account| (*account).clone().into())
 		}
 
 		/// convert the ECDSA 64-byte uncompressed pubkey to H160 address
