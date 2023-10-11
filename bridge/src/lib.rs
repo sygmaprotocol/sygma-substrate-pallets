@@ -473,7 +473,7 @@ pub mod pallet {
 				&Junction::AccountId32 { network: None, id: T::FeeReserveAccount::get().into() }
 					.into(),
 				// Put empty message hash here because we are not sending XCM message
-				&XcmContext::with_message_hash([0; 32]),
+				&XcmContext::with_message_id([0; 32]),
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
@@ -489,7 +489,7 @@ pub mod pallet {
 					&(asset.id, Fungible(bridge_amount)).into(),
 					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
 					// Put empty message hash here because we are not sending XCM message
-					&XcmContext::with_message_hash([0; 32]),
+					&XcmContext::with_message_id([0; 32]),
 				)
 				.map_err(|_| Error::<T>::TransactFailed)?;
 			}
@@ -857,14 +857,14 @@ pub mod pallet {
 
 		/// Return true if deposit nonce has been used
 		pub fn is_proposal_executed(nonce: DepositNonce, domain_id: DomainID) -> bool {
-			(UsedNonces::<T>::get(domain_id, nonce / 256) & (1 << (nonce % 256))) != 0
+			(UsedNonces::<T>::get(domain_id, nonce / 64) & (1 << (nonce % 64))) != 0
 		}
 
 		/// Set bit mask for specific nonce as used
 		fn set_proposal_executed(nonce: DepositNonce, domain_id: DomainID) {
-			let mut current_nonces = UsedNonces::<T>::get(domain_id, nonce / 256);
-			current_nonces |= 1 << (nonce % 256);
-			UsedNonces::<T>::insert(domain_id, nonce / 256, current_nonces);
+			let mut current_nonces = UsedNonces::<T>::get(domain_id, nonce / 64);
+			current_nonces |= 1 << (nonce % 64);
+			UsedNonces::<T>::insert(domain_id, nonce / 64, current_nonces);
 		}
 
 		/// Execute a single proposal
@@ -910,7 +910,7 @@ pub mod pallet {
 				&decimal_converted_asset,
 				&location,
 				// Put empty message hash here because we are not sending XCM message
-				&XcmContext::with_message_hash([0; 32]),
+				&XcmContext::with_message_id([0; 32]),
 			)
 			.map_err(|_| Error::<T>::TransactFailed)?;
 
@@ -3381,6 +3381,44 @@ pub mod pallet {
 				assert_events(vec![RuntimeEvent::SygmaBridge(
 					SygmaBridgeEvent::AllBridgeUnpaused { sender: ALICE },
 				)]);
+			})
+		}
+
+		#[test]
+		fn deposit_nonce_fix_should_work() {
+			new_test_ext().execute_with(|| {
+				// Nonce from source chain start from 1, set first batch of nonce under [1, 63]
+				for nonce in 1..64u64 {
+					SygmaBridge::set_proposal_executed(nonce, 0);
+				}
+				// Nonce 0 should not be set
+				assert!(!SygmaBridge::is_proposal_executed(0, 0));
+				// Nonce 1 should be set
+				assert!(SygmaBridge::is_proposal_executed(1, 0));
+				// Nonce 63 should be set
+				assert!(SygmaBridge::is_proposal_executed(63, 0));
+
+				// set second batch of nonce under [64, 127]
+				for nonce in 64..128u64 {
+					SygmaBridge::set_proposal_executed(nonce, 0);
+				}
+				// Nonce 64 should be set
+				assert!(SygmaBridge::is_proposal_executed(64, 0));
+				// Nonce 127 should be set
+				assert!(SygmaBridge::is_proposal_executed(127, 0));
+				// Nonce 128 should not be set
+				assert!(!SygmaBridge::is_proposal_executed(128, 0));
+
+				// set future batch of nonce under [256, 300]
+				for nonce in 256..301u64 {
+					SygmaBridge::set_proposal_executed(nonce, 0);
+				}
+				// Nonce 256 should be set
+				assert!(SygmaBridge::is_proposal_executed(256, 0));
+				// Nonce 300 should be set
+				assert!(SygmaBridge::is_proposal_executed(300, 0));
+				// Nonce 301 should not be set
+				assert!(!SygmaBridge::is_proposal_executed(301, 0));
 			})
 		}
 	}

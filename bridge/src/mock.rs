@@ -13,13 +13,14 @@ use frame_support::{
 use frame_system::{self as system, EnsureSigned};
 use polkadot_parachain::primitives::Sibling;
 use sp_core::{hash::H256, Get};
+use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::{
-	testing::Header,
-	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
-	AccountId32, Perbill,
+	traits::{BlakeTwo256, IdentityLookup},
+	AccountId32, BuildStorage, Perbill,
 };
 use sp_std::collections::btree_map::BTreeMap;
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result};
+use sp_std::{marker::PhantomData, prelude::*, result};
+
 use sygma_traits::{
 	ChainID, DecimalConverter, DomainID, ExtractDestinationData, ResourceId,
 	VerifyingContractAddress,
@@ -29,20 +30,15 @@ use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
 	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
+use xcm_executor::traits::{Error as ExecutionError, MatchesFungibles};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 pub(crate) type Balance = u128;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+	pub enum Runtime {
+		System: frame_system,
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
@@ -64,17 +60,16 @@ parameter_types! {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
@@ -109,7 +104,7 @@ impl pallet_balances::Config for Runtime {
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -283,27 +278,6 @@ pub type CurrencyTransactor = CurrencyAdapter<
 /// A simple Asset converter that extract the bingding relationship between AssetId and
 /// MultiLocation, And convert Asset transfer amount to Balance
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
-
-impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
-	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
-		if &UsdtLocation::get() == id.borrow() {
-			Ok(UsdtAssetId::get())
-		} else if &AstrLocation::get() == id.borrow() {
-			Ok(AstrAssetId::get())
-		} else {
-			Err(())
-		}
-	}
-	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
-		if *what.borrow() == UsdtAssetId::get() {
-			Ok(UsdtLocation::get())
-		} else if *what.borrow() == AstrAssetId::get() {
-			Ok(AstrLocation::get())
-		} else {
-			Err(())
-		}
-	}
-}
 
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
@@ -525,7 +499,7 @@ pub const ENDOWED_BALANCE: Balance = 1_000_000_000_000_000_000_000_000_000;
 pub const DEST_DOMAIN_ID: DomainID = 1;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 	pallet_balances::GenesisConfig::<Runtime> {
 		balances: vec![

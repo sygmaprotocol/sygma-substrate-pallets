@@ -3,7 +3,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit = "256"]
+#![recursion_limit = "1024"]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -27,7 +27,7 @@ use sp_runtime::{
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
 use sp_std::collections::btree_map::BTreeMap;
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*, result, vec::Vec};
+use sp_std::{marker::PhantomData, prelude::*, result, vec::Vec};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -40,14 +40,14 @@ use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
 	SiblingParachainConvertsVia,
 };
-use xcm_executor::traits::{Convert, Error as ExecutionError, MatchesFungibles};
+use xcm_executor::traits::{Error as ExecutionError, MatchesFungibles};
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
-		Randomness, StorageInfo,
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU32, ConstU64, ConstU8,
+		KeyOwnerProofSystem, Randomness, StorageInfo,
 	},
 	weights::{
 		constants::{
@@ -80,7 +80,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 pub type Balance = u128;
 
 /// Index of a transaction in the chain.
-pub type Index = u32;
+pub type Nonce = u32;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
@@ -172,6 +172,8 @@ parameter_types! {
 impl frame_system::Config for Runtime {
 	/// The basic call filter to use in dispatchable.
 	type BaseCallFilter = frame_support::traits::Everything;
+	/// The block type for the runtime.
+	type Block = Block;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
@@ -182,16 +184,12 @@ impl frame_system::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
-	/// The index type for storing how many extrinsics an account has signed.
-	type Index = Index;
-	/// The index type for blocks.
-	type BlockNumber = BlockNumber;
+	/// The type for storing how many extrinsics an account has signed.
+	type Nonce = Nonce;
 	/// The type for hashing blocks and tries.
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The header type.
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
 	/// The ubiquitous origin type.
@@ -229,6 +227,7 @@ impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
 	type MaxAuthorities = ConstU32<32>;
+	type AllowMultipleBlocksPerSlot = ConstBool<false>;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -266,7 +265,7 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -501,31 +500,6 @@ pub type CurrencyTransactor = CurrencyAdapter<
 /// MultiLocation, And convert Asset transfer amount to Balance
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
 
-impl Convert<MultiLocation, AssetId> for SimpleForeignAssetConverter {
-	fn convert_ref(id: impl Borrow<MultiLocation>) -> result::Result<AssetId, ()> {
-		if &UsdtLocation::get() == id.borrow() {
-			Ok(UsdtAssetId::get())
-		} else if &ERC20TSTLocation::get() == id.borrow() {
-			Ok(ERC20TSTAssetId::get())
-		} else if &ERC20TSTD20Location::get() == id.borrow() {
-			Ok(ERC20TSTD20AssetId::get())
-		} else {
-			Err(())
-		}
-	}
-	fn reverse_ref(what: impl Borrow<AssetId>) -> result::Result<MultiLocation, ()> {
-		if *what.borrow() == UsdtAssetId::get() {
-			Ok(UsdtLocation::get())
-		} else if *what.borrow() == ERC20TSTAssetId::get() {
-			Ok(ERC20TSTLocation::get())
-		} else if *what.borrow() == ERC20TSTD20AssetId::get() {
-			Ok(ERC20TSTD20Location::get())
-		} else {
-			Err(())
-		}
-	}
-}
-
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
@@ -756,12 +730,7 @@ pub fn slice_to_generalkey(key: &[u8]) -> Junction {
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
-	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub struct Runtime {
 		System: frame_system,
 		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
 		Timestamp: pallet_timestamp,
@@ -776,7 +745,7 @@ construct_runtime!(
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
 		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 13,
-		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config} = 20,
+		ParachainInfo: pallet_parachain_info = 20,
 	}
 );
 
@@ -959,8 +928,8 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Nonce> for Runtime {
+		fn account_nonce(account: AccountId) -> Nonce {
 			System::account_nonce(account)
 		}
 	}
