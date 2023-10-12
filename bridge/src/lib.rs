@@ -47,6 +47,7 @@ pub mod pallet {
 	use xcm_executor::traits::TransactAsset;
 
 	use crate::eip712;
+	use sp_std::collections::btree_map::BTreeMap;
 	use sygma_traits::{
 		ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler,
 		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
@@ -85,9 +86,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + sygma_access_segregator::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Bridge transfer reserve account
+		/// Bridge transfer reserve accounts mapping with designated assets
 		#[pallet::constant]
-		type TransferReserveAccount: Get<Self::AccountId>;
+		type TransferReserveAccounts: Get<BTreeMap<AssetId, Self::AccountId>>;
 
 		/// EIP712 Verifying contract address
 		/// This is used in EIP712 typed data domain
@@ -226,8 +227,10 @@ pub mod pallet {
 		ExtractDestDataFailed,
 		/// Failed on the decimal converter
 		DecimalConversionFail,
-		/// Deposit nonce has reached max integer qvalue
+		/// Deposit nonce has reached max integer value
 		DepositNonceOverflow,
+		/// Asset not bound to a liquidity holder account
+		NoLiquidityHolderAccountBound,
 		/// Function unimplemented
 		Unimplemented,
 	}
@@ -476,16 +479,15 @@ pub mod pallet {
 
 			let bridge_amount = amount - fee;
 
+			let token_reserved_account = Self::get_token_reserved_account(&asset.id)
+				.ok_or(Error::<T>::NoLiquidityHolderAccountBound)?;
+
 			// Deposit `bridge_amount` of asset to reserve account if asset is reserved in local
 			// chain.
 			if T::IsReserve::contains(&asset, &MultiLocation::here()) {
 				T::AssetTransactor::deposit_asset(
 					&(asset.id, Fungible(bridge_amount)).into(),
-					&Junction::AccountId32 {
-						network: None,
-						id: T::TransferReserveAccount::get().into(),
-					}
-					.into(),
+					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
 					// Put empty message hash here because we are not sending XCM message
 					&XcmContext::with_message_id([0; 32]),
 				)
@@ -705,6 +707,13 @@ pub mod pallet {
 			}
 		}
 
+		/// Return the TokenReservedAccount address by the given token
+		pub fn get_token_reserved_account(token_id: &AssetId) -> Option<[u8; 32]> {
+			T::TransferReserveAccounts::get()
+				.get(token_id)
+				.map(|account| (*account).clone().into())
+		}
+
 		/// convert the ECDSA 64-byte uncompressed pubkey to H160 address
 		pub fn public_key_to_address(public_key: &[u8]) -> [u8; 20] {
 			let hash = keccak_256(public_key);
@@ -883,15 +892,14 @@ pub mod pallet {
 				T::DecimalConverter::convert_from(&(asset_id, amount).into())
 					.ok_or(Error::<T>::DecimalConversionFail)?;
 
+			let token_reserved_account = Self::get_token_reserved_account(&asset_id)
+				.ok_or(Error::<T>::NoLiquidityHolderAccountBound)?;
+
 			// Withdraw `decimal_converted_asset` of asset from reserve account
 			if T::IsReserve::contains(&decimal_converted_asset, &MultiLocation::here()) {
 				T::AssetTransactor::withdraw_asset(
 					&decimal_converted_asset,
-					&Junction::AccountId32 {
-						network: None,
-						id: T::TransferReserveAccount::get().into(),
-					}
-					.into(),
+					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
 					None,
 				)
 				.map_err(|_| Error::<T>::TransactFailed)?;
@@ -932,22 +940,58 @@ pub mod pallet {
 		};
 		use bridge::mock::{
 			assert_events, new_test_ext, slice_to_generalkey, AccessSegregator, Assets, Balances,
-			BridgeAccount, BridgePalletIndex, NativeLocation, NativeResourceId, Runtime,
-			RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler, SygmaBridge,
-			SygmaFeeHandlerRouter, SygmaPercentageFeeHandler, TreasuryAccount, UsdcAssetId,
-			UsdcLocation, UsdcResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID, ENDOWED_BALANCE,
+			BridgeAccountNative, BridgeAccountOtherTokens, BridgePalletIndex, NativeLocation,
+			NativeResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler,
+			SygmaBridge, SygmaFeeHandlerRouter, SygmaPercentageFeeHandler, TreasuryAccount,
+			UsdtAssetId, UsdtLocation, UsdtResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID,
+			ENDOWED_BALANCE,
 		};
 		use codec::{self, Encode};
 		use frame_support::{
 			assert_noop, assert_ok, crypto::ecdsa::ECDSAExt,
 			traits::tokens::fungibles::Create as FungibleCerate,
 		};
+		use parachains_common::AccountId;
 		use primitive_types::U256;
-		use sp_core::{ecdsa, Pair};
+		use sp_core::{ecdsa, ByteArray, Pair};
 		use sp_std::{boxed::Box, vec};
 		use sygma_fee_handler_router::FeeHandlerType;
 		use sygma_traits::{DomainID, MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
+
+		#[test]
+		fn get_token_reserved_account_test() {
+			new_test_ext().execute_with(|| {
+				assert_eq!(
+					SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into()).unwrap(),
+					BridgeAccountOtherTokens::get().as_slice()
+				);
+				assert_eq!(
+					SygmaBridge::get_token_reserved_account(&NativeLocation::get().into()).unwrap(),
+					BridgeAccountNative::get().as_slice()
+				);
+				assert_eq!(
+					SygmaBridge::get_token_reserved_account(&AstrLocation::get().into()).unwrap(),
+					BridgeAccountOtherTokens::get().as_slice()
+				);
+
+				// unknown token should return None
+				assert_eq!(
+					SygmaBridge::get_token_reserved_account(
+						&MultiLocation::new(
+							2,
+							X3(
+								Parachain(1000),
+								slice_to_generalkey(b"sygma"),
+								slice_to_generalkey(b"unknown"),
+							),
+						)
+						.into()
+					),
+					None
+				);
+			})
+		}
 
 		#[test]
 		fn set_mpc_address() {
@@ -1235,7 +1279,13 @@ pub mod pallet {
 				));
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					amount - fee
+				);
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![
@@ -1313,13 +1363,13 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					Box::new(UsdcLocation::get().into()),
+					Box::new(UsdtLocation::get().into()),
 					fee
 				));
 				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					Box::new(UsdcLocation::get().into()),
+					Box::new(UsdtLocation::get().into()),
 					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1329,23 +1379,23 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 
-				// Register foreign asset (USDC) with asset id 0
+				// Register foreign asset (USDT) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
-				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
 
-				// Mint some USDC to ALICE for test
+				// Mint some USDT to ALICE for test
 				assert_ok!(Assets::mint(
 					Origin::signed(ASSET_OWNER),
 					codec::Compact(0),
 					ALICE,
 					ENDOWED_BALANCE,
 				));
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
+				assert_eq!(Assets::balance(UsdtAssetId::get(), &ALICE), ENDOWED_BALANCE);
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(UsdcLocation::get()), Fungible(amount)).into()),
+					Box::new((Concrete(UsdtLocation::get()), Fungible(amount)).into()),
 					Box::new(MultiLocation {
 						parents: 0,
 						interior: X2(
@@ -1355,14 +1405,24 @@ pub mod pallet {
 					}),
 				));
 				// Check balances
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Assets::balance(UsdcAssetId::get(), BridgeAccount::get()), 0);
-				assert_eq!(Assets::balance(UsdcAssetId::get(), TreasuryAccount::get()), fee);
+				assert_eq!(Assets::balance(UsdtAssetId::get(), &ALICE), ENDOWED_BALANCE - amount);
+				// USDT in the mock runtime has been configured as the reserved token, so the corresponding account should hold the deposit balance
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					amount - fee
+				);
+				assert_eq!(Assets::balance(UsdtAssetId::get(), TreasuryAccount::get()), fee);
 				// Check event
 				assert_events(vec![
 					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 						dest_domain_id: DEST_DOMAIN_ID,
-						resource_id: UsdcResourceId::get(),
+						resource_id: UsdtResourceId::get(),
 						deposit_nonce: 0,
 						sender: ALICE,
 						transfer_type: TransferType::FungibleTransfer,
@@ -1375,9 +1435,9 @@ pub mod pallet {
 					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
 						fee_payer: ALICE,
 						dest_domain_id: DEST_DOMAIN_ID,
-						resource_id: UsdcResourceId::get(),
+						resource_id: UsdtResourceId::get(),
 						fee_amount: fee,
-						fee_asset_id: UsdcLocation::get().into(),
+						fee_asset_id: UsdtLocation::get().into(),
 					}),
 				]);
 			})
@@ -1720,10 +1780,40 @@ pub mod pallet {
 					}),
 				));
 
-				// Register foreign asset (USDC) with asset id 0
+				// Register foreign asset (USDT) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
-				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
+
+				// Mint 400 USDT to liquidity holder for test
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					AccountId::new(
+						SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+							.unwrap()
+					),
+					400_000_000_000_000,
+				));
+				// alice deposit 200 - 1 token fee native token, so the native token holder should have 199 tokens
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					199_000_000_000_000
+				);
+				// USDT liquidity holder should have 400 USDT at this moment
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					400_000_000_000_000
+				);
 
 				// Generate proposals
 				// amount is in 18 decimal 0.000200000000000000, will be convert to 12 decimal
@@ -1740,10 +1830,10 @@ pub mod pallet {
 				};
 				// amount is in 18 decimal 0.000200000000000000, will be convert to 18 decimal
 				// 0.000200000000000000
-				let valid_usdc_transfer_proposal = Proposal {
+				let valid_usdt_transfer_proposal = Proposal {
 					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 2,
-					resource_id: UsdcResourceId::get(),
+					resource_id: UsdtResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
 						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
@@ -1789,13 +1879,13 @@ pub mod pallet {
 				let empty_data_proposal = Proposal {
 					origin_domain_id: DEST_DOMAIN_ID,
 					deposit_nonce: 3,
-					resource_id: UsdcResourceId::get(),
+					resource_id: UsdtResourceId::get(),
 					data: vec![],
 				};
 
 				let proposals = vec![
 					valid_native_transfer_proposal,
-					valid_usdc_transfer_proposal,
+					valid_usdt_transfer_proposal,
 					invalid_depositnonce_proposal,
 					invalid_domainid_proposal,
 					invalid_resourceid_proposal,
@@ -1834,7 +1924,7 @@ pub mod pallet {
 					bridge::Error::<Runtime>::BadMpcSignature,
 				);
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE);
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), 0);
+				assert_eq!(Assets::balance(UsdtAssetId::get(), &BOB), 0);
 				assert!(SygmaBridge::verify_by_mpc_address(
 					final_message,
 					proposals_with_valid_signature.encode()
@@ -1847,8 +1937,29 @@ pub mod pallet {
 				// proposal amount is in 18 decimal 0.000200000000000000, will be convert to 12
 				// decimal 0.000200000000(200000000) because native asset is defined in 12 decimal
 				assert_eq!(Balances::free_balance(&BOB), ENDOWED_BALANCE + 200000000);
-				// usdc is defined in 18 decimal so that converted amount is the same as in proposal
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &BOB), amount);
+				// usdt is defined in 18 decimal so that converted amount is the same as in proposal
+				assert_eq!(Assets::balance(UsdtAssetId::get(), &BOB), amount);
+
+				// liquidity holder accounts balance after proposals execution
+				// 199 - 0.0002 native token is 198.999800000000
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					199_000_000_000_000 - 200_000_000
+				);
+				// 400 USDT after transferring out the USDT proposal, should remain 200 USDT
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					200_000_000_000_000
+				);
 			})
 		}
 
@@ -2044,10 +2155,10 @@ pub mod pallet {
 				let amount_native_asset = 123_456_789_123_456u128; // 123.456_789_123_456
 				let adjusted_amount_native_asset = 122_456_789_123_456_000_000u128; // amount_native_asset - fee_native_asset then adjust it to 18 decimals
 
-				// usdc asset with 18 decimal
-				let fee_usdc_asset = 1_000_000_000_000_000_000u128; // 1.0 usdc asset
-				let amount_usdc_asset = 123_456_789_123_456_789_123u128; // 123.456_789_123_456_789_123
-				let adjusted_amount_usdc_asset = 122_456_789_123_456_789_123u128; // amount_usdc_asset - fee_usdc_asset then adjust it to 18 decimals
+				// usdt asset with 18 decimal
+				let fee_usdt_asset = 1_000_000_000_000_000_000u128; // 1.0 usdt asset
+				let amount_usdt_asset = 123_456_789_123_456_789_123u128; // 123.456_789_123_456_789_123
+				let adjusted_amount_usdt_asset = 122_456_789_123_456_789_123u128; // amount_usdt_asset - fee_usdt_asset then adjust it to 18 decimals
 
 				// astr asset with 24 decimal
 				let fee_astr_asset = 1_000_000_000_000_000_000_000_000u128; // 1.0 astr asset
@@ -2064,8 +2175,8 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					Box::new(UsdcLocation::get().into()),
-					fee_usdc_asset
+					Box::new(UsdtLocation::get().into()),
+					fee_usdt_asset
 				));
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
@@ -2082,7 +2193,7 @@ pub mod pallet {
 				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					Box::new(UsdcLocation::get().into()),
+					Box::new(UsdtLocation::get().into()),
 					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
@@ -2116,7 +2227,10 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount_native_asset);
 				// native asset should be reserved so that BridgeAccount should hold it
 				assert_eq!(
-					Balances::free_balance(BridgeAccount::get()),
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
 					amount_native_asset - fee_native_asset
 				);
 				// TreasuryAccount is collecting the bridging fee
@@ -2144,25 +2258,25 @@ pub mod pallet {
 					}),
 				]);
 
-				// deposit usdc asset which has 18 decimal
-				// Register foreign asset (usdc) with asset id 0
+				// deposit usdt asset which has 18 decimal
+				// Register foreign asset (usdt) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
-				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
 
-				// Mint some usdc to ALICE for test
+				// Mint some usdt to ALICE for test
 				assert_ok!(Assets::mint(
 					Origin::signed(ASSET_OWNER),
 					codec::Compact(0),
 					ALICE,
 					ENDOWED_BALANCE,
 				)); // make sure Alice owns enough funds here
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), ENDOWED_BALANCE);
+				assert_eq!(Assets::balance(UsdtAssetId::get(), &ALICE), ENDOWED_BALANCE);
 
 				// deposit
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(UsdcLocation::get()), Fungible(amount_usdc_asset)).into()),
+					Box::new((Concrete(UsdtLocation::get()), Fungible(amount_usdt_asset)).into()),
 					Box::new(MultiLocation {
 						parents: 0,
 						interior: X2(
@@ -2173,27 +2287,35 @@ pub mod pallet {
 				));
 				// Check balances
 				assert_eq!(
-					Assets::balance(UsdcAssetId::get(), &ALICE),
-					ENDOWED_BALANCE - amount_usdc_asset
+					Assets::balance(UsdtAssetId::get(), &ALICE),
+					ENDOWED_BALANCE - amount_usdt_asset
 				);
-				// usdc asset should not be reserved so that BridgeAccount should not hold it
-				assert_eq!(Assets::balance(UsdcAssetId::get(), BridgeAccount::get()), 0);
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					122_456_789_123_456_789_123
+				);
 				// TreasuryAccount is collecting the bridging fee
 				assert_eq!(
-					Assets::balance(UsdcAssetId::get(), TreasuryAccount::get()),
-					fee_usdc_asset
+					Assets::balance(UsdtAssetId::get(), TreasuryAccount::get()),
+					fee_usdt_asset
 				);
 
 				// Check event
 				assert_events(vec![
 					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
 						dest_domain_id: DEST_DOMAIN_ID,
-						resource_id: UsdcResourceId::get(),
+						resource_id: UsdtResourceId::get(),
 						deposit_nonce: 1,
 						sender: ALICE,
 						transfer_type: TransferType::FungibleTransfer,
 						deposit_data: SygmaBridge::create_deposit_data(
-							adjusted_amount_usdc_asset,
+							adjusted_amount_usdt_asset,
 							b"ethereum recipient".to_vec(),
 						),
 						handler_response: vec![],
@@ -2201,9 +2323,9 @@ pub mod pallet {
 					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
 						fee_payer: ALICE,
 						dest_domain_id: DEST_DOMAIN_ID,
-						resource_id: UsdcResourceId::get(),
-						fee_amount: fee_usdc_asset,
-						fee_asset_id: UsdcLocation::get().into(),
+						resource_id: UsdtResourceId::get(),
+						fee_amount: fee_usdt_asset,
+						fee_asset_id: UsdtLocation::get().into(),
 					}),
 				]);
 
@@ -2242,7 +2364,13 @@ pub mod pallet {
 				// astr asset should be reserved so that BridgeAccount should hold it(Astr is not
 				// defined in ConcrateSygmaAsset)
 				assert_eq!(
-					Assets::balance(AstrAssetId::get(), BridgeAccount::get()),
+					Assets::balance(
+						AstrAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&AstrLocation::get().into())
+								.unwrap()
+						)
+					),
 					amount_astr_asset - fee_astr_asset
 				);
 				// TreasuryAccount is collecting the bridging fee
@@ -2353,7 +2481,13 @@ pub mod pallet {
 					}),
 				));
 				// BridgeAccount should have half of alice native asset - fee
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), ENDOWED_BALANCE / 2 - fee);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					ENDOWED_BALANCE / 2 - fee
+				);
 				// TreasuryAccount is collecting the bridging fee
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 
@@ -2389,37 +2523,58 @@ pub mod pallet {
 					ENDOWED_BALANCE / 2 + 100_000_000_000_000
 				);
 
-				// proposal for bridging usdc asset to alice(usdc asset is 18 decimal)
-				// Register foreign asset (usdc) with asset id 0
+				// proposal for bridging usdt asset to alice(usdt asset is 18 decimal)
+				// Register foreign asset (usdt) with asset id 0
 				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
 					<Runtime as frame_system::Config>::AccountId,
-				>>::create(UsdcAssetId::get(), ASSET_OWNER, true, 1,));
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
 
-				let p_usdc = Proposal {
+				// Mint some USDT to liquidity holder for test
+				assert_ok!(Assets::mint(
+					Origin::signed(ASSET_OWNER),
+					codec::Compact(0),
+					AccountId::new(
+						SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+							.unwrap()
+					),
+					ENDOWED_BALANCE,
+				));
+				assert_eq!(
+					Assets::balance(
+						UsdtAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
+								.unwrap()
+						)
+					),
+					ENDOWED_BALANCE
+				);
+
+				let p_usdt = Proposal {
 					origin_domain_id: 1,
 					deposit_nonce: 2,
-					resource_id: UsdcResourceId::get(),
+					resource_id: UsdtResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						bridge_amount,
 						MultiLocation::new(0, X1(AccountId32 { network: None, id: ALICE.into() }))
 							.encode(),
 					),
 				};
-				let proposals_usdc = vec![p_usdc];
-				let final_message_usdc =
-					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_usdc);
-				let signature_usdc = pair.sign_prehashed(&final_message_usdc);
+				let proposals_usdt = vec![p_usdt];
+				let final_message_usdt =
+					SygmaBridge::construct_ecdsa_signing_proposals_data(&proposals_usdt);
+				let signature_usdt = pair.sign_prehashed(&final_message_usdt);
 
-				// alice does not have any usdc at this moment
-				assert_eq!(Assets::balance(UsdcAssetId::get(), &ALICE), 0);
+				// alice does not have any usdt at this moment
+				assert_eq!(Assets::balance(UsdtAssetId::get(), &ALICE), 0);
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
-					proposals_usdc,
-					signature_usdc.encode()
+					proposals_usdt,
+					signature_usdt.encode()
 				));
-				// alice should have 100 usdc at this moment (100 usdc with 18 decimals)
+				// alice should have 100 usdt at this moment (100 usdt with 18 decimals)
 				assert_eq!(
-					Assets::balance(UsdcAssetId::get(), &ALICE),
+					Assets::balance(UsdtAssetId::get(), &ALICE),
 					100_000_000_000_000_000_000
 				);
 
@@ -2433,11 +2588,20 @@ pub mod pallet {
 				assert_ok!(Assets::mint(
 					Origin::signed(ASSET_OWNER),
 					codec::Compact(1),
-					BridgeAccount::get(),
+					AccountId::new(
+						SygmaBridge::get_token_reserved_account(&AstrLocation::get().into())
+							.unwrap()
+					),
 					ENDOWED_BALANCE
 				));
 				assert_eq!(
-					Assets::balance(AstrAssetId::get(), BridgeAccount::get()),
+					Assets::balance(
+						AstrAssetId::get(),
+						AccountId::new(
+							SygmaBridge::get_token_reserved_account(&AstrLocation::get().into())
+								.unwrap()
+						)
+					),
 					ENDOWED_BALANCE
 				);
 
@@ -2696,7 +2860,13 @@ pub mod pallet {
 				));
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					amount - fee
+				);
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 
 				// proposal execution should work
@@ -2774,7 +2944,13 @@ pub mod pallet {
 				// Check balances of Alice after deposit 200 native token
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
 				// Check reserved native token
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), 190_000_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					190_000_000_000_000u128
+				);
 				// Check fee collected
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 10_000_000_000_000u128);
 				// Check event
@@ -2837,7 +3013,13 @@ pub mod pallet {
 					}),
 				));
 				// Check reserved native token, should increase by 0.02 to 190.020000000000
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), 190_020_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					190_020_000_000_000u128
+				);
 				// Check fee collected, should increase by 199.98 to 209.980000000000
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
 
@@ -2863,7 +3045,13 @@ pub mod pallet {
 					}),
 				));
 				// Check reserved native token, should increase by 200 to 390.020000000000
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					390_020_000_000_000u128
+				);
 				// Check fee collected, should increase by 0 to 209.980000000000
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
 
@@ -2882,7 +3070,13 @@ pub mod pallet {
 				);
 
 				// Check reserved native token, should remain as 390.020000000000
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), 390_020_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					390_020_000_000_000u128
+				);
 				// Check fee collected, should remain as 209.980000000000
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 209_980_000_000_000u128);
 
@@ -2912,7 +3106,13 @@ pub mod pallet {
 					}),
 				));
 				// Check reserved native token, should increase by 100 to 490.020000000000
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), 490_020_000_000_000u128);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					490_020_000_000_000u128
+				);
 				// Check fee collected, should increase by 100 to 309.980000000000
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), 309_980_000_000_000u128);
 
@@ -2934,7 +3134,10 @@ pub mod pallet {
 				));
 				// Check reserved native token, should increase by 199000 to 199490.020000000000
 				assert_eq!(
-					Balances::free_balance(BridgeAccount::get()),
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
 					199_490_020_000_000_000u128
 				);
 				// Check fee collected, should increase by 1000 to 1309.980000000000
@@ -3026,7 +3229,13 @@ pub mod pallet {
 				));
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
-				assert_eq!(Balances::free_balance(BridgeAccount::get()), amount - fee);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					amount - fee
+				);
 				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
 
 				// Override Basic fee handler to Percentage fee handler with 5% fee rate
@@ -3060,7 +3269,10 @@ pub mod pallet {
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount * 2);
 				// Check reserved native token, should increase by 190
 				assert_eq!(
-					Balances::free_balance(BridgeAccount::get()),
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
 					amount - fee + 190_000_000_000_000u128
 				);
 				// Check fee collected, should increase by 10

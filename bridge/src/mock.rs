@@ -13,11 +13,14 @@ use frame_support::{
 use frame_system::{self as system, EnsureSigned};
 use polkadot_parachain::primitives::Sibling;
 use sp_core::{hash::H256, Get};
+use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32, BuildStorage, Perbill,
 };
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::{marker::PhantomData, prelude::*, result};
+
 use sygma_traits::{
 	ChainID, DecimalConverter, DomainID, ExtractDestinationData, ResourceId,
 	VerifyingContractAddress,
@@ -200,25 +203,33 @@ impl sygma_percentage_feehandler::Config for Runtime {
 	type WeightInfo = sygma_percentage_feehandler::weights::SygmaWeightInfo<Runtime>;
 }
 
+fn bridge_accounts_generator() -> BTreeMap<XcmAssetId, AccountId32> {
+	let mut account_map: BTreeMap<XcmAssetId, AccountId32> = BTreeMap::new();
+	account_map.insert(NativeLocation::get().into(), BridgeAccountNative::get());
+	account_map.insert(UsdtLocation::get().into(), BridgeAccountOtherTokens::get());
+	account_map.insert(AstrLocation::get().into(), BridgeAccountOtherTokens::get());
+	account_map
+}
+
 parameter_types! {
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
 	pub EIP712ChainID: ChainID = primitive_types::U256([1u64; 4]);
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160([1u8; 20]);
-	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	pub BridgeAccountNative: AccountId32 = SygmaBridgePalletId::get().into_account_truncating();
+	pub BridgeAccountOtherTokens: AccountId32 = SygmaBridgePalletId::get().into_sub_account_truncating(1u32);
+	pub BridgeAccounts: BTreeMap<XcmAssetId, AccountId32> = bridge_accounts_generator();
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	pub NativeLocation: MultiLocation = MultiLocation::here();
-	// amount = 0 act as placeholder
-	pub NativeAsset: MultiAsset = (Concrete(MultiLocation::here()), 0u128).into();
-	pub UsdcAssetId: AssetId = 0;
-	pub UsdcLocation: MultiLocation = MultiLocation::new(
+	pub UsdtAssetId: AssetId = 0;
+	pub UsdtLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
-			Parachain(2004),
+			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"usdc"),
+			slice_to_generalkey(b"usdt"),
 		),
 	);
 	pub AstrAssetId: AssetId = 1;
@@ -231,10 +242,10 @@ parameter_types! {
 		),
 	);
 	pub NativeResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
+	pub UsdtResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
 	pub AstrResourceId: ResourceId = hex_literal::hex!("4e071db61a2fb903df487c401663825643ba158d9b0ce73e1437163825643bba");
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
-	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdtLocation::get().into(), UsdtResourceId::get()), (AstrLocation::get().into(), AstrResourceId::get())];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdtLocation::get().into(), 18u8), (AstrLocation::get().into(), 24u8)];
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
@@ -272,8 +283,8 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), Concrete(ref id)) => {
-				if id == &UsdcLocation::get() {
-					Ok((UsdcAssetId::get(), *amount))
+				if id == &UsdtLocation::get() {
+					Ok((UsdtAssetId::get(), *amount))
 				} else if id == &AstrLocation::get() {
 					Ok((AstrAssetId::get(), *amount))
 				} else {
@@ -466,7 +477,7 @@ impl ExtractDestinationData for DestinationDataParser {
 
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type TransferReserveAccount = BridgeAccount;
+	type TransferReserveAccounts = BridgeAccounts;
 	type FeeReserveAccount = TreasuryAccount;
 	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;

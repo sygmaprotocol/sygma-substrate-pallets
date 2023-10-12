@@ -20,11 +20,13 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+		AccountIdConversion, AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount,
+		NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	AccountId32, ApplyExtrinsicResult, MultiSignature, Perbill,
 };
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::{marker::PhantomData, prelude::*, result, vec::Vec};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -392,13 +394,25 @@ impl sygma_fee_handler_router::Config for Runtime {
 // This address is defined in the substrate E2E test of sygma-relayer
 const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08c2d1c68";
 
+fn bridge_accounts_generator() -> BTreeMap<XcmAssetId, AccountId32> {
+	let mut account_map: BTreeMap<XcmAssetId, AccountId32> = BTreeMap::new();
+	account_map.insert(NativeLocation::get().into(), BridgeAccountNative::get());
+	account_map.insert(UsdtLocation::get().into(), BridgeAccountOtherToken::get());
+	account_map.insert(ERC20TSTLocation::get().into(), BridgeAccountOtherToken::get());
+	account_map.insert(ERC20TSTD20Location::get().into(), BridgeAccountOtherToken::get());
+	account_map
+}
+
 parameter_types! {
 	// TreasuryAccount is an substrate account and currently used for substrate -> EVM bridging fee collection
 	// TreasuryAccount address: 5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3
 	pub TreasuryAccount: AccountId32 = AccountId32::new([100u8; 32]);
-	// BridgeAccount is an account for holding transferred asset collection
-	// BridgeAccount address: 5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw
-	pub BridgeAccount: AccountId32 = AccountId32::new([101u8; 32]);
+	// BridgeAccountNative: 5EYCAe5jLbHcAAMKvLFSXgCTbPrLgBJusvPwfKcaKzuf5X5e
+	pub BridgeAccountNative: AccountId32 = SygmaBridgePalletId::get().into_account_truncating();
+	// BridgeAccountOtherToken  5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp
+	pub BridgeAccountOtherToken: AccountId32 = SygmaBridgePalletId::get().into_sub_account_truncating(1u32);
+	// BridgeAccounts is a list of accounts for holding transferred asset collection
+	pub BridgeAccounts: BTreeMap<XcmAssetId, AccountId32> = bridge_accounts_generator();
 	// EIP712ChainID is the chainID that pallet is assigned with, used in EIP712 typed data domain
 	pub EIP712ChainID: ChainID = U256::from(5);
 	// DestVerifyingContractAddress is a H160 address that is used in proposal signature verification, specifically EIP712 typed data
@@ -411,22 +425,20 @@ parameter_types! {
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
 	pub NativeLocation: MultiLocation = MultiLocation::here();
-	// amount = 0 act as placeholder
-	pub NativeAsset: MultiAsset = (Concrete(MultiLocation::here()), 0u128).into();
-	// UsdcLocation is the representation of the USDC asset location in substrate
-	// USDC is a foreign asset, and in our local testing env, it's being registered on Parachain 2004 with the following location
-	pub UsdcLocation: MultiLocation = MultiLocation::new(
+	// UsdtLocation is the representation of the USDT asset location in substrate
+	// USDT is a foreign asset, and in our local testing env, it's being registered on Parachain 2004 with the following location
+	pub UsdtLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
-			Parachain(2004),
+			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"usdc"),
+			slice_to_generalkey(b"usdt"),
 		),
 	);
 	pub ERC20TSTLocation: MultiLocation = MultiLocation::new(
 		1,
 		X3(
-			Parachain(2004),
+			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
 			slice_to_generalkey(b"erc20tst"),
 		),
@@ -434,28 +446,28 @@ parameter_types! {
 	pub ERC20TSTD20Location: MultiLocation = MultiLocation::new(
 		1,
 		X3(
-			Parachain(2004),
+			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
 			slice_to_generalkey(b"erc20tstd20"),
 		),
 	);
-	// UsdcAssetId is the substrate assetID of USDC
-	pub UsdcAssetId: AssetId = 2000;
+	// UsdtAssetId is the substrate assetID of USDT
+	pub UsdtAssetId: AssetId = 2000;
 	pub ERC20TSTAssetId: AssetId = 2001;
 	pub ERC20TSTD20AssetId: AssetId = 2002;
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
 	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
-	// UsdcResourceId is the resourceID that mapping with the foreign asset USDC
-	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
+	// UsdtResourceId is the resourceID that mapping with the foreign asset USDT
+	pub UsdtResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
 	pub ERC20TSTResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
 	pub ERC20TSTD20ResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000900");
 
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (ERC20TSTLocation::get().into(), ERC20TSTResourceId::get()), (ERC20TSTD20Location::get().into(), ERC20TSTD20ResourceId::get())];
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdtLocation::get().into(), UsdtResourceId::get()), (ERC20TSTLocation::get().into(), ERC20TSTResourceId::get()), (ERC20TSTD20Location::get().into(), ERC20TSTD20ResourceId::get())];
 	// SygmaBridgePalletId is the palletIDl
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
-	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 12u8), (ERC20TSTLocation::get().into(), 18u8), (ERC20TSTD20Location::get().into(), 20u8)];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdtLocation::get().into(), 12u8), (ERC20TSTLocation::get().into(), 18u8), (ERC20TSTD20Location::get().into(), 20u8)];
 }
 
 /// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
@@ -492,8 +504,8 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), Concrete(ref id)) => {
-				if id == &UsdcLocation::get() {
-					Ok((UsdcAssetId::get(), *amount))
+				if id == &UsdtLocation::get() {
+					Ok((UsdtAssetId::get(), *amount))
 				} else if id == &ERC20TSTLocation::get() {
 					Ok((ERC20TSTAssetId::get(), *amount))
 				} else if id == &ERC20TSTD20Location::get() {
@@ -688,7 +700,7 @@ impl ExtractDestinationData for DestinationDataParser {
 
 impl sygma_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type TransferReserveAccount = BridgeAccount;
+	type TransferReserveAccounts = BridgeAccounts;
 	type FeeReserveAccount = TreasuryAccount;
 	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
