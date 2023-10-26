@@ -11,7 +11,7 @@ use frame_support::{
 	PalletId,
 };
 use frame_system::{self as system, EnsureSigned};
-use polkadot_parachain::primitives::Sibling;
+use polkadot_parachain_primitives::primitives::Sibling;
 use sp_core::{hash::H256, Get};
 use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::{
