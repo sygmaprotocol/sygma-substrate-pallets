@@ -19,6 +19,7 @@ mod encode;
 
 #[cfg(test)]
 mod mock;
+mod xcm_asset_transactor;
 
 #[allow(unused_variables)]
 #[allow(clippy::large_enum_variant)]
