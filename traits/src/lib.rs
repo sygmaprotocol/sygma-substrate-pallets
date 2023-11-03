@@ -61,3 +61,15 @@ pub trait DecimalConverter {
 	/// Sygma relayer will always send asset in 18 decimal
 	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset>;
 }
+
+// TODO: implement this method for local mock and standalone use
+// when integrating with parachain, parachain team can implement their own version
+pub trait AssetTypeIdentifier {
+	fn is_native_asset(asset: &MultiAsset) -> bool;
+}
+
+// TODO: implement these methods
+pub trait TransactorForwarder {
+	fn xcm_transactor_forwarder();
+	fn other_world_transactor_forwarder();
+}
