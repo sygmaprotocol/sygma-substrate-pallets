@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 use xcm::latest::{Junction, MultiAsset, MultiLocation, XcmContext};
 use sygma_traits::{AssetTypeIdentifier, TransactorForwarder};
 use xcm::prelude::*;
-use xcm_executor::{traits::TransactAsset};
+use xcm_executor::{Assets, traits::TransactAsset};
 
 pub struct XCMAssetTransactor<CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder>(PhantomData<(CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder)>);
 
@@ -12,7 +12,7 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
     // 1. recipient is on the local parachain
     // 2. recipient is on the remote parachain
     // 3, recipient is on non-substrate chain(evm, cosmos, etc.)
-    fn deposit_asset(what: &MultiAsset, who: &MultiLocation, context: &XcmContext){
+    fn deposit_asset(what: &MultiAsset, who: &MultiLocation, context: &XcmContext) -> XcmResult {
         match (who.parents, who.interior) {
             // 1. recipient is the local parachain
             (0, None) => {
@@ -38,7 +38,7 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
                 }
 
                 // TODO: call the xcm handler pallet to construct the xcm message and execute it(to other remote parachain route)
-                Forwarder::xcm_transactor_forwarder()
+                Forwarder::xcm_transactor_forwarder(tmp_account, what.into(), who.into())
             }
             // 3. recipient is on non-substrate chain(evm, cosmos, etc.), will forward to sygma bridge pallet
             // TODO: the junctions below is just an temporary example, will change it to proper sygma bridge standard, see the link below:
@@ -53,16 +53,18 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
                 }
 
                 // TODO: call deposit() extrisic in sygmaBrdige pallet. Sygma bridge pallet should also be in the PhantomData type
-                Forwarder::other_world_transactor_forwarder()
+                Forwarder::other_world_transactor_forwarder(tmp_account, what.into(), who.into())
             }
             // Other destination multilocation not supported, return Err
             _ => {
-                Err("Destination not supported")
+                Err(XcmError::DestinationUnsupported)
             }
         }
+        Ok(())
     }
 
-    fn withdraw_asset(_what: &MultiAsset, _who: &MultiLocation, _maybe_context: Option<&XcmContext>,){
+    fn withdraw_asset(_what: &MultiAsset, _who: &MultiLocation, _maybe_context: Option<&XcmContext>) -> Result<Assets, XcmError> {
         // TODO:
+        Ok(Assets::new())
     }
 }

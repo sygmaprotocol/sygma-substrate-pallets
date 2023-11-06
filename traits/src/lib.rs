@@ -4,6 +4,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::dispatch::DispatchResult;
 use primitive_types::{H160, U256};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
@@ -70,6 +71,19 @@ pub trait AssetTypeIdentifier {
 
 // TODO: implement these methods
 pub trait TransactorForwarder {
-	fn xcm_transactor_forwarder();
-	fn other_world_transactor_forwarder();
+	fn xcm_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
+	fn other_world_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
+}
+
+pub trait OtherWorldBridge {
+	fn do_deposit(
+		sender: [u8; 32],
+		asset: MultiAsset,
+		dest: MultiLocation,
+	) -> DispatchResult;
+}
+
+pub trait InnerWorldBridge {
+	fn create_message() -> DispatchResult;
+	fn execute_message() -> DispatchResult;
 }

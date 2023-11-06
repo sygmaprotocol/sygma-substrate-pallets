@@ -51,7 +51,7 @@ pub mod pallet {
 	use sp_std::collections::btree_map::BTreeMap;
 	use sygma_traits::{
 		ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler,
-		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
+		MpcAddress, ResourceId, TransferType, VerifyingContractAddress, OtherWorldBridge,
 	};
 
 	#[allow(dead_code)]
@@ -680,6 +680,14 @@ pub mod pallet {
 			Self::deposit_event(Event::AllBridgeUnpaused { sender });
 
 			Ok(())
+		}
+	}
+
+	impl<T: Config> OtherWorldBridge for Pallet<T> {
+		fn do_deposit(sender: [u8; 32],
+				   asset: MultiAsset,
+				   dest: MultiLocation) -> DispatchResult {
+			&Self::deposit(sender, asset, dest)?
 		}
 	}
 
