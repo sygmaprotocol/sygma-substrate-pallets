@@ -8,7 +8,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use frame_support::transactional;
     use frame_support::traits::StorageVersion;
-    use sygma_traits::{TransactorForwarder, OtherWorldBridge, InnerWorldBridge};
+    use sygma_traits::{TransactorForwarder, Bridge};
     use xcm::latest::{prelude::*, MultiAsset, MultiLocation};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
@@ -20,14 +20,13 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config: frame_system::Config {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-        type SygmaBridge: OtherWorldBridge;
-        type XCMBridge: InnerWorldBridge;
+        type SygmaBridge: Bridge;
+        type XCMBridge: Bridge;
     }
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Assets being withdrawn from somewhere.
         XCMTransferForward {},
         OtherWorldTransferForward {},
     }
@@ -37,16 +36,15 @@ pub mod pallet {
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(195_000_000, 0))]
         #[transactional]
-        pub fn xcm_transactor_forwarder(origin: OriginFor<T>, what: MultiAsset, who: MultiLocation) -> DispatchResult {
-            T::XCMBridge::create_message()?;
-            T::XCMBridge::execute_message()?
+        fn xcm_transactor_forwarder(origin: OriginFor<T>, what: MultiAsset, who: MultiLocation) -> DispatchResult {
+            T::XCMBridge::transfer(origin.into(), what, who)?;
         }
 
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(195_000_000, 0))]
         #[transactional]
-        pub fn other_world_transactor_forwarder(origin: OriginFor<T>, what: MultiAsset, who: MultiLocation) -> DispatchResult {
-            T::SygmaBridge::deposit(origin.into(), what, who)?
+        fn other_world_transactor_forwarder(origin: OriginFor<T>, what: MultiAsset, who: MultiLocation) -> DispatchResult {
+            T::SygmaBridge::transfer(origin.into(), what, who)?
         }
     }
 }

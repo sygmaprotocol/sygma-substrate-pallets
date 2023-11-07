@@ -75,15 +75,10 @@ pub trait TransactorForwarder {
 	fn other_world_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
 }
 
-pub trait OtherWorldBridge {
-	fn do_deposit(
+pub trait Bridge {
+	fn transfer(
 		sender: [u8; 32],
 		asset: MultiAsset,
 		dest: MultiLocation,
 	) -> DispatchResult;
-}
-
-pub trait InnerWorldBridge {
-	fn create_message() -> DispatchResult;
-	fn execute_message() -> DispatchResult;
 }

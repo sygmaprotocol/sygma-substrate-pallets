@@ -13,7 +13,8 @@ members = [
     "substrate-node/node",
     "substrate-node/runtime",
     "parachain-info",
-    "bridge-forwarder"
+    "bridge-forwarder",
+    "xcm-bridge"
 ]
 
 exclude = [
