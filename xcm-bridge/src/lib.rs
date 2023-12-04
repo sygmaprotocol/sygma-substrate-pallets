@@ -4,7 +4,7 @@ pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-    use sygma_traits::{Bridge};
+    use sygma_traits::Bridge;
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -21,8 +21,17 @@ pub mod pallet {
         type XcmExecutor: ExecuteXcm<Self::RuntimeCall>;
     }
 
+    enum TransferKind {
+        /// Transfer self reserve asset.
+        SelfReserveAsset,
+        /// To reserve location.
+        ToReserve,
+        /// To non-reserve location.
+        ToNonReserve,
+    }
+
     #[pallet::event]
-    #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
         XCMTransferSend {},
     }
@@ -33,7 +42,7 @@ pub mod pallet {
         XcmExecutionFailed,
     }
 
-    struct Xcm<T: Config>{
+    struct Xcm<T: Config> {
         asset: MultiAsset,
         origin: MultiLocation,
         dest: MultiLocation,
@@ -42,29 +51,49 @@ pub mod pallet {
     }
 
     pub trait XcmHandler {
-        fn create_message(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
-        fn execute_message(&self, xcm_message: Xcm<T::RuntimeCall>) -> DispatchResult;
+        fn transfer_kind(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
+        fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
+        fn execute_instructions(&self, xcm_message: Xcm<T::RuntimeCall>) -> DispatchResult;
     }
 
     impl XcmHandler for Xcm {
-        fn create_message(&self) {
-            // TODO: xcm instructions
-            // asset reserved on the origin: WithdrawAsset + DepositReserveAsset (BuyExecution + DepositAsset)
-            // asset reserved on the dest: WithdrawAsset + InitiateReserveWithdraw (BuyExecution + DepositAsset)
-            // asset not reserved: WithdrawAsset + InitiateReserveWithdraw (BuyExecution + DepositReserveAsset(BuyExecution + DepositAsset))
+        /// Get the transfer kind.
+        fn transfer_kind(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
+            // todo: impl the xcm kind logic, return the following:
+            // SelfReserveAsset,
+            // ToReserve,
+            // ToNonReserve,
+        }
+        fn create_instructions(&self) {
+            let kind = Self::transfer_kind(&self)?;
+
+            let mut xcm_instructions = match kind {
+                SelfReserveAsset => Self::transfer_self_reserve_asset(assets, fee, dest, recipient, dest_weight_limit)?,
+                ToReserve => Self::transfer_to_reserve_asset(assets, fee, dest, recipient, dest_weight_limit)?,
+                ToNonReserve => Self::transfer_to_non_reserve_asset(
+                    assets,
+                    fee,
+                    reserve,
+                    dest,
+                    recipient,
+                    dest_weight_limit,
+                )?,
+            };
+
+            Ok(xcm_instructions)
         }
 
-        fn execute_message(&self, xcm_message: Xcm<T::RuntimeCall>) {
-            let message_weight = T::Weigher::weight(xcm_message).map_err(|()| Error::<T>::FailToWeightMessage)?;
+        fn execute_instructions(&self, xcm_instructions: Xcm<T::RuntimeCall>) {
+            let message_weight = T::Weigher::weight(xcm_instructions).map_err(|()| Error::<T>::FailToWeightMessage)?;
 
-            let hash = xcm_message.using_encoded(sp_io::hashing::blake2_256);
+            let hash = xcm_instructions.using_encoded(sp_io::hashing::blake2_256);
 
             T::XcmExecutor::execute_xcm_in_credit(
                 self.origin.clone(),
-                xcm_message.clone(),
+                xcm_instructions.clone(),
                 hash,
                 message_weight,
-                message_weight
+                message_weight,
             ).ensure_complete().map_err(|_| Error::<T>::XcmExecutionFailed)?;
 
             oK(())
@@ -79,7 +108,6 @@ pub mod pallet {
         fn transfer(sender: [u8; 32],
                     asset: MultiAsset,
                     dest: MultiLocation) -> DispatchResult {
-            // TODO: create xcm message
             let origin_location: MultiLocation = Junction::AccountId32 {
                 network: None,
                 id: sender,
@@ -89,14 +117,93 @@ pub mod pallet {
                 origin: origin_location.clone(),
                 dest: MultiLocation, // TODO: extra dest
                 recipient: MultiLocation, // TODO: extra recipient on dest
-                recipient: MultiLocation, // TODO: extra recipient on dest
                 weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
             };
-            let mut msg = xcm.create_message()?;
+            let mut msg = xcm.create_instructions()?;
             // TODO: execute xcm message
-            xcm.execute_message(msg)?;
+            xcm.execute_instructions(msg)?;
 
             Ok(())
+        }
+    }
+
+    impl<T: Config> Pallet<T> {
+        fn transfer_self_reserve_asset(
+            assets: MultiAssets,
+            fee: MultiAsset,
+            dest: MultiLocation,
+            recipient: MultiLocation,
+            dest_weight_limit: WeightLimit,
+        ) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
+            Ok(Xcm(vec![TransferReserveAsset {
+                assets: assets.clone(),
+                dest,
+                xcm: Xcm(vec![
+                    Self::buy_execution(fee, &dest, dest_weight_limit)?,
+                    Self::deposit_asset(recipient, assets.len() as u32),
+                ]),
+            }]))
+        }
+
+        fn transfer_to_reserve_asset(
+            assets: MultiAssets,
+            fee: MultiAsset,
+            reserve: MultiLocation,
+            recipient: MultiLocation,
+            dest_weight_limit: WeightLimit,
+        ) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
+            Ok(Xcm(vec![
+                WithdrawAsset(assets.clone()),
+                InitiateReserveWithdraw {
+                    assets: All.into(),
+                    reserve,
+                    xcm: Xcm(vec![
+                        Self::buy_execution(fee, &reserve, dest_weight_limit)?,
+                        Self::deposit_asset(recipient, assets.len() as u32),
+                    ]),
+                },
+            ]))
+        }
+
+        fn transfer_to_non_reserve_asset(
+            assets: MultiAssets,
+            fee: MultiAsset,
+            reserve: MultiLocation,
+            dest: MultiLocation,
+            recipient: MultiLocation,
+            dest_weight_limit: WeightLimit,
+        ) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
+            let mut reanchored_dest = dest;
+            if reserve == MultiLocation::parent() {
+                if let MultiLocation {
+                    parents: 1,
+                    interior: X1(Parachain(id)),
+                } = dest
+                {
+                    reanchored_dest = Parachain(id).into();
+                }
+            }
+
+            let max_assets = assets.len() as u32;
+
+            Ok(Xcm(vec![
+                WithdrawAsset(assets),
+                InitiateReserveWithdraw {
+                    assets: All.into(),
+                    reserve,
+                    xcm: Xcm(vec![
+                        Self::buy_execution(half(&fee), &reserve, dest_weight_limit.clone())?,
+                        DepositReserveAsset {
+                            assets: AllCounted(max_assets).into(),
+                            dest: reanchored_dest,
+                            xcm: Xcm(vec![
+                                Self::buy_execution(half(&fee), &dest, dest_weight_limit)?,
+                                Self::deposit_asset(recipient, max_assets),
+                            ]),
+                        },
+                    ]),
+                },
+            ]))
         }
     }
 }
