@@ -48,7 +48,10 @@ pub mod pallet {
 
     impl XcmHandler for Xcm {
         fn create_message(&self) {
-
+            // TODO: xcm instructions
+            // asset reserved on the origin: WithdrawAsset + DepositReserveAsset (BuyExecution + DepositAsset)
+            // asset reserved on the dest: WithdrawAsset + InitiateReserveWithdraw (BuyExecution + DepositAsset)
+            // asset not reserved: WithdrawAsset + InitiateReserveWithdraw (BuyExecution + DepositReserveAsset(BuyExecution + DepositAsset))
         }
 
         fn execute_message(&self, xcm_message: Xcm<T::RuntimeCall>) {
@@ -77,7 +80,23 @@ pub mod pallet {
                     asset: MultiAsset,
                     dest: MultiLocation) -> DispatchResult {
             // TODO: create xcm message
+            let origin_location: MultiLocation = Junction::AccountId32 {
+                network: None,
+                id: sender,
+            }.into();
+            let xcm = Xcm::<T> {
+                asset: asset.clone(),
+                origin: origin_location.clone(),
+                dest: MultiLocation, // TODO: extra dest
+                recipient: MultiLocation, // TODO: extra recipient on dest
+                recipient: MultiLocation, // TODO: extra recipient on dest
+                weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
+            };
+            let mut msg = xcm.create_message()?;
             // TODO: execute xcm message
+            xcm.execute_message(msg)?;
+
+            Ok(())
         }
     }
 }
