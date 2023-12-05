@@ -82,3 +82,7 @@ pub trait Bridge {
 		dest: MultiLocation,
 	) -> DispatchResult;
 }
+
+pub trait AssetReserveLocationParser {
+	fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation>;
+}

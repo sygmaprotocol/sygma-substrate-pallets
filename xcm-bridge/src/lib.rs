@@ -19,6 +19,11 @@ pub mod pallet {
         type Weigher: WeightBounds<Self::RuntimeCall>;
 
         type XcmExecutor: ExecuteXcm<Self::RuntimeCall>;
+
+        #[pallet::constant]
+        type SelfLocation: Get<MultiLocation>;
+
+        type ReserveLocationParser: AssetReserveLocationParser;
     }
 
     enum TransferKind {
@@ -51,18 +56,22 @@ pub mod pallet {
     }
 
     pub trait XcmHandler {
-        fn transfer_kind(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
+        fn transfer_kind(&self) -> Result<TransferKind, DispatchError>;
         fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
         fn execute_instructions(&self, xcm_message: Xcm<T::RuntimeCall>) -> DispatchResult;
     }
 
     impl XcmHandler for Xcm {
         /// Get the transfer kind.
-        fn transfer_kind(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
-            // todo: impl the xcm kind logic, return the following:
-            // SelfReserveAsset,
-            // ToReserve,
-            // ToNonReserve,
+        fn transfer_kind(&self) -> Result<TransferKind, DispatchError> {
+            let asset_location = T::ReserveLocationParser::reserved_location(&self.asset).ok_or()?;
+            if asset_location == T::SelfLocation {
+                TransferKind::SelfReserveAsset
+            } else if asset_location == self.dest {
+                TransferKind::ToReserve
+            } else {
+                TransferKind::ToNonReserve
+            }
         }
         fn create_instructions(&self) {
             let kind = Self::transfer_kind(&self)?;
@@ -120,7 +129,7 @@ pub mod pallet {
                 weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
             };
             let mut msg = xcm.create_instructions()?;
-            // TODO: execute xcm message
+
             xcm.execute_instructions(msg)?;
 
             Ok(())
