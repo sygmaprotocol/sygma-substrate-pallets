@@ -24,6 +24,9 @@ pub mod pallet {
         type SelfLocation: Get<MultiLocation>;
 
         type ReserveLocationParser: AssetReserveLocationParser;
+
+        type MinXcmFee: GetByKey<MultiLocation, Option<u128>>;
+
     }
 
     enum TransferKind {
@@ -45,10 +48,12 @@ pub mod pallet {
     pub enum Error<T> {
         FailToWeightMessage,
         XcmExecutionFailed,
+        MinXcmFeeNotDefined,
     }
 
     struct Xcm<T: Config> {
         asset: MultiAsset,
+        fee: MultiAsset,
         origin: MultiLocation,
         dest: MultiLocation,
         recipient: MultiLocation,
@@ -73,26 +78,26 @@ pub mod pallet {
                 TransferKind::ToNonReserve
             }
         }
-        fn create_instructions(&self) {
-            let kind = Self::transfer_kind(&self)?;
+        fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
+            let kind = Self::transfer_kind(self)?;
 
             let mut xcm_instructions = match kind {
-                SelfReserveAsset => Self::transfer_self_reserve_asset(assets, fee, dest, recipient, dest_weight_limit)?,
-                ToReserve => Self::transfer_to_reserve_asset(assets, fee, dest, recipient, dest_weight_limit)?,
+                SelfReserveAsset => Self::transfer_self_reserve_asset(self.assets, self.fee, self.dest, self.recipient, self.weight)?,
+                ToReserve => Self::transfer_to_reserve_asset(self.assets, self.fee, self.dest, self.recipient, self.weight)?,
                 ToNonReserve => Self::transfer_to_non_reserve_asset(
-                    assets,
-                    fee,
-                    reserve,
-                    dest,
-                    recipient,
-                    dest_weight_limit,
+                    self.assets,
+                    self.fee,
+                    self.dest,
+                    self.dest.clone(),
+                    self.recipient,
+                    self.weight,
                 )?,
             };
 
             Ok(xcm_instructions)
         }
 
-        fn execute_instructions(&self, xcm_instructions: Xcm<T::RuntimeCall>) {
+        fn execute_instructions(&self, xcm_instructions: Xcm<T::RuntimeCall>) -> DispatchResult {
             let message_weight = T::Weigher::weight(xcm_instructions).map_err(|()| Error::<T>::FailToWeightMessage)?;
 
             let hash = xcm_instructions.using_encoded(sp_io::hashing::blake2_256);
@@ -121,8 +126,11 @@ pub mod pallet {
                 network: None,
                 id: sender,
             }.into();
+
+            let min_xcm_fee = T::MinXcmFee::get(&dest).ok_or(Error::<T>::MinXcmFeeNotDefined)?;
             let xcm = Xcm::<T> {
                 asset: asset.clone(),
+                fee: min_xcm_fee,
                 origin: origin_location.clone(),
                 dest: MultiLocation, // TODO: extra dest
                 recipient: MultiLocation, // TODO: extra recipient on dest
