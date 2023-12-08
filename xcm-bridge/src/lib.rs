@@ -4,7 +4,7 @@ pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-    use sygma_traits::Bridge;
+    use sygma_traits::{Bridge, AssetReserveLocationParser};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -16,14 +16,15 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// Current pallet index defined in runtime
+        type PalletIndex: Get<u8>;
+
         type Weigher: WeightBounds<Self::RuntimeCall>;
 
         type XcmExecutor: ExecuteXcm<Self::RuntimeCall>;
 
         #[pallet::constant]
         type SelfLocation: Get<MultiLocation>;
-
-        type ReserveLocationParser: AssetReserveLocationParser;
 
         type MinXcmFee: GetByKey<MultiLocation, Option<u128>>;
 
@@ -69,7 +70,7 @@ pub mod pallet {
     impl XcmHandler for Xcm {
         /// Get the transfer kind.
         fn transfer_kind(&self) -> Result<TransferKind, DispatchError> {
-            let asset_location = T::ReserveLocationParser::reserved_location(&self.asset).ok_or()?;
+            let asset_location = Pallet::<T>::reserved_location(&self.asset).ok_or()?;
             if asset_location == T::SelfLocation {
                 TransferKind::SelfReserveAsset
             } else if asset_location == self.dest {
@@ -111,6 +112,15 @@ pub mod pallet {
             ).ensure_complete().map_err(|_| Error::<T>::XcmExecutionFailed)?;
 
             oK(())
+        }
+    }
+
+    impl<T: Config> AssetReserveLocationParser for Pallet<T> {
+        fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation> {
+            match (&asset.id, &asset.fun) {
+                (Concrete(id), Fungible(_)) => Some(id.clone()),
+                _ => None,
+            }
         }
     }
 
