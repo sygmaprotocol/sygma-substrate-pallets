@@ -50,6 +50,7 @@ pub mod pallet {
         FailToWeightMessage,
         XcmExecutionFailed,
         MinXcmFeeNotDefined,
+        InvalidDestination,
     }
 
     struct Xcm<T: Config> {
@@ -137,13 +138,17 @@ pub mod pallet {
                 id: sender,
             }.into();
 
+            let (dest_location, recipient) =
+                Pallet::<T>::extract_dest(&dest).ok_or(Error::<T>::InvalidDestination)?;
+
             let min_xcm_fee = T::MinXcmFee::get(&dest).ok_or(Error::<T>::MinXcmFeeNotDefined)?;
+
             let xcm = Xcm::<T> {
                 asset: asset.clone(),
                 fee: min_xcm_fee,
                 origin: origin_location.clone(),
-                dest: MultiLocation, // TODO: extra dest
-                recipient: MultiLocation, // TODO: extra recipient on dest
+                dest_location,
+                recipient,
                 weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
             };
             let mut msg = xcm.create_instructions()?;
@@ -155,6 +160,21 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
+        pub fn extract_dest(dest: &MultiLocation) -> Option<(MultiLocation, MultiLocation)> {
+            match (dest.parents, dest.first_interior()) {
+                // parents must be 1 here because only parents as 1 can be forwarded to xcm bridge logic
+                // parachains
+                (1, Some(Parachain(id))) => Some((
+                    MultiLocation::new(1, X1(Parachain(*id))),
+                    MultiLocation::new(0, dest.interior().clone().split_first().0),
+                )),
+                (1, _) => Some((
+                    MultiLocation::parent(),
+                    MultiLocation::new(0, dest.interior().clone()),
+                )),
+                _ => None,
+            }
+        }
         fn transfer_self_reserve_asset(
             assets: MultiAssets,
             fee: MultiAsset,
