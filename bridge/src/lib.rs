@@ -687,7 +687,9 @@ pub mod pallet {
 		fn transfer(sender: [u8; 32],
 					asset: MultiAsset,
 					dest: MultiLocation) -> DispatchResult {
-			&Self::deposit(sender, asset, dest)?
+			&Self::deposit(sender, Box::from(asset), Box::from(dest))?;
+
+			Ok(())
 		}
 	}
 

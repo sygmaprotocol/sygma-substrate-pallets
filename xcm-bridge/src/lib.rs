@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod mock;
+
 pub use self::pallet::*;
 
 #[frame_support::pallet]

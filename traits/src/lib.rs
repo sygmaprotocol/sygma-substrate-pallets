@@ -71,8 +71,8 @@ pub trait AssetTypeIdentifier {
 
 // TODO: implement these methods
 pub trait TransactorForwarder {
-	fn xcm_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
-	fn other_world_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
+	fn xcm_transactor_forwarder(sender: [u8; 32], what: &MultiAsset, who: &MultiLocation) -> DispatchResult;
+	fn other_world_transactor_forwarder(sender: [u8; 32], what: &MultiAsset, who: &MultiLocation) -> DispatchResult;
 }
 
 pub trait Bridge {
