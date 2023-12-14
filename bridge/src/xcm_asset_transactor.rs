@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use codec::Encode;
 use xcm::latest::{Junction, MultiAsset, MultiLocation, XcmContext};
 use sygma_traits::{AssetTypeIdentifier, TransactorForwarder};
 use xcm::prelude::*;
@@ -32,7 +33,7 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
                 // (https://www.notion.so/chainsafe/Sygma-as-an-Independent-pallet-c481f00ccff84ff49ce917c8b2feacda?pvs=4#6e51e6632e254b9b9a01444ef7297969)
                 if who.interior == X3(Parachain(1000), GeneralKey{length: 8, data: [1u8; 32]}, GeneralKey {length:8, data: [2u8; 32]}) {
                     // check if the asset is native or foreign, and deposit the asset to a tmp account first
-                    let tmp_account = MultiLocation::new(0, X1(GeneralKey {length: 8, data: [2u8; 32]})).into_account();
+                    let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey {length: 8, data: [2u8; 32]})).encode());
                     if AssetTypeChecker::is_native_asset(what) {
                         CurrencyTransactor::deposit_asset(what, &Junction::AccountId32 { network: None, id: tmp_account }.into(), context)?;
                     } else {
@@ -48,7 +49,7 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
                 // 3. recipient is remote parachain
                 // recipient is remote parachain
                 // xcm message must have a sender(origin), so a tmp account derived from pallet would be used
-                let tmp_account = MultiLocation::new(0, X1(GeneralKey {length: 8, data: [2u8; 32]})).into_account();
+                let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey {length: 8, data: [2u8; 32]})).encode());
 
                 // check if the asset is native or foreign, and call the corresponding deposit_asset(), recipient will be the derived tmp account
                 // xcm message execution
