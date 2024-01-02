@@ -6,7 +6,14 @@ pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-    use sygma_traits::{Bridge, AssetReserveLocationParser};
+    use sygma_traits::{Bridge, AssetReserveLocationParser, AssetTypeIdentifier};
+    use frame_support::{
+        dispatch::DispatchResult,
+        pallet_prelude::*,
+        traits::{ContainsPair, StorageVersion},
+    };
+    use xcm::latest::{prelude::*, MultiLocation, Weight as XCMWeight};
+    use xcm_executor::traits::WeightBounds;
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -27,9 +34,6 @@ pub mod pallet {
 
         #[pallet::constant]
         type SelfLocation: Get<MultiLocation>;
-
-        type MinXcmFee: GetByKey<MultiLocation, Option<u128>>;
-
     }
 
     enum TransferKind {
@@ -51,7 +55,6 @@ pub mod pallet {
     pub enum Error<T> {
         FailToWeightMessage,
         XcmExecutionFailed,
-        MinXcmFeeNotDefined,
         InvalidDestination,
     }
 
@@ -70,7 +73,7 @@ pub mod pallet {
         fn execute_instructions(&self, xcm_message: Xcm<T::RuntimeCall>) -> DispatchResult;
     }
 
-    impl XcmHandler for Xcm {
+    impl XcmHandler for Xcm<T> {
         /// Get the transfer kind.
         fn transfer_kind(&self) -> Result<TransferKind, DispatchError> {
             let asset_location = Pallet::<T>::reserved_location(&self.asset).ok_or()?;
@@ -118,6 +121,7 @@ pub mod pallet {
         }
     }
 
+
     impl<T: Config> AssetReserveLocationParser for Pallet<T> {
         fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation> {
             match (&asset.id, &asset.fun) {
@@ -127,11 +131,7 @@ pub mod pallet {
         }
     }
 
-    #[pallet::call]
     impl<T: Config> Bridge for Pallet<T> {
-        #[pallet::call_index(0)]
-        #[pallet::weight(Weight::from_parts(195_000_000, 0))]
-        #[transactional]
         fn transfer(sender: [u8; 32],
                     asset: MultiAsset,
                     dest: MultiLocation) -> DispatchResult {
@@ -143,11 +143,9 @@ pub mod pallet {
             let (dest_location, recipient) =
                 Pallet::<T>::extract_dest(&dest).ok_or(Error::<T>::InvalidDestination)?;
 
-            let min_xcm_fee = T::MinXcmFee::get(&dest).ok_or(Error::<T>::MinXcmFeeNotDefined)?;
-
             let xcm = Xcm::<T> {
                 asset: asset.clone(),
-                fee: min_xcm_fee,
+                fee: asset.clone(), // TODO: fee is asset?
                 origin: origin_location.clone(),
                 dest_location,
                 recipient,

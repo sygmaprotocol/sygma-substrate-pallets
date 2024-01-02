@@ -1600,6 +1600,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cumulus-pallet-xcm"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/polkadot-sdk.git?branch=release-polkadot-v1.1.0#c8d2251cafadc108ba2f1f8a3208dc547ff38901"
+dependencies = [
+ "cumulus-primitives-core",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "staging-xcm",
+]
+
+[[package]]
 name = "cumulus-primitives-core"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/polkadot-sdk.git?branch=release-polkadot-v1.1.0#f60318f68687e601c47de5ad5ca88e2c3f8139a7"
@@ -9606,9 +9622,11 @@ dependencies = [
  "staging-xcm-executor",
  "sygma-access-segregator",
  "sygma-basic-feehandler",
+ "sygma-bridge-forwarder",
  "sygma-fee-handler-router",
  "sygma-percentage-feehandler",
  "sygma-traits",
+ "sygma-xcm-bridge",
 ]
 
 [[package]]
@@ -9715,6 +9733,9 @@ dependencies = [
 name = "sygma-xcm-bridge"
 version = "0.3.0"
 dependencies = [
+ "cumulus-pallet-xcm",
+ "cumulus-primitives-core",
+ "cumulus-primitives-utility",
  "frame-support",
  "frame-system",
  "pallet-assets",
@@ -9727,6 +9748,7 @@ dependencies = [
  "staging-xcm",
  "staging-xcm-builder",
  "staging-xcm-executor",
+ "sygma-bridge-forwarder",
  "sygma-traits",
 ]
 

@@ -39,6 +39,8 @@ sygma-access-segregator = { path = "../access-segregator", default-features = fa
 sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
 sygma-percentage-feehandler = { path = "../percentage-fee-handler", default-features = false }
 sygma-fee-handler-router = { path = "../fee-handler-router", default-features = false }
+sygma-bridge-forwarder = { path = "../bridge-forwarder", default-features = false }
+sygma-xcm-bridge =  { path = "../xcm-bridge", default-features = false }
 
 [dev-dependencies]
 assert_matches = "1.4.0"

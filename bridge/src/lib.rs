@@ -34,7 +34,7 @@ pub mod pallet {
 		traits::{ContainsPair, StorageVersion},
 		transactional, PalletId,
 	};
-
+	use frame_support::dispatch::RawOrigin;
 	use frame_system::pallet_prelude::*;
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
@@ -49,10 +49,7 @@ pub mod pallet {
 
 	use crate::eip712;
 	use sp_std::collections::btree_map::BTreeMap;
-	use sygma_traits::{
-		ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler,
-		MpcAddress, ResourceId, TransferType, VerifyingContractAddress, Bridge,
-	};
+	use sygma_traits::{ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, MpcAddress, ResourceId, TransferType, VerifyingContractAddress, Bridge, AssetTypeIdentifier};
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
@@ -683,11 +680,31 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> Bridge for Pallet<T> {
+	impl<T: Config> AssetTypeIdentifier for Pallet<T> {
+		fn is_native_asset(asset: &MultiAsset) -> bool {
+			let native_locations = [
+				MultiLocation::here(),
+				MultiLocation::new(1, X1(Parachain(T::get().into()))),
+			];
+
+			match (&asset.id, &asset.fun) {
+				(Concrete(ref id), Fungible(_)) => {
+					native_locations.contains(id)
+				},
+				_ => false,
+			}
+		}
+	}
+
+
+	impl<T: Config> Bridge for Pallet<T> where
+		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
+	{
 		fn transfer(sender: [u8; 32],
 					asset: MultiAsset,
 					dest: MultiLocation) -> DispatchResult {
-			&Self::deposit(sender, Box::from(asset), Box::from(dest))?;
+			let sender_origin = OriginFor::<T>::from(RawOrigin::Signed(sender.into()));
+			Pallet::<T>::deposit(sender_origin, Box::from(asset), Box::from(dest))?;
 
 			Ok(())
 		}

@@ -31,6 +31,7 @@ use xcm_builder::{
 	SiblingParachainConvertsVia,
 };
 use xcm_executor::traits::{Error as ExecutionError, MatchesFungibles};
+use crate::xcm_asset_transactor::XCMAssetTransactor;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -47,6 +48,8 @@ frame_support::construct_runtime!(
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 6,
 		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 7,
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 8,
+		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Call, Storage, Event<T>} = 9,
+		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Call, Storage, Event<T>} = 10,
 	}
 );
 
@@ -482,7 +485,7 @@ impl sygma_bridge::Config for Runtime {
 	type EIP712ChainID = EIP712ChainID;
 	type DestVerifyingContractAddress = DestVerifyingContractAddress;
 	type FeeHandler = SygmaFeeHandlerRouter;
-	type AssetTransactor = AssetTransactors;
+	type AssetTransactor = XCMAssetTransactor<CurrencyTransactor, FungiblesTransactor, SygmaXcmBridge, SygmaBridgeForwarder, >;
 	type ResourcePairs = ResourcePairs;
 	type IsReserve = ReserveChecker;
 	type ExtractDestData = DestinationDataParser;

@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use self::pallet::*;
@@ -5,11 +8,10 @@ pub use self::pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
     use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
-    use frame_support::transactional;
     use frame_support::traits::StorageVersion;
-    use sygma_traits::{TransactorForwarder, Bridge};
-    use xcm::latest::{prelude::*, MultiAsset, MultiLocation};
+    use xcm::latest::{MultiAsset, MultiLocation};
+
+    use sygma_traits::{Bridge, TransactorForwarder};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -25,26 +27,19 @@ pub mod pallet {
     }
 
     #[pallet::event]
-    #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
         XCMTransferForward {},
         OtherWorldTransferForward {},
     }
 
-    #[pallet::call]
     impl<T: Config> TransactorForwarder for Pallet<T> {
-        #[pallet::call_index(0)]
-        #[pallet::weight(Weight::from_parts(195_000_000, 0))]
-        #[transactional]
-        fn xcm_transactor_forwarder(origin: OriginFor<T>, what: MultiAsset, who: MultiLocation) -> DispatchResult {
-            T::XCMBridge::transfer(origin.into(), what, who)?;
+        fn xcm_transactor_forwarder(origin: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult {
+            T::XCMBridge::transfer(origin, what, who)
         }
 
-        #[pallet::call_index(1)]
-        #[pallet::weight(Weight::from_parts(195_000_000, 0))]
-        #[transactional]
-        fn other_world_transactor_forwarder(origin: OriginFor<T>, what: MultiAsset, who: MultiLocation) -> DispatchResult {
-            T::SygmaBridge::transfer(origin.into(), what, who)?
+        fn other_world_transactor_forwarder(origin: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult {
+            T::SygmaBridge::transfer(origin, what, who)
         }
     }
 }
