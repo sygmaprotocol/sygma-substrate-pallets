@@ -1,19 +1,22 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod mock;
-
 pub use self::pallet::*;
+
+mod mock;
 
 #[frame_support::pallet]
 pub mod pallet {
-    use sygma_traits::{Bridge, AssetReserveLocationParser, AssetTypeIdentifier};
     use frame_support::{
         dispatch::DispatchResult,
         pallet_prelude::*,
-        traits::{ContainsPair, StorageVersion},
+        traits::StorageVersion,
     };
-    use xcm::latest::{prelude::*, MultiLocation, Weight as XCMWeight};
+    use sp_runtime::traits::Zero;
+    use sp_std::{prelude::*, vec};
+    use xcm::latest::{MultiLocation, prelude::*, Weight as XCMWeight};
     use xcm_executor::traits::WeightBounds;
+
+    use sygma_traits::{AssetReserveLocationParser, Bridge};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -36,7 +39,7 @@ pub mod pallet {
         type SelfLocation: Get<MultiLocation>;
     }
 
-    enum TransferKind {
+    pub enum TransferKind {
         /// Transfer self reserve asset.
         SelfReserveAsset,
         /// To reserve location.
@@ -56,55 +59,62 @@ pub mod pallet {
         FailToWeightMessage,
         XcmExecutionFailed,
         InvalidDestination,
+        UnknownTransferType,
+        CannotReanchor,
     }
 
-    struct Xcm<T: Config> {
+    #[derive(PartialEq, Eq, Clone, Encode, Decode)]
+    struct XcmObject<T: Config> {
         asset: MultiAsset,
         fee: MultiAsset,
         origin: MultiLocation,
         dest: MultiLocation,
         recipient: MultiLocation,
         weight: XCMWeight,
+        _unused: PhantomData<T>,
     }
 
-    pub trait XcmHandler {
-        fn transfer_kind(&self) -> Result<TransferKind, DispatchError>;
+    pub trait XcmHandler<T: Config> {
+        fn transfer_kind(&self) -> Option<TransferKind>;
         fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
-        fn execute_instructions(&self, xcm_message: Xcm<T::RuntimeCall>) -> DispatchResult;
+        fn execute_instructions(&self, xcm_instructions: &mut Xcm<T::RuntimeCall>) -> DispatchResult;
     }
 
-    impl XcmHandler for Xcm<T> {
+    impl<T: Config> XcmHandler<T> for XcmObject<T> {
         /// Get the transfer kind.
-        fn transfer_kind(&self) -> Result<TransferKind, DispatchError> {
-            let asset_location = Pallet::<T>::reserved_location(&self.asset).ok_or()?;
-            if asset_location == T::SelfLocation {
-                TransferKind::SelfReserveAsset
+        fn transfer_kind(&self) -> Option<TransferKind> {
+            let asset_location = Pallet::<T>::reserved_location(&self.asset.clone())?;
+            if asset_location == T::SelfLocation::get() {
+                Some(TransferKind::SelfReserveAsset)
             } else if asset_location == self.dest {
-                TransferKind::ToReserve
+                Some(TransferKind::ToReserve)
             } else {
-                TransferKind::ToNonReserve
+                Some(TransferKind::ToNonReserve)
             }
         }
         fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
-            let kind = Self::transfer_kind(self)?;
+            let kind = Self::transfer_kind(self).ok_or(Error::<T>::UnknownTransferType)?;
 
-            let mut xcm_instructions = match kind {
-                SelfReserveAsset => Self::transfer_self_reserve_asset(self.assets, self.fee, self.dest, self.recipient, self.weight)?,
-                ToReserve => Self::transfer_to_reserve_asset(self.assets, self.fee, self.dest, self.recipient, self.weight)?,
-                ToNonReserve => Self::transfer_to_non_reserve_asset(
-                    self.assets,
-                    self.fee,
+            let mut assets = MultiAssets::new();
+            assets.push(self.asset.clone());
+
+            let xcm_instructions = match kind {
+                TransferKind::SelfReserveAsset => Pallet::<T>::transfer_self_reserve_asset(assets, self.fee.clone(), self.dest, self.recipient, WeightLimit::Limited(self.weight))?,
+                TransferKind::ToReserve => Pallet::<T>::transfer_to_reserve_asset(assets, self.fee.clone(), self.dest, self.recipient, WeightLimit::Limited(self.weight))?,
+                TransferKind::ToNonReserve => Pallet::<T>::transfer_to_non_reserve_asset(
+                    assets,
+                    self.fee.clone(),
                     self.dest,
                     self.dest.clone(),
                     self.recipient,
-                    self.weight,
+                    WeightLimit::Limited(self.weight),
                 )?,
             };
 
             Ok(xcm_instructions)
         }
 
-        fn execute_instructions(&self, xcm_instructions: Xcm<T::RuntimeCall>) -> DispatchResult {
+        fn execute_instructions(&self, xcm_instructions: &mut Xcm<T::RuntimeCall>) -> DispatchResult {
             let message_weight = T::Weigher::weight(xcm_instructions).map_err(|()| Error::<T>::FailToWeightMessage)?;
 
             let hash = xcm_instructions.using_encoded(sp_io::hashing::blake2_256);
@@ -117,7 +127,7 @@ pub mod pallet {
                 message_weight,
             ).ensure_complete().map_err(|_| Error::<T>::XcmExecutionFailed)?;
 
-            oK(())
+            Ok(())
         }
     }
 
@@ -143,17 +153,18 @@ pub mod pallet {
             let (dest_location, recipient) =
                 Pallet::<T>::extract_dest(&dest).ok_or(Error::<T>::InvalidDestination)?;
 
-            let xcm = Xcm::<T> {
+            let xcm = XcmObject::<T> {
                 asset: asset.clone(),
                 fee: asset.clone(), // TODO: fee is asset?
                 origin: origin_location.clone(),
-                dest_location,
+                dest: dest_location,
                 recipient,
                 weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
+                _unused: PhantomData,
             };
             let mut msg = xcm.create_instructions()?;
 
-            xcm.execute_instructions(msg)?;
+            xcm.execute_instructions(&mut msg)?;
 
             Ok(())
         }
@@ -239,12 +250,12 @@ pub mod pallet {
                     assets: All.into(),
                     reserve,
                     xcm: Xcm(vec![
-                        Self::buy_execution(half(&fee), &reserve, dest_weight_limit.clone())?,
+                        Self::buy_execution(Self::half(&fee), &reserve, dest_weight_limit.clone())?,
                         DepositReserveAsset {
                             assets: AllCounted(max_assets).into(),
                             dest: reanchored_dest,
                             xcm: Xcm(vec![
-                                Self::buy_execution(half(&fee), &dest, dest_weight_limit)?,
+                                Self::buy_execution(Self::half(&fee), &dest, dest_weight_limit)?,
                                 Self::deposit_asset(recipient, max_assets),
                             ]),
                         },
@@ -252,5 +263,44 @@ pub mod pallet {
                 },
             ]))
         }
+
+        fn deposit_asset(recipient: MultiLocation, max_assets: u32) -> Instruction<()> {
+            DepositAsset {
+                assets: AllCounted(max_assets).into(),
+                beneficiary: recipient,
+            }
+        }
+
+        fn buy_execution(
+            asset: MultiAsset,
+            at: &MultiLocation,
+            weight_limit: WeightLimit,
+        ) -> Result<Instruction<()>, DispatchError> {
+            let ancestry = T::SelfLocation::get();
+
+            let fees = asset.reanchored(at, ancestry.interior).map_err(|_| Error::<T>::CannotReanchor)?;
+
+            Ok(BuyExecution { fees, weight_limit })
+        }
+
+        /// Returns amount if `asset` is fungible, or zero.
+        fn fungible_amount(asset: &MultiAsset) -> u128 {
+            if let Fungible(amount) = &asset.fun {
+                *amount
+            } else {
+                Zero::zero()
+            }
+        }
+
+        fn half(asset: &MultiAsset) -> MultiAsset {
+            let half_amount = Self::fungible_amount(asset)
+                .checked_div(2)
+                .expect("div 2 can't overflow; qed");
+            MultiAsset {
+                fun: Fungible(half_amount),
+                id: asset.id,
+            }
+        }
     }
 }
+

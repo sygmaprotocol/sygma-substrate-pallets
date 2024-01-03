@@ -9595,6 +9595,7 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "bounded-collections",
+ "cumulus-primitives-core",
  "ethabi",
  "fixed",
  "frame-benchmarking",
