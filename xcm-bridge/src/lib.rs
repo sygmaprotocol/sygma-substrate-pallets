@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use self::pallet::*;
@@ -28,7 +31,6 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-        /// Current pallet index defined in runtime
         type PalletIndex: Get<u8>;
 
         type Weigher: WeightBounds<Self::RuntimeCall>;
@@ -51,7 +53,11 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
-        XCMTransferSend {},
+        XCMTransferSend {
+            asset: MultiAsset,
+            origin: MultiLocation,
+            dest: MultiLocation,
+        },
     }
 
     #[pallet::error]
@@ -81,7 +87,6 @@ pub mod pallet {
     }
 
     impl<T: Config> XcmHandler<T> for XcmObject<T> {
-        /// Get the transfer kind.
         fn transfer_kind(&self) -> Option<TransferKind> {
             let asset_location = Pallet::<T>::reserved_location(&self.asset.clone())?;
             if asset_location == T::SelfLocation::get() {
@@ -162,15 +167,22 @@ pub mod pallet {
                 weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
                 _unused: PhantomData,
             };
-            let mut msg = xcm.create_instructions()?;
 
+            let mut msg = xcm.create_instructions()?;
             xcm.execute_instructions(&mut msg)?;
+
+            Pallet::<T>::deposit_event(Event::XCMTransferSend {
+                asset,
+                origin: origin_location,
+                dest,
+            });
 
             Ok(())
         }
     }
 
     impl<T: Config> Pallet<T> {
+        /// extract the dest_location, recipient_location
         pub fn extract_dest(dest: &MultiLocation) -> Option<(MultiLocation, MultiLocation)> {
             match (dest.parents, dest.first_interior()) {
                 // parents must be 1 here because only parents as 1 can be forwarded to xcm bridge logic
@@ -179,10 +191,12 @@ pub mod pallet {
                     MultiLocation::new(1, X1(Parachain(*id))),
                     MultiLocation::new(0, dest.interior().clone().split_first().0),
                 )),
+                // parent: relay chain
                 (1, _) => Some((
                     MultiLocation::parent(),
                     MultiLocation::new(0, dest.interior().clone()),
                 )),
+                // local and children parachain have been filterred out in the TransactAsset
                 _ => None,
             }
         }

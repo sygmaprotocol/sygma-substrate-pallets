@@ -9595,7 +9595,9 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "bounded-collections",
+ "cumulus-pallet-xcm",
  "cumulus-primitives-core",
+ "cumulus-primitives-utility",
  "ethabi",
  "fixed",
  "frame-benchmarking",
@@ -9634,6 +9636,9 @@ dependencies = [
 name = "sygma-bridge-forwarder"
 version = "0.3.0"
 dependencies = [
+ "cumulus-pallet-xcm",
+ "cumulus-primitives-core",
+ "cumulus-primitives-utility",
  "frame-support",
  "frame-system",
  "pallet-assets",

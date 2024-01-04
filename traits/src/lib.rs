@@ -63,15 +63,14 @@ pub trait DecimalConverter {
 	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset>;
 }
 
-// TODO: implement this method for local mock and standalone use
 // when integrating with parachain, parachain team can implement their own version
 pub trait AssetTypeIdentifier {
 	fn is_native_asset(asset: &MultiAsset) -> bool;
 }
 
 pub trait TransactorForwarder {
-	fn xcm_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
-	fn other_world_transactor_forwarder(sender: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult;
+	fn xcm_transactor_forwarder(sender: [u8; 32], what: MultiAsset, dest: MultiLocation) -> DispatchResult;
+	fn other_world_transactor_forwarder(sender: [u8; 32], what: MultiAsset, dest: MultiLocation) -> DispatchResult;
 }
 
 pub trait Bridge {

@@ -9,7 +9,7 @@ pub use self::pallet::*;
 pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::traits::StorageVersion;
-    use xcm::latest::{MultiAsset, MultiLocation};
+    use xcm::latest::{MultiAsset, MultiLocation, Junction};
 
     use sygma_traits::{Bridge, TransactorForwarder};
 
@@ -29,17 +29,51 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
-        XCMTransferForward {},
-        OtherWorldTransferForward {},
+        XCMTransferForward {
+            asset: MultiAsset,
+            origin: MultiLocation,
+            dest: MultiLocation,
+        },
+        OtherWorldTransferForward {
+            asset: MultiAsset,
+            origin: MultiLocation,
+            dest: MultiLocation,
+        },
     }
 
     impl<T: Config> TransactorForwarder for Pallet<T> {
-        fn xcm_transactor_forwarder(origin: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult {
-            T::XCMBridge::transfer(origin, what, who)
+        fn xcm_transactor_forwarder(origin: [u8; 32], what: MultiAsset, dest: MultiLocation) -> DispatchResult {
+            T::XCMBridge::transfer(origin, what.clone(), dest.clone())?;
+
+            let origin_location: MultiLocation = Junction::AccountId32 {
+                network: None,
+                id: origin,
+            }.into();
+
+            Pallet::<T>::deposit_event(Event::XCMTransferForward {
+                asset: what,
+                origin: origin_location,
+                dest,
+            });
+
+            Ok(())
         }
 
-        fn other_world_transactor_forwarder(origin: [u8; 32], what: MultiAsset, who: MultiLocation) -> DispatchResult {
-            T::SygmaBridge::transfer(origin, what, who)
+        fn other_world_transactor_forwarder(origin: [u8; 32], what: MultiAsset, dest: MultiLocation) -> DispatchResult {
+            T::SygmaBridge::transfer(origin, what.clone(), dest.clone())?;
+
+            let origin_location: MultiLocation = Junction::AccountId32 {
+                network: None,
+                id: origin,
+            }.into();
+
+            Pallet::<T>::deposit_event(Event::OtherWorldTransferForward {
+                asset: what,
+                origin: origin_location,
+                dest,
+            });
+
+            Ok(())
         }
     }
 }

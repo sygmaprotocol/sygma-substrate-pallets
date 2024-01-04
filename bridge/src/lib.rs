@@ -684,7 +684,11 @@ pub mod pallet {
     }
 
     impl<T: Get<ParaId>> AssetTypeIdentifier for Pallet<T> {
+        /// check if the given MultiAsset is a native asset
         fn is_native_asset(asset: &MultiAsset) -> bool {
+            // currently there are two multilocations are considered as native asset:
+            // 1. integrated parachain native asset(MultiLocation::here())
+            // 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
             let native_locations = [
                 MultiLocation::here(),
                 MultiLocation::new(1, X1(Parachain(T::get().into()))),
@@ -698,7 +702,6 @@ pub mod pallet {
             }
         }
     }
-
 
     impl<T: Config> Bridge for Pallet<T> where
         <T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,

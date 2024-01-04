@@ -36,7 +36,10 @@ xcm-executor = { package = "staging-xcm-executor", git = "https://github.com/par
 
 # Cumulus
 cumulus-primitives-core = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
+cumulus-pallet-xcm = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
+cumulus-primitives-utility = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
 
+# Local
 sygma-traits = { path = "../traits", default-features = false }
 sygma-access-segregator = { path = "../access-segregator", default-features = false }
 sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
