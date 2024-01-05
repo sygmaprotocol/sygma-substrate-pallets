@@ -53,7 +53,14 @@ std = [
     "xcm/std",
     "xcm-builder/std",
     "xcm-executor/std",
+    "pallet-balances/std",
+    "pallet-assets/std",
+    "cumulus-primitives-core/std",
+    "cumulus-primitives-utility/std",
+    "cumulus-pallet-xcm/std",
     "sygma-traits/std",
+    "sygma-bridge-forwarder/std",
+
 ]
 runtime-benchmarks = [
     'frame-support/runtime-benchmarks',

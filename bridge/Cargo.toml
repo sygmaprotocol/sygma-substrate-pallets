@@ -96,6 +96,9 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
+	"cumulus-primitives-core/std",
+	"cumulus-primitives-utility/std",
+	"cumulus-pallet-xcm/std",
 	"xcm/std",
 	"xcm-builder/std",
 	"xcm-executor/std",
@@ -106,5 +109,7 @@ std = [
 	"sygma-basic-feehandler/std",
 	"sygma-percentage-feehandler/std",
 	"sygma-fee-handler-router/std",
+	"sygma-bridge-forwarder/std",
+	"sygma-xcm-bridge/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

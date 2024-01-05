@@ -4,10 +4,8 @@ use codec::Encode;
 use xcm::latest::{Junction, MultiAsset, MultiLocation, XcmContext};
 use xcm::prelude::*;
 use xcm_executor::{Assets, traits::TransactAsset};
-
+use hex_literal::hex;
 use sygma_traits::{AssetTypeIdentifier, TransactorForwarder};
-
-use crate::mock::slice_to_generalkey;
 
 pub struct XCMAssetTransactor<CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder>(PhantomData<(CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder)>);
 
@@ -32,7 +30,9 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
             (1, Some(Parachain(_))) => {
                 // 2. recipient is on non-substrate chain(evm, cosmos, etc.), will forward to sygma bridge pallet
                 match who.interior {
-                    (X5(Parachain(1000), slice_to_generalkey(b"sygma"), slice_to_generalkey(b"sygma-bridge"), GeneralIndex(..), GeneralKey { .. })) => {
+                    // sygma: 7379676d61000000000000000000000000000000000000000000000000000000
+                    // sygma-bridge: 7379676d612d6272696467650000000000000000000000000000000000000000
+                    X5(Parachain(1000), GeneralKey { length: 5, data: hex!["7379676d61000000000000000000000000000000000000000000000000000000"]},  GeneralKey { length: 12, data: hex!["7379676d612d6272696467650000000000000000000000000000000000000000"]}, GeneralIndex(..), GeneralKey { .. }) => {
                         // check if the asset is native or foreign, and deposit the asset to a tmp account first
                         let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey { length: 8, data: [2u8; 32] })).encode());
                         if AssetTypeChecker::is_native_asset(what) {
@@ -41,7 +41,7 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
                             FungiblesTransactor::deposit_asset(&what.clone(), &Junction::AccountId32 { network: None, id: tmp_account }.into(), context)?
                         }
 
-                        Forwarder::other_world_transactor_forwarder(tmp_account, what.clone(), who.into()).map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
+                        Forwarder::other_world_transactor_forwarder(tmp_account, what.clone(), *who).map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
                     }
                     _ => {
                         // 3. recipient is on remote parachain
@@ -56,7 +56,7 @@ impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, Asse
                             FungiblesTransactor::deposit_asset(&what.clone(), &Junction::AccountId32 { network: None, id: tmp_account }.into(), context)?
                         }
 
-                        Forwarder::xcm_transactor_forwarder(tmp_account, what.clone(), who.into()).map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
+                        Forwarder::xcm_transactor_forwarder(tmp_account, what.clone(), *who).map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
                     }
                 }
             }

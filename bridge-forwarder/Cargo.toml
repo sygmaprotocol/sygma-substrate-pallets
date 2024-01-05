@@ -48,6 +48,9 @@ std = [
     "xcm/std",
     "xcm-builder/std",
     "xcm-executor/std",
+    "cumulus-primitives-core/std",
+    "cumulus-primitives-utility/std",
+    "cumulus-pallet-xcm/std",
     "sygma-traits/std",
 ]
 runtime-benchmarks = [

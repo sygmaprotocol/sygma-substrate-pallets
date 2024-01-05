@@ -97,6 +97,7 @@ pub mod pallet {
                 Some(TransferKind::ToNonReserve)
             }
         }
+
         fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
             let kind = Self::transfer_kind(self).ok_or(Error::<T>::UnknownTransferType)?;
 
