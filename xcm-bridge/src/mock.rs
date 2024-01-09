@@ -3,6 +3,8 @@
 
 #![cfg(test)]
 
+mod relay;
+
 use frame_support::{construct_runtime, pallet_prelude::ConstU32, parameter_types, sp_runtime::{
     AccountId32,
     BuildStorage,
