@@ -3,33 +3,37 @@
 
 #![cfg(test)]
 
-mod relay;
-
 use frame_support::{construct_runtime, pallet_prelude::ConstU32, parameter_types, sp_runtime::{
     AccountId32,
     BuildStorage,
     Perbill, testing::H256, traits::{BlakeTwo256, IdentityLookup},
 }, traits::{AsEnsureOriginWithArg, ConstU128, Everything, Nothing}};
 use frame_system::{EnsureSigned, self as system};
+use polkadot_parachain_primitives::primitives::Sibling;
+use sp_io::TestExternalities;
 use xcm::latest::{prelude::*, Weight as XCMWeight};
 use xcm_builder::{AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter, FixedWeightBounds, FungiblesAdapter, IsConcrete, NativeAsset, NoChecking, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative, SovereignSignedViaLocation, TakeWeightCredit};
 use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
+use xcm_simulator::{decl_test_network, decl_test_parachain, decl_test_relay_chain, TestExt};
 
 use sygma_bridge::XCMAssetTransactor;
+
+mod relay;
+mod para;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 pub(crate) type Balance = u128;
 
-pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
+pub type AccountId = AccountId32;
 
-construct_runtime! (
+construct_runtime!(
 	pub enum Runtime {
-		System: frame_system,
-        CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+        Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Storage, Event<T>} = 5,
+        CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
+		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Storage, Event<T>},
 		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -43,7 +47,6 @@ parameter_types! {
 }
 
 parameter_types! {
-	// Make sure put same value with `construct_runtime`
 	pub const XcmBridgePalletIndex: u8 = 6;
 	pub RegisteredExtrinsics: Vec<(u8, Vec<u8>)> = [
 		(XcmBridgePalletIndex::get(), b"transfer".to_vec()),
@@ -122,12 +125,12 @@ impl pallet_assets::Config for Runtime {
     type Freezer = ();
     type Extra = ();
     type CallbackHandle = ();
-    type WeightInfo = pallet_assets::weights::SubstrateWeight<Test>;
+    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = ();
 }
 
-impl xcm_bridge::Config for Runtime {
+impl sygma_xcm_bridge::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type PalletIndex = XcmBridgePalletIndex;
 
@@ -256,4 +259,106 @@ pub fn assert_events(mut expected: Vec<RuntimeEvent>) {
         let next = actual.pop().expect("event expected");
         assert_eq!(next, evt, "Events don't match");
     }
+}
+
+pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
+pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
+pub const ENDOWED_BALANCE: u128 = 100_000_000;
+pub const TEST_THRESHOLD: u32 = 2;
+
+decl_test_parachain! {
+	pub struct ParaA {
+		Runtime = para::Runtime,
+		XcmpMessageHandler = para::XcmpQueue,
+		DmpMessageHandler = para::DmpQueue,
+		new_ext = para_ext(1),
+	}
+}
+
+decl_test_parachain! {
+	pub struct ParaB {
+		Runtime = para::Runtime,
+		XcmpMessageHandler = para::XcmpQueue,
+		DmpMessageHandler = para::DmpQueue,
+		new_ext = para_ext(2),
+	}
+}
+
+decl_test_parachain! {
+	pub struct ParaC {
+		Runtime = para_teleport::Runtime,
+		XcmpMessageHandler = para::XcmpQueue,
+		DmpMessageHandler = para::DmpQueue,
+		new_ext = para_ext(3),
+	}
+}
+
+decl_test_relay_chain! {
+	pub struct Relay {
+		Runtime = relay::Runtime,
+		RuntimeCall = relay::RuntimeCall,
+		RuntimeEvent = relay::RuntimeEvent,
+		XcmConfig = relay::XcmConfig,
+		MessageQueue = relay::MessageQueue,
+		System = relay::System,
+		new_ext = relay_ext(),
+	}
+}
+
+decl_test_network! {
+	pub struct TestNet {
+		relay_chain = Relay,
+		parachains = vec![
+			(1, ParaA),
+			(2, ParaB),
+			(3, ParaC),
+		],
+	}
+}
+
+pub fn para_ext(para_id: u32) -> TestExternalities {
+    use para::{Runtime, System};
+
+    let mut t = frame_system::GenesisConfig::<Runtime>::default()
+        .build_storage()
+        .unwrap();
+
+    let parachain_info_config = pallet_parachain_info::GenesisConfig::<Runtime> {
+        parachain_id: para_id.into(),
+        phantom: Default::default(),
+    };
+    parachain_info_config.assimilate_storage(&mut t).unwrap();
+
+    // TODO: set up the init account token balance for unit test
+    pallet_balances::GenesisConfig::<Runtime> {
+        balances: vec![
+            (bridge_account, ENDOWED_BALANCE),
+            (ALICE, ENDOWED_BALANCE),
+            (BOB, ENDOWED_BALANCE),
+        ],
+    }
+        .assimilate_storage(&mut t)
+        .unwrap();
+
+    let mut ext = TestExternalities::new(t);
+    ext.execute_with(|| System::set_block_number(1));
+    ext
+}
+
+pub fn relay_ext() -> sp_io::TestExternalities {
+    use relay::{Runtime, System};
+
+    let mut t = frame_system::GenesisConfig::<Runtime>::default()
+        .build_storage()
+        .unwrap();
+
+    pallet_balances::GenesisConfig::<Runtime> {
+        balances: vec![(ALICE, 1_000)],
+    }
+        .assimilate_storage(&mut t)
+        .unwrap();
+
+    let mut ext = sp_io::TestExternalities::new(t);
+    ext.execute_with(|| System::set_block_number(1));
+    ext
 }

@@ -1,3 +1,6 @@
+// The Licensed Work is (c) 2022 Sygma
+// SPDX-License-Identifier: LGPL-3.0-only
+
 use cumulus_primitives_core::ParaId;
 use frame_support::{
     construct_runtime, parameter_types,
@@ -21,6 +24,16 @@ use xcm_builder::{
     TakeWeightCredit, UsingComponents,
 };
 use xcm_executor::{Config, traits::WithOriginFilter, XcmExecutor};
+
+construct_runtime!(
+	pub struct Runtime {
+		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		ParasOrigin: origin::{Pallet, Origin},
+		XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin},
+		MessageQueue: pallet_message_queue::{Pallet, Event<T>},
+	}
+);
 
 pub type AccountId = AccountId32;
 pub type Balance = u128;
@@ -226,14 +239,5 @@ impl pallet_message_queue::Config for Runtime {
     type QueuePausedQuery = ();
 }
 
-construct_runtime!(
-	pub struct Runtime {
-		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		ParasOrigin: origin::{Pallet, Origin},
-		XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin},
-		MessageQueue: pallet_message_queue::{Pallet, Event<T>},
-	}
-);
 
 
