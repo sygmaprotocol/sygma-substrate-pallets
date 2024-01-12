@@ -42,11 +42,11 @@ pub mod pallet {
     }
 
     pub enum TransferKind {
-        /// Transfer self reserve asset.
+        /// Transfer self reserve asset. assets reserved by the origin chain
         SelfReserveAsset,
-        /// To reserve location.
+        /// To reserve location. assets reserved by the dest chain
         ToReserve,
-        /// To non-reserve location.
+        /// To non-reserve location. assets not reserved by the dest chain
         ToNonReserve,
     }
 
@@ -315,6 +315,135 @@ pub mod pallet {
                 fun: Fungible(half_amount),
                 id: asset.id,
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use frame_support::assert_ok;
+
+        use crate::mock::{
+            ALICE, BOB, ENDOWED_BALANCE,
+            ParaA, ParaAssets, ParaB, ParaBalances, TestNet,
+        };
+        use crate::mock::para::Runtime;
+        use sygma_bridge::mock::UsdtLocation;
+
+        #[test]
+        fn test_transfer_self_reserve_asset_to_parachain() {
+            TestNet::reset();
+
+            ParaA::execute_with(|| {
+                let bridge = Bridge::<Runtime>::new();
+                // transfer parachain A native asset from Alice to parachain B on Bob
+                assert_ok!(bridge.transfer(ALICE.into(),
+                              (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
+                              MultiLocation::new(
+                                  1,
+                                  X2(
+                                      Parachain(2u32.into()),
+                                      Junction::AccountId32 {
+                                          network: None,
+                                          id: BOB.into(),
+                                      },
+                                  ),
+                              )
+            ));
+                assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10);
+            });
+
+            ParaB::execute_with(|| {
+                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10);
+            });
+        }
+
+        #[test]
+        fn test_transfer_to_reserve_to_parachain() {
+            TestNet::reset();
+
+            let para_a_location = MultiLocation {
+                parents: 1,
+                interior: X1(Parachain(1)),
+            };
+
+            // Prepare step
+            // sending parachainB native asset to parachainA
+            ParaB::execute_with(|| {
+                let bridge = Bridge::<Runtime>::new();
+                assert_ok!(bridge.transfer(
+					ALICE.into(),
+					(Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
+					MultiLocation::new(
+						1,
+						X2(
+							Parachain(1u32.into()),
+							Junction::AccountId32 {
+								network: None,
+								id: BOB.into()
+							}
+						)
+					)
+				));
+
+                assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10);
+            });
+            // Bob on parachainA should have parachainB's native asset
+            ParaA::execute_with(|| {
+                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10);
+            });
+
+            // sending parachainB's native asset from parachainA back to parachainB
+            ParaA::execute_with(|| {
+                let bridge = Bridge::<Runtime>::new();
+                assert_ok!(bridge.transfer(
+					BOB.into(),
+					(Concrete(para_a_location.clone()), Fungible(5u128)).into(), // sending 5 tokens
+					MultiLocation::new(
+						1,
+						X2(
+							Parachain(2u32.into()),
+							Junction::AccountId32 {
+								network: None,
+								id: ALICE.into()
+							}
+						)
+					)
+				));
+
+                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10 - 5);
+            });
+            ParaA::execute_with(|| {
+                assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10 + 5);
+            });
+        }
+
+        #[test]
+        fn test_transfer_to_non_reserve_to_parachain() {
+            TestNet::reset();
+
+            // send USDT token from parachainA to parachainB
+            ParaA::execute_with(|| {
+                let bridge = Bridge::<Runtime>::new();
+                assert_ok!(bridge.transfer(ALICE.into(),
+                              (Concrete(UsdtLocation::get().into()), Fungible(10u128)).into(),
+                              MultiLocation::new(
+                                  1,
+                                  X2(
+                                      Parachain(2u32.into()),
+                                      Junction::AccountId32 {
+                                          network: None,
+                                          id: BOB.into(),
+                                      },
+                                  ),
+                              )
+            ));
+                assert_eq!(ParaAssets::balance(&ALICE), ENDOWED_BALANCE - 10);
+            });
+
+            ParaB::execute_with(|| {
+                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10);
+            });
+
         }
     }
 }

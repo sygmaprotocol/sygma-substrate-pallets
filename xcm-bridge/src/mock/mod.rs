@@ -18,8 +18,10 @@ use xcm_simulator::{decl_test_network, decl_test_parachain, decl_test_relay_chai
 
 use sygma_bridge::XCMAssetTransactor;
 
+use crate as sygma_xcm_bridge;
+
 mod relay;
-mod para;
+pub(crate) mod para;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -284,15 +286,6 @@ decl_test_parachain! {
 	}
 }
 
-decl_test_parachain! {
-	pub struct ParaC {
-		Runtime = para_teleport::Runtime,
-		XcmpMessageHandler = para::XcmpQueue,
-		DmpMessageHandler = para::DmpQueue,
-		new_ext = para_ext(3),
-	}
-}
-
 decl_test_relay_chain! {
 	pub struct Relay {
 		Runtime = relay::Runtime,
@@ -311,7 +304,6 @@ decl_test_network! {
 		parachains = vec![
 			(1, ParaA),
 			(2, ParaB),
-			(3, ParaC),
 		],
 	}
 }
@@ -329,13 +321,19 @@ pub fn para_ext(para_id: u32) -> TestExternalities {
     };
     parachain_info_config.assimilate_storage(&mut t).unwrap();
 
-    // TODO: set up the init account token balance for unit test
     pallet_balances::GenesisConfig::<Runtime> {
         balances: vec![
-            (bridge_account, ENDOWED_BALANCE),
             (ALICE, ENDOWED_BALANCE),
             (BOB, ENDOWED_BALANCE),
         ],
+    }
+        .assimilate_storage(&mut t)
+        .unwrap();
+
+    pallet_assets::GenesisConfig::<Runtime> {
+        assets: vec![(0, ALICE, false, 1)],
+        metadata: vec![(0, "USDT".into(), "USDT".into(), 6)],
+        accounts: vec![(0, ALICE, ENDOWED_BALANCE)],
     }
         .assimilate_storage(&mut t)
         .unwrap();
@@ -353,7 +351,7 @@ pub fn relay_ext() -> sp_io::TestExternalities {
         .unwrap();
 
     pallet_balances::GenesisConfig::<Runtime> {
-        balances: vec![(ALICE, 1_000)],
+        balances: vec![(ALICE, ENDOWED_BALANCE)],
     }
         .assimilate_storage(&mut t)
         .unwrap();
