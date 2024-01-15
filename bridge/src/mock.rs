@@ -48,8 +48,8 @@ frame_support::construct_runtime!(
 		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 6,
 		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 7,
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 8,
-		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Call, Storage, Event<T>} = 9,
-		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Call, Storage, Event<T>} = 10,
+		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>} = 9,
+		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>} = 10,
 	}
 );
 

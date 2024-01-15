@@ -10243,7 +10243,6 @@ dependencies = [
  "staging-xcm",
  "staging-xcm-builder",
  "staging-xcm-executor",
- "sygma-bridge",
  "sygma-bridge-forwarder",
  "sygma-traits",
  "xcm-simulator",

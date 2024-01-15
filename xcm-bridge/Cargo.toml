@@ -64,7 +64,6 @@ cumulus-primitives-utility = { git = "https://github.com/paritytech/polkadot-sdk
 # Local
 sygma-traits = { path = "../traits" }
 pallet-parachain-info = { path = "../parachain-info" }
-sygma-bridge = { path = "../bridge"  }
 
 [features]
 default = ["std"]

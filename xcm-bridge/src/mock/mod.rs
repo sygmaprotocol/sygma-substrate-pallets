@@ -3,6 +3,9 @@
 
 #![cfg(test)]
 
+use std::marker::PhantomData;
+use std::result;
+
 use frame_support::{construct_runtime, pallet_prelude::ConstU32, parameter_types, sp_runtime::{
     AccountId32,
     BuildStorage,
@@ -13,15 +16,13 @@ use polkadot_parachain_primitives::primitives::Sibling;
 use sp_io::TestExternalities;
 use xcm::latest::{prelude::*, Weight as XCMWeight};
 use xcm_builder::{AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter, FixedWeightBounds, FungiblesAdapter, IsConcrete, NativeAsset, NoChecking, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative, SovereignSignedViaLocation, TakeWeightCredit};
-use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
+use xcm_executor::{Config, traits::{Error as ExecutionError, MatchesFungibles, WithOriginFilter}, XcmExecutor};
 use xcm_simulator::{decl_test_network, decl_test_parachain, decl_test_relay_chain, TestExt};
-
-use sygma_bridge::XCMAssetTransactor;
 
 use crate as sygma_xcm_bridge;
 
-mod relay;
-pub(crate) mod para;
+pub mod relay;
+pub mod para;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -34,9 +35,10 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
         Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+        ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config<T>},
         CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
-		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Storage, Event<T>},
-		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Call, Storage, Event<T>},
+		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>},
+		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>},
 	}
 );
 
@@ -109,10 +111,12 @@ parameter_types! {
 	pub const MetadataDepositPerByte: Balance = 1;
 }
 
+pub type AssetId = u32;
+
 impl pallet_assets::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
-    type AssetId = u32;
+    type AssetId = AssetId;
     type AssetIdParameter = codec::Compact<u32>;
     type Currency = Balances;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId32>>;
@@ -141,17 +145,20 @@ impl sygma_xcm_bridge::Config for Runtime {
     type SelfLocation = SelfLocation;
 }
 
+impl sygma_bridge_forwarder::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type SygmaBridge = ();
+    type XCMBridge = ();
+}
+
+impl pallet_parachain_info::Config for Runtime {}
+
 pub struct XcmConfig;
 
 impl Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = XCMAssetTransactor<
-        CurrencyTransactor,
-        FungiblesTransactor,
-        SygmaXcmBridge,
-        SygmaBridgeForwarder,
-    >;
+    type AssetTransactor = (CurrencyTransactor, FungiblesTransactor);
     type OriginConverter = XcmOriginToTransactDispatchOrigin;
     type IsReserve = NativeAsset;
     type IsTeleporter = ();
@@ -209,6 +216,42 @@ parameter_types! {
 	pub const MaxInstructions: u32 = 100;
 }
 
+impl cumulus_pallet_xcm::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type XcmExecutor = XcmExecutor<XcmConfig>;
+}
+
+parameter_types! {
+    pub NativeLocation: MultiLocation = MultiLocation::here();
+    pub UsdtAssetId: AssetId = 0;
+	pub UsdtLocation: MultiLocation = MultiLocation::new(
+		1,
+		X3(
+			Parachain(2005),
+			slice_to_generalkey(b"sygma"),
+			slice_to_generalkey(b"usdt"),
+		),
+	);
+    pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
+}
+
+pub struct SimpleForeignAssetConverter(PhantomData<()>);
+
+impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
+    fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
+        match (&a.fun, &a.id) {
+            (Fungible(ref amount), Concrete(ref id)) => {
+                if id == &UsdtLocation::get() {
+                    Ok((UsdtAssetId::get(), *amount))
+                } else {
+                    Err(ExecutionError::AssetNotHandled)
+                }
+            }
+            _ => Err(ExecutionError::AssetNotHandled),
+        }
+    }
+}
+
 pub type CurrencyTransactor = CurrencyAdapter<
     // Use this currency:
     Balances,
@@ -227,7 +270,7 @@ pub type FungiblesTransactor = FungiblesAdapter<
     // Use this fungibles implementation:
     Assets,
     // Use this currency when it is a fungible asset matching the given location or name:
-    sygma_bridge::SimpleForeignAssetConverter,
+    SimpleForeignAssetConverter,
     // Convert an XCM MultiLocation into a local account id:
     LocationToAccountId,
     // Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -239,11 +282,11 @@ pub type FungiblesTransactor = FungiblesAdapter<
 >;
 
 parameter_types! {
-	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::get().into())));
+	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into())));
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-    let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+    let t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext
@@ -253,7 +296,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 // include the most recent event, but do not have to include every past event.
 pub fn assert_events(mut expected: Vec<RuntimeEvent>) {
     let mut actual: Vec<RuntimeEvent> =
-        system::Pallet::<Test>::events().iter().map(|e| e.event.clone()).collect();
+        system::Pallet::<Runtime>::events().iter().map(|e| e.event.clone()).collect();
 
     expected.reverse();
 
@@ -267,6 +310,9 @@ pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
 pub const ENDOWED_BALANCE: u128 = 100_000_000;
 pub const TEST_THRESHOLD: u32 = 2;
+
+pub type ParaBalances = pallet_balances::Pallet<para::Runtime>;
+pub type ParaAssets = pallet_assets::Pallet<para::Runtime>;
 
 decl_test_parachain! {
 	pub struct ParaA {
@@ -359,4 +405,17 @@ pub fn relay_ext() -> sp_io::TestExternalities {
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext
+}
+
+pub fn slice_to_generalkey(key: &[u8]) -> Junction {
+    let len = key.len();
+    assert!(len <= 32);
+    GeneralKey {
+        length: len as u8,
+        data: {
+            let mut data = [0u8; 32];
+            data[..len].copy_from_slice(key);
+            data
+        },
+    }
 }

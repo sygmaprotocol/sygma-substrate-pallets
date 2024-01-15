@@ -20,7 +20,6 @@ construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 
-		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config<T>},
 		ParachainSystem: cumulus_pallet_parachain_system::{Pallet, Storage, Config<T>},
 
 		XcmpQueue: cumulus_pallet_xcmp_queue::{Pallet, Call, Storage, Event<T>},

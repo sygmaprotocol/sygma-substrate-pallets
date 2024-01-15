@@ -324,10 +324,9 @@ pub mod pallet {
 
         use crate::mock::{
             ALICE, BOB, ENDOWED_BALANCE,
-            ParaA, ParaAssets, ParaB, ParaBalances, TestNet,
+            ParaA, ParaAssets, ParaB, ParaBalances, TestNet, UsdtLocation
         };
         use crate::mock::para::Runtime;
-        use sygma_bridge::mock::UsdtLocation;
 
         #[test]
         fn test_transfer_self_reserve_asset_to_parachain() {
