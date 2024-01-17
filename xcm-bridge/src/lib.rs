@@ -31,8 +31,6 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-        type PalletIndex: Get<u8>;
-
         type Weigher: WeightBounds<Self::RuntimeCall>;
 
         type XcmExecutor: ExecuteXcm<Self::RuntimeCall>;
@@ -147,7 +145,9 @@ pub mod pallet {
         }
     }
 
-    impl<T: Config> Bridge for Pallet<T> {
+    pub struct BridgeImpl<T>(PhantomData<T>);
+
+    impl<T: Config> Bridge for BridgeImpl<T> {
         fn transfer(sender: [u8; 32],
                     asset: MultiAsset,
                     dest: MultiLocation) -> DispatchResult {
@@ -197,7 +197,7 @@ pub mod pallet {
                     MultiLocation::parent(),
                     MultiLocation::new(0, dest.interior().clone()),
                 )),
-                // local and children parachain have been filterred out in the TransactAsset
+                // local and children parachain have been filtered out in the TransactAsset
                 _ => None,
             }
         }
@@ -321,21 +321,24 @@ pub mod pallet {
     #[cfg(test)]
     mod test {
         use frame_support::assert_ok;
+        use xcm_simulator::TestExt;
 
+        use crate::Event as SygmaXcmBridgeEvent;
         use crate::mock::{
             ALICE, BOB, ENDOWED_BALANCE,
-            ParaA, ParaAssets, ParaB, ParaBalances, TestNet, UsdtLocation
+            ParaA, ParaAssets, ParaB, ParaBalances, TestNet,
         };
-        use crate::mock::para::Runtime;
+        use crate::mock::para::{assert_events, Runtime, RuntimeEvent, UsdtAssetId, UsdtLocation};
+
+        use super::*;
 
         #[test]
         fn test_transfer_self_reserve_asset_to_parachain() {
             TestNet::reset();
 
             ParaA::execute_with(|| {
-                let bridge = Bridge::<Runtime>::new();
                 // transfer parachain A native asset from Alice to parachain B on Bob
-                assert_ok!(bridge.transfer(ALICE.into(),
+                assert_ok!(BridgeImpl::<Runtime>::transfer(ALICE.into(),
                               (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
                               MultiLocation::new(
                                   1,
@@ -349,10 +352,28 @@ pub mod pallet {
                               )
             ));
                 assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10);
+
+                assert_events(vec![RuntimeEvent::SygmaXcmBridge(SygmaXcmBridgeEvent::XCMTransferSend {
+                    asset: (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
+                    origin: Junction::AccountId32 {
+                        network: None,
+                        id: ALICE.into(),
+                    }.into(),
+                    dest: MultiLocation::new(
+                        1,
+                        X2(
+                            Parachain(2u32.into()),
+                            Junction::AccountId32 {
+                                network: None,
+                                id: BOB.into(),
+                            },
+                        ),
+                    ),
+                })]);
             });
 
             ParaB::execute_with(|| {
-                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10);
+                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 0);
             });
         }
 
@@ -368,8 +389,7 @@ pub mod pallet {
             // Prepare step
             // sending parachainB native asset to parachainA
             ParaB::execute_with(|| {
-                let bridge = Bridge::<Runtime>::new();
-                assert_ok!(bridge.transfer(
+                assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ALICE.into(),
 					(Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
 					MultiLocation::new(
@@ -385,6 +405,24 @@ pub mod pallet {
 				));
 
                 assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10);
+
+                assert_events(vec![RuntimeEvent::SygmaXcmBridge(SygmaXcmBridgeEvent::XCMTransferSend {
+                    asset: (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
+                    origin: Junction::AccountId32 {
+                        network: None,
+                        id: ALICE.into(),
+                    }.into(),
+                    dest: MultiLocation::new(
+                        1,
+                        X2(
+                            Parachain(1u32.into()),
+                            Junction::AccountId32 {
+                                network: None,
+                                id: BOB.into(),
+                            },
+                        ),
+                    ),
+                })]);
             });
             // Bob on parachainA should have parachainB's native asset
             ParaA::execute_with(|| {
@@ -393,8 +431,7 @@ pub mod pallet {
 
             // sending parachainB's native asset from parachainA back to parachainB
             ParaA::execute_with(|| {
-                let bridge = Bridge::<Runtime>::new();
-                assert_ok!(bridge.transfer(
+                assert_ok!(BridgeImpl::<Runtime>::transfer(
 					BOB.into(),
 					(Concrete(para_a_location.clone()), Fungible(5u128)).into(), // sending 5 tokens
 					MultiLocation::new(
@@ -410,6 +447,24 @@ pub mod pallet {
 				));
 
                 assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10 - 5);
+
+                assert_events(vec![RuntimeEvent::SygmaXcmBridge(SygmaXcmBridgeEvent::XCMTransferSend {
+                    asset: (Concrete(para_a_location.clone()), Fungible(5u128)).into(),
+                    origin: Junction::AccountId32 {
+                        network: None,
+                        id: BOB.into(),
+                    }.into(),
+                    dest: MultiLocation::new(
+                        1,
+                        X2(
+                            Parachain(2u32.into()),
+                            Junction::AccountId32 {
+                                network: None,
+                                id: ALICE.into(),
+                            },
+                        ),
+                    ),
+                })]);
             });
             ParaA::execute_with(|| {
                 assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10 + 5);
@@ -422,8 +477,7 @@ pub mod pallet {
 
             // send USDT token from parachainA to parachainB
             ParaA::execute_with(|| {
-                let bridge = Bridge::<Runtime>::new();
-                assert_ok!(bridge.transfer(ALICE.into(),
+                assert_ok!(BridgeImpl::<Runtime>::transfer(ALICE.into(),
                               (Concrete(UsdtLocation::get().into()), Fungible(10u128)).into(),
                               MultiLocation::new(
                                   1,
@@ -436,13 +490,30 @@ pub mod pallet {
                                   ),
                               )
             ));
-                assert_eq!(ParaAssets::balance(&ALICE), ENDOWED_BALANCE - 10);
+                assert_eq!(ParaAssets::balance(UsdtAssetId::get().into(), &ALICE), ENDOWED_BALANCE - 10);
+
+                assert_events(vec![RuntimeEvent::SygmaXcmBridge(SygmaXcmBridgeEvent::XCMTransferSend {
+                    asset: (Concrete(UsdtLocation::get().into()), Fungible(10u128)).into(),
+                    origin: Junction::AccountId32 {
+                        network: None,
+                        id: ALICE.into(),
+                    }.into(),
+                    dest: MultiLocation::new(
+                        1,
+                        X2(
+                            Parachain(2u32.into()),
+                            Junction::AccountId32 {
+                                network: None,
+                                id: BOB.into(),
+                            },
+                        ),
+                    ),
+                })]);
             });
 
             ParaB::execute_with(|| {
-                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 10);
+                assert_eq!(ParaAssets::balance(UsdtAssetId::get().into(), &BOB), 10);
             });
-
         }
     }
 }

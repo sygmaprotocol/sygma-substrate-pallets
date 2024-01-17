@@ -125,7 +125,7 @@ pub type Barrier = (TakeWeightCredit, AllowTopLevelPaidExecutionFrom<Everything>
 parameter_types! {
 	pub Rococo: MultiAssetFilter = Wild(AllOf { fun: WildFungible, id: Concrete(RooLocation::get()) });
 	pub Statemine: MultiLocation = Parachain(3).into();
-	pub KusamaForStatemine: (MultiAssetFilter, MultiLocation) = (Kusama::get(), Statemine::get());
+	pub KusamaForStatemine: (MultiAssetFilter, MultiLocation) = (Rococo::get(), Statemine::get());
 }
 
 parameter_types! {
