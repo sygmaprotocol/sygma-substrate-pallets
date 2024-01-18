@@ -20,14 +20,12 @@ mod encode;
 
 #[cfg(test)]
 mod mock;
-mod xcm_asset_transactor;
 
 #[allow(unused_variables)]
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
     use codec::{Decode, Encode};
-    use cumulus_primitives_core::ParaId;
     use ethabi::{encode as abi_encode, token::Token};
     use frame_support::{
         dispatch::DispatchResult,
@@ -49,7 +47,7 @@ pub mod pallet {
     use xcm::latest::{MultiLocation, prelude::*};
     use xcm_executor::traits::TransactAsset;
 
-    use sygma_traits::{AssetTypeIdentifier, Bridge, ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, MpcAddress, ResourceId, TransferType, VerifyingContractAddress};
+    use sygma_traits::{Bridge, ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler, MpcAddress, ResourceId, TransferType, VerifyingContractAddress};
 
     use crate::eip712;
     use crate::encode::{abi::encode_packed, SolidityDataType};
@@ -680,26 +678,6 @@ pub mod pallet {
             Self::deposit_event(Event::AllBridgeUnpaused { sender });
 
             Ok(())
-        }
-    }
-
-    impl<T: Get<ParaId>> AssetTypeIdentifier for Pallet<T> {
-        /// check if the given MultiAsset is a native asset
-        fn is_native_asset(asset: &MultiAsset) -> bool {
-            // currently there are two multilocations are considered as native asset:
-            // 1. integrated parachain native asset(MultiLocation::here())
-            // 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
-            let native_locations = [
-                MultiLocation::here(),
-                MultiLocation::new(1, X1(Parachain(T::get().into()))),
-            ];
-
-            match (&asset.id, &asset.fun) {
-                (Concrete(ref id), Fungible(_)) => {
-                    native_locations.contains(id)
-                }
-                _ => false,
-            }
         }
     }
 

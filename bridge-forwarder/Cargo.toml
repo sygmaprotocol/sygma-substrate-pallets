@@ -7,11 +7,13 @@ license = "LGPL-3.0"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde", "decode"] }
+hex-literal = { version = "0.3", default-features =  false }
 
 # Substrate
 frame-support = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
 frame-system = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
 sp-std = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
 
 # Polkadot
 xcm = { package = "staging-xcm", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0", default-features = false }
@@ -35,6 +37,7 @@ frame-system = { git = "https://github.com/paritytech/polkadot-sdk.git", branch 
 pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0" }
 pallet-assets = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0" }
 
+# Local
 sygma-traits = { path = "../traits" }
 
 [features]
@@ -45,6 +48,7 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "sp-std/std",
+    "sp-io/std",
     "xcm/std",
     "xcm-builder/std",
     "xcm-executor/std",

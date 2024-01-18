@@ -35,8 +35,13 @@ pub mod pallet {
 
         type XcmExecutor: ExecuteXcm<Self::RuntimeCall>;
 
+        type UniversalLocation: Get<InteriorMultiLocation>;
+
         #[pallet::constant]
         type SelfLocation: Get<MultiLocation>;
+
+        /// Minimum xcm execution fee paid on destination chain.
+        type MinXcmFee: Get<Vec<(AssetId, u128)>>;
     }
 
     pub enum TransferKind {
@@ -65,6 +70,7 @@ pub mod pallet {
         InvalidDestination,
         UnknownTransferType,
         CannotReanchor,
+        NoXcmMiNFeeSet,
     }
 
     #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -159,9 +165,21 @@ pub mod pallet {
             let (dest_location, recipient) =
                 Pallet::<T>::extract_dest(&dest).ok_or(Error::<T>::InvalidDestination)?;
 
+            ensure!(
+				T::MinXcmFee::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+                T::MinXcmFee::get()[idx].1
+            }).is_some(),
+				Error::<T>::NoXcmMiNFeeSet
+			);
+            let fee_per_asset = T::MinXcmFee::get().iter().position(|a| a.0 == asset.id).map(|idx| {
+                T::MinXcmFee::get()[idx].1
+            }).unwrap();
+
+            let fee_to_dest: MultiAsset = (asset.id, fee_per_asset).into();
+
             let xcm = XcmObject::<T> {
                 asset: asset.clone(),
-                fee: asset.clone(), // TODO: fee is asset?
+                fee: fee_to_dest,
                 origin: origin_location.clone(),
                 dest: dest_location,
                 recipient,
@@ -186,8 +204,6 @@ pub mod pallet {
         /// extract the dest_location, recipient_location
         pub fn extract_dest(dest: &MultiLocation) -> Option<(MultiLocation, MultiLocation)> {
             match (dest.parents, dest.first_interior()) {
-                // parents must be 1 here because only parents as 1 can be forwarded to xcm bridge logic
-                // parachains
                 (1, Some(Parachain(id))) => Some((
                     MultiLocation::new(1, X1(Parachain(*id))),
                     MultiLocation::new(0, dest.interior().clone().split_first().0),
@@ -336,10 +352,13 @@ pub mod pallet {
         fn test_transfer_self_reserve_asset_to_parachain() {
             TestNet::reset();
 
+            // sending native asset from parachain A to parachain B
             ParaA::execute_with(|| {
+                assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE);
+
                 // transfer parachain A native asset from Alice to parachain B on Bob
                 assert_ok!(BridgeImpl::<Runtime>::transfer(ALICE.into(),
-                              (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
+                              (Concrete(MultiLocation::new(0, Here)), Fungible(10_000_000_000_000u128)).into(),
                               MultiLocation::new(
                                   1,
                                   X2(
@@ -350,11 +369,11 @@ pub mod pallet {
                                       },
                                   ),
                               )
-            ));
-                assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10);
+                ));
+                assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10_000_000_000_000u128);
 
                 assert_events(vec![RuntimeEvent::SygmaXcmBridge(SygmaXcmBridgeEvent::XCMTransferSend {
-                    asset: (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
+                    asset: (Concrete(MultiLocation::new(0, Here)), Fungible(10_000_000_000_000u128)).into(),
                     origin: Junction::AccountId32 {
                         network: None,
                         id: ALICE.into(),
@@ -373,7 +392,8 @@ pub mod pallet {
             });
 
             ParaB::execute_with(|| {
-                assert_eq!(ParaAssets::balance(0u32.into(), &BOB), 0);
+                assert_eq!(ParaAssets::balance(1u32.into(), &ALICE), ENDOWED_BALANCE);
+                assert_eq!(ParaAssets::balance(1u32.into(), &BOB), 9_000_000_000_000u128);
             });
         }
 

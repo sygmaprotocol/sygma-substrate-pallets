@@ -9,16 +9,19 @@ use frame_support::{
     construct_runtime, parameter_types,
     traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, Everything},
 };
-use frame_support::traits::{ConstU64, Nothing};
+use frame_support::traits::{ConstU16, ConstU64, Nothing};
 use frame_system as system;
 use frame_system::EnsureRoot;
 use polkadot_parachain_primitives::primitives::Sibling;
 use sp_core::{crypto::AccountId32, H256};
 use sp_runtime::traits::{IdentityLookup, Zero};
-use xcm::latest::{InteriorMultiLocation, Junction, MultiAsset, MultiLocation, NetworkId, Weight as XCMWeight, XcmContext};
-use xcm::prelude::{Concrete, Fungible, GeneralKey, Parachain, X1, X3, XcmError};
+use xcm::latest::{AssetId as XcmAssetId, InteriorMultiLocation, Junction, MultiAsset, MultiLocation, NetworkId, Weight as XCMWeight, XcmContext};
+use xcm::prelude::{Concrete, Fungible, GeneralKey, GlobalConsensus, Parachain, X1, X2, X3, XcmError};
 use xcm_builder::{AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter, FixedWeightBounds, FungiblesAdapter, IsConcrete, NativeAsset, NoChecking, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative, SovereignSignedViaLocation, TakeWeightCredit};
 use xcm_executor::{Assets as XcmAssets, Config, traits::{Error as ExecutionError, MatchesFungibles, WeightTrader, WithOriginFilter}, XcmExecutor};
+
+use sygma_bridge_forwarder;
+use sygma_bridge_forwarder::xcm_asset_transactor::XCMAssetTransactor;
 
 use crate as sygma_xcm_bridge;
 use crate::BridgeImpl;
@@ -41,6 +44,7 @@ construct_runtime!(
 		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>},
 	}
 );
+
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -71,7 +75,7 @@ impl frame_system::Config for Runtime {
     type DbWeight = ();
     type BaseCallFilter = Everything;
     type SystemWeightInfo = ();
-    type SS58Prefix = ();
+    type SS58Prefix = ConstU16<20>;
     type OnSetCode = ();
     type MaxConsumers = ConstU32<16>;
 }
@@ -127,7 +131,9 @@ impl sygma_xcm_bridge::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
     type XcmExecutor = XcmExecutor<XcmConfig>;
+    type UniversalLocation = UniversalLocation;
     type SelfLocation = SelfLocation;
+    type MinXcmFee = MinXcmFee;
 }
 
 impl sygma_bridge_forwarder::Config for Runtime {
@@ -139,15 +145,14 @@ impl sygma_bridge_forwarder::Config for Runtime {
 impl pallet_parachain_info::Config for Runtime {}
 
 pub struct XcmConfig;
-
 impl Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = (CurrencyTransactor, FungiblesTransactor);
+    type AssetTransactor = XCMAssetTransactor<CurrencyTransactor, FungiblesTransactor, sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>, SygmaBridgeForwarder, >;
     type OriginConverter = XcmOriginToTransactDispatchOrigin;
     type IsReserve = NativeAsset;
     type IsTeleporter = ();
-    type UniversalLocation = SelfLocation;
+    type UniversalLocation = UniversalLocation;
     type Barrier = Barrier;
     type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
     type Trader = AllTokensAreCreatedEqualToWeight;
@@ -209,6 +214,13 @@ parameter_types! {
     pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 }
 
+parameter_types! {
+    pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into())));
+	pub UniversalLocation: InteriorMultiLocation = X2(GlobalConsensus(RelayNetwork::get()), Parachain(ParachainInfo::parachain_id().into()));
+
+    pub MinXcmFee: Vec<(XcmAssetId, u128)> = vec![(NativeLocation::get().into(), 1_000_000_000_000u128), (UsdtLocation::get().into(), 1_000_000u128)];
+}
+
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
 
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
@@ -255,7 +267,6 @@ pub type FungiblesTransactor = FungiblesAdapter<
     CheckingAccount,
 >;
 
-
 pub struct ChannelInfo;
 
 impl GetChannelInfo for ChannelInfo {
@@ -291,7 +302,6 @@ impl cumulus_pallet_dmp_queue::Config for Runtime {
 }
 
 pub struct AllTokensAreCreatedEqualToWeight(MultiLocation);
-
 impl WeightTrader for AllTokensAreCreatedEqualToWeight {
     fn new() -> Self {
         Self(MultiLocation::parent())
@@ -328,10 +338,6 @@ impl WeightTrader for AllTokensAreCreatedEqualToWeight {
             Some((self.0.clone(), weight.ref_time() as u128).into())
         }
     }
-}
-
-parameter_types! {
-	pub SelfLocation: InteriorMultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into()))).interior;
 }
 
 // Checks events against the latest. A contiguous set of events must be provided. They must

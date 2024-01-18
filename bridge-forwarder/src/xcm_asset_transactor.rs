@@ -8,7 +8,6 @@ use hex_literal::hex;
 use sygma_traits::{AssetTypeIdentifier, TransactorForwarder};
 
 pub struct XCMAssetTransactor<CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder>(PhantomData<(CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder)>);
-
 impl<CurrencyTransactor: TransactAsset, FungiblesTransactor: TransactAsset, AssetTypeChecker: AssetTypeIdentifier, Forwarder: TransactorForwarder> TransactAsset for XCMAssetTransactor<CurrencyTransactor, FungiblesTransactor, AssetTypeChecker, Forwarder> {
     // deposit_asset implements the TransactAsset deposit_asset method and contains the logic to classify
     // the asset recipient location:

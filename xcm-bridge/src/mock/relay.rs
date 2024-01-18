@@ -1,7 +1,7 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
-use cumulus_primitives_core::ParaId;
+use  cumulus_primitives_core::ParaId;
 use frame_support::{
     construct_runtime, parameter_types,
     traits::{Everything, ProcessMessage, ProcessMessageError},
@@ -101,7 +101,7 @@ impl configuration::Config for Runtime {
 parameter_types! {
 	pub RooLocation: MultiLocation = Here.into();
 	pub const RococoNetwork: NetworkId = NetworkId::Rococo;
-	pub UniversalLocation: InteriorMultiLocation = X1(GlobalConsensus(RococoNetwork::get()));
+	pub UniversalLocation: InteriorMultiLocation = Here;
 }
 
 pub type SovereignAccountOf = (
@@ -130,13 +130,12 @@ parameter_types! {
 
 parameter_types! {
 	pub const UnitWeightCost: Weight = Weight::from_parts(10, 10);
-	pub const BaseXcmWeight: Weight = Weight::from_parts(100_000_000, 100_000_000);
+	pub const BaseXcmWeight: Weight = Weight::from_parts(10, 0);
 	pub const MaxInstructions: u32 = 100;
 	pub const MaxAssetsIntoHolding: u32 = 64;
 }
 
 pub struct XcmConfig;
-
 impl Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
@@ -205,7 +204,6 @@ parameter_types! {
 }
 
 pub struct MessageProcessor;
-
 impl ProcessMessage for MessageProcessor {
     type Origin = AggregateMessageOrigin;
 

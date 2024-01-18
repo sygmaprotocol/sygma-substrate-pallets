@@ -14,7 +14,7 @@ pub mod para;
 
 pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
-pub const ENDOWED_BALANCE: u128 = 100_000_000;
+pub const ENDOWED_BALANCE: u128 = 100_000_000_000_000_000_000;
 
 pub type ParaBalances = pallet_balances::Pallet<para::Runtime>;
 pub type ParaAssets = pallet_assets::Pallet<para::Runtime>;
@@ -72,6 +72,7 @@ pub fn para_ext(para_id: u32) -> TestExternalities {
     };
     parachain_info_config.assimilate_storage(&mut t).unwrap();
 
+    // set Alice and Bob with ENDOWED_BALANCE amount of native asset on every parachain
     pallet_balances::GenesisConfig::<Runtime> {
         balances: vec![
             (ALICE, ENDOWED_BALANCE),
@@ -81,10 +82,11 @@ pub fn para_ext(para_id: u32) -> TestExternalities {
         .assimilate_storage(&mut t)
         .unwrap();
 
+    // set Alice with ENDOWED_BALANCE amount of USDT asset on every parachain
     pallet_assets::GenesisConfig::<Runtime> {
-        assets: vec![(0, ALICE, false, 1)],
-        metadata: vec![(0, "USDT".into(), "USDT".into(), 6)],
-        accounts: vec![(0, ALICE, ENDOWED_BALANCE)],
+        assets: vec![(1, ALICE, false, 1)],
+        metadata: vec![(1, "USDT".into(), "USDT".into(), 6)],
+        accounts: vec![(1, ALICE, ENDOWED_BALANCE)],
     }
         .assimilate_storage(&mut t)
         .unwrap();
@@ -101,6 +103,7 @@ pub fn relay_ext() -> sp_io::TestExternalities {
         .build_storage()
         .unwrap();
 
+    // set Alice with ENDOWED_BALANCE amount of native asset on relay chain
     pallet_balances::GenesisConfig::<Runtime> {
         balances: vec![(ALICE, ENDOWED_BALANCE)],
     }

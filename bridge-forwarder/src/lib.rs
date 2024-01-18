@@ -5,13 +5,17 @@
 
 pub use self::pallet::*;
 
+pub mod xcm_asset_transactor;
+
 #[frame_support::pallet]
 pub mod pallet {
+    use cumulus_primitives_core::ParaId;
     use frame_support::pallet_prelude::*;
     use frame_support::traits::StorageVersion;
     use xcm::latest::{MultiAsset, MultiLocation, Junction};
+    use xcm::prelude::{Concrete, Fungible, Parachain, X1};
 
-    use sygma_traits::{Bridge, TransactorForwarder};
+    use sygma_traits::{AssetTypeIdentifier, Bridge, TransactorForwarder};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -74,6 +78,27 @@ pub mod pallet {
             });
 
             Ok(())
+        }
+    }
+
+    pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
+    impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
+        /// check if the given MultiAsset is a native asset
+        fn is_native_asset(asset: &MultiAsset) -> bool {
+            // currently there are two multilocations are considered as native asset:
+            // 1. integrated parachain native asset(MultiLocation::here())
+            // 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+            let native_locations = [
+                MultiLocation::here(),
+                MultiLocation::new(1, X1(Parachain(T::get().into()))),
+            ];
+
+            match (&asset.id, &asset.fun) {
+                (Concrete(ref id), Fungible(_)) => {
+                    native_locations.contains(id)
+                }
+                _ => false,
+            }
         }
     }
 }

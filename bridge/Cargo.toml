@@ -67,9 +67,9 @@ xcm = { package = "staging-xcm", git = "https://github.com/paritytech/polkadot-s
 xcm-builder = { package = "staging-xcm-builder", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0" }
 xcm-executor = { package = "staging-xcm-executor", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0" }
 polkadot-parachain-primitives = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0"}
-
 parachains-common = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.1.0" }
 
+# Local
 sygma-basic-feehandler = { path = "../basic-fee-handler" }
 sygma-traits = { path = "../traits" }
 
