@@ -5,6 +5,7 @@
 
 pub use self::pallet::*;
 
+#[cfg(test)]
 mod mock;
 
 #[frame_support::pallet]
@@ -152,7 +153,6 @@ pub mod pallet {
     }
 
     pub struct BridgeImpl<T>(PhantomData<T>);
-
     impl<T: Config> Bridge for BridgeImpl<T> {
         fn transfer(sender: [u8; 32],
                     asset: MultiAsset,

@@ -6,6 +6,8 @@
 pub use self::pallet::*;
 
 pub mod xcm_asset_transactor;
+#[cfg(test)]
+mod mock;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -99,6 +101,73 @@ pub mod pallet {
                 }
                 _ => false,
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use frame_support::assert_ok;
+        use xcm::latest::Junction;
+        use xcm::prelude::{Concrete, Fungible, Parachain, X2, Here, X1};
+        use xcm::v3::Junction::GeneralIndex;
+        use xcm::v3::{MultiAsset, MultiLocation};
+        use sygma_traits::{AssetTypeIdentifier, TransactorForwarder};
+        use crate::mock::{new_test_ext, SygmaBridgeForwarder, ALICE, assert_events, RuntimeEvent, ParachainInfo};
+        use crate::{Event as SygmaBridgeForwarderEvent, NativeAssetTypeIdentifier};
+        #[test]
+        fn test_xcm_transactor_forwarder() {
+            new_test_ext().execute_with(|| {
+
+                let asset: MultiAsset = (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into();
+                let dest: MultiLocation = MultiLocation::new(1, X2(Parachain(1), GeneralIndex(1u128)));
+
+                assert_ok!(SygmaBridgeForwarder::xcm_transactor_forwarder(ALICE.into(), asset.clone(), dest.clone()));
+
+                assert_events(vec![RuntimeEvent::SygmaBridgeForwarder(SygmaBridgeForwarderEvent::XCMTransferForward {
+                    asset,
+                    origin: Junction::AccountId32 {
+                        network: None,
+                        id: ALICE.into(),
+                    }.into(),
+                    dest,
+                })]);
+            })
+        }
+
+        #[test]
+        fn test_other_world_transactor_forwarder() {
+            new_test_ext().execute_with(|| {
+
+                let asset: MultiAsset = (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into();
+                let dest: MultiLocation = MultiLocation::new(1, X2(Parachain(1), GeneralIndex(1u128)));
+
+                assert_ok!(SygmaBridgeForwarder::other_world_transactor_forwarder(ALICE.into(), asset.clone(), dest.clone()));
+
+                assert_events(vec![RuntimeEvent::SygmaBridgeForwarder(SygmaBridgeForwarderEvent::OtherWorldTransferForward {
+                    asset,
+                    origin: Junction::AccountId32 {
+                        network: None,
+                        id: ALICE.into(),
+                    }.into(),
+                    dest,
+                })]);
+            })
+        }
+
+        #[test]
+        fn test_asset_type_identifier_native_asset() {
+            new_test_ext().execute_with(|| {
+
+                let asset_local_native: MultiAsset = (Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into();
+                assert_eq!(NativeAssetTypeIdentifier::<ParachainInfo>::is_native_asset(&asset_local_native), true);
+
+                // ParachainInfo is given parachain ID as 100
+                let asset_foreign_native: MultiAsset = (Concrete(MultiLocation::new(1, X1(Parachain(100)))), Fungible(10u128)).into();
+                assert_eq!(NativeAssetTypeIdentifier::<ParachainInfo>::is_native_asset(&asset_foreign_native), true);
+
+                let asset_foreign_asset: MultiAsset = (Concrete(MultiLocation::new(0, X1(Parachain(100)))), Fungible(10u128)).into();
+                assert_eq!(NativeAssetTypeIdentifier::<ParachainInfo>::is_native_asset(&asset_foreign_asset), false);
+            })
         }
     }
 }
