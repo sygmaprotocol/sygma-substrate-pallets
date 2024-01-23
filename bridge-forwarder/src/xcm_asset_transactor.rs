@@ -43,9 +43,10 @@ impl<
 				match who.interior {
                     // sygma: 7379676d61000000000000000000000000000000000000000000000000000000
                     // sygma-bridge: 7379676d612d6272696467650000000000000000000000000000000000000000
+					// outer world multilocation pattern: { Parachain(1000), GeneralKey { length: 5, data: b"sygma"},  GeneralKey { length: 12, data: b"sygma-bridge"}, GeneralIndex(domainID), GeneralKey { length: length_of_recipient_address, data: recipient_address} }
                     X5(Parachain(1000), GeneralKey { length: 5, data: hex!["7379676d61000000000000000000000000000000000000000000000000000000"]},  GeneralKey { length: 12, data: hex!["7379676d612d6272696467650000000000000000000000000000000000000000"]}, GeneralIndex(..), GeneralKey { .. }) => {
-                        // check if the asset is native or foreign, and deposit the asset to a tmp account first
-                        let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey { length: 8, data: [2u8; 32] })).encode());
+						// check if the asset is native or foreign, and deposit the asset to a tmp account first
+                        let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey { length: 8, data: [1u8; 32] })).encode());
                         if AssetTypeChecker::is_native_asset(what) {
                             CurrencyTransactor::deposit_asset(&what.clone(), &Junction::AccountId32 { network: None, id: tmp_account }.into(), context)?;
                         } else {
