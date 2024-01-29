@@ -31,6 +31,8 @@ cumulus-primitives-core = { git = "https://github.com/paritytech/polkadot-sdk.gi
 # Local
 sygma-traits = { path = "../traits", default-features = false }
 sygma-bridge-forwarder = { path = "../bridge-forwarder", default-features = false }
+half = { version = "2.3.1", default-features = false }
+log = "0.4.20"
 
 [dev-dependencies]
 # Substrate
@@ -63,6 +65,8 @@ cumulus-primitives-utility = { git = "https://github.com/paritytech/polkadot-sdk
 # Local
 sygma-traits = { path = "../traits" }
 pallet-parachain-info = { path = "../parachain-info" }
+
+env_logger = "0.11.1"
 
 [features]
 default = ["std"]

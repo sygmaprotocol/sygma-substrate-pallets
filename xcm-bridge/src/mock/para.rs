@@ -16,12 +16,10 @@ use polkadot_parachain_primitives::primitives::Sibling;
 use sp_core::{crypto::AccountId32, H256};
 use sp_runtime::traits::{IdentityLookup, Zero};
 use xcm::latest::{
-	AssetId as XcmAssetId, InteriorMultiLocation, Junction, MultiAsset, MultiLocation, NetworkId,
+	AssetId as XcmAssetId, InteriorMultiLocation, MultiAsset, MultiLocation, NetworkId,
 	Weight as XCMWeight, XcmContext,
 };
-use xcm::prelude::{
-	Concrete, Fungible, GeneralKey, GlobalConsensus, Parachain, XcmError, X1, X2, X3,
-};
+use xcm::prelude::{Concrete, Fungible, GlobalConsensus, Parachain, XcmError, X1, X2};
 use xcm_builder::{
 	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter,
 	FixedWeightBounds, FungiblesAdapter, IsConcrete, NativeAsset, NoChecking, ParentIsPreset,
@@ -142,6 +140,7 @@ impl sygma_xcm_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
+	type AssetReservedChecker = sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>;
 	type UniversalLocation = UniversalLocation;
 	type SelfLocation = SelfLocation;
 	type MinXcmFee = MinXcmFee;
@@ -213,15 +212,17 @@ parameter_types! {
 
 parameter_types! {
 	pub NativeLocation: MultiLocation = MultiLocation::here();
+	pub NativeAssetId: AssetId = 0; // native asset ID is used for token registration on other parachain as foreign asset
+	pub PAALocation: MultiLocation = MultiLocation::new(1, X1(Parachain(1u32)));
+	pub PBALocation: MultiLocation = MultiLocation::new(1, X1(Parachain(2u32)));
 	pub UsdtAssetId: AssetId = 1;
 	pub UsdtLocation: MultiLocation = MultiLocation::new(
 		1,
-		X3(
+		X1(
 			Parachain(2005),
-			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"usdt"),
 		),
 	);
+	// Parachain A and Parachain B native asset multilocation
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 }
 
@@ -229,7 +230,8 @@ parameter_types! {
 	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into())));
 	pub UniversalLocation: InteriorMultiLocation = X2(GlobalConsensus(RelayNetwork::get()), Parachain(ParachainInfo::parachain_id().into()));
 
-	pub MinXcmFee: Vec<(XcmAssetId, u128)> = vec![(NativeLocation::get().into(), 1_000_000_000_000u128), (UsdtLocation::get().into(), 1_000_000u128)];
+	// set 1 token as min fee
+	pub MinXcmFee: Vec<(XcmAssetId, u128)> = vec![(NativeLocation::get().into(), 1_000_000_000_000u128), (PBALocation::get().into(), 1_000_000_000_000u128), (UsdtLocation::get().into(), 1_000_000u128)];
 }
 
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
@@ -239,6 +241,8 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 			(Fungible(ref amount), Concrete(ref id)) => {
 				if id == &UsdtLocation::get() {
 					Ok((UsdtAssetId::get(), *amount))
+				} else if id == &PBALocation::get() || id == &PAALocation::get() {
+					Ok((NativeAssetId::get(), *amount))
 				} else {
 					Err(ExecutionError::AssetNotHandled)
 				}
@@ -354,18 +358,5 @@ pub fn assert_events(mut expected: Vec<RuntimeEvent>) {
 	for evt in expected {
 		let next = actual.pop().expect("event expected");
 		assert_eq!(next, evt, "Events don't match");
-	}
-}
-
-pub fn slice_to_generalkey(key: &[u8]) -> Junction {
-	let len = key.len();
-	assert!(len <= 32);
-	GeneralKey {
-		length: len as u8,
-		data: {
-			let mut data = [0u8; 32];
-			data[..len].copy_from_slice(key);
-			data
-		},
 	}
 }

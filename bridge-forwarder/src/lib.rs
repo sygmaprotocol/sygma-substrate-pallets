@@ -80,7 +80,6 @@ pub mod pallet {
 	}
 
 	pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
-
 	impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
 		/// check if the given MultiAsset is a native asset
 		fn is_native_asset(asset: &MultiAsset) -> bool {

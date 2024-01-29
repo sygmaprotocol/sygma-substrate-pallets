@@ -16,7 +16,7 @@ pub mod pallet {
 	use xcm::latest::{prelude::*, MultiLocation, Weight as XCMWeight};
 	use xcm_executor::traits::WeightBounds;
 
-	use sygma_traits::{AssetReserveLocationParser, Bridge};
+	use sygma_traits::{AssetReserveLocationParser, AssetTypeIdentifier, Bridge};
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -32,6 +32,8 @@ pub mod pallet {
 
 		type XcmExecutor: ExecuteXcm<Self::RuntimeCall>;
 
+		type AssetReservedChecker: AssetTypeIdentifier;
+
 		type UniversalLocation: Get<InteriorMultiLocation>;
 
 		#[pallet::constant]
@@ -41,6 +43,7 @@ pub mod pallet {
 		type MinXcmFee: Get<Vec<(AssetId, u128)>>;
 	}
 
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub enum TransferKind {
 		/// Transfer self reserve asset. assets reserved by the origin chain
 		SelfReserveAsset,
@@ -67,10 +70,11 @@ pub mod pallet {
 		InvalidDestination,
 		UnknownTransferType,
 		CannotReanchor,
-		NoXcmMiNFeeSet,
+		NoXcmMinFeeSet,
+		AssetReservedLocationNotFound,
 	}
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 	struct XcmObject<T: Config> {
 		asset: MultiAsset,
 		fee: MultiAsset,
@@ -82,7 +86,7 @@ pub mod pallet {
 	}
 
 	pub trait XcmHandler<T: Config> {
-		fn transfer_kind(&self) -> Option<TransferKind>;
+		fn transfer_kind(&self, asset_reserved_location: MultiLocation) -> Option<TransferKind>;
 		fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
 		fn execute_instructions(
 			&self,
@@ -91,12 +95,10 @@ pub mod pallet {
 	}
 
 	impl<T: Config> XcmHandler<T> for XcmObject<T> {
-		fn transfer_kind(&self) -> Option<TransferKind> {
-			let asset_location = Pallet::<T>::reserved_location(&self.asset.clone())?;
-			if asset_location == T::SelfLocation::get() {
+		fn transfer_kind(&self, asset_reserved_location: MultiLocation) -> Option<TransferKind> {
+			if T::AssetReservedChecker::is_native_asset(&self.asset.clone()) {
 				Some(TransferKind::SelfReserveAsset)
-			} else if asset_location == self.dest {
-				// TODO: parse to dest multilocation, not asset local
+			} else if asset_reserved_location == self.dest {
 				Some(TransferKind::ToReserve)
 			} else {
 				Some(TransferKind::ToNonReserve)
@@ -104,7 +106,10 @@ pub mod pallet {
 		}
 
 		fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
-			let kind = Self::transfer_kind(self).ok_or(Error::<T>::UnknownTransferType)?;
+			let asset_reserved_location = Pallet::<T>::reserved_location(&self.asset.clone())
+				.ok_or(Error::<T>::AssetReservedLocationNotFound)?;
+			let kind = Self::transfer_kind(self, asset_reserved_location)
+				.ok_or(Error::<T>::UnknownTransferType)?;
 
 			let mut assets = MultiAssets::new();
 			assets.push(self.asset.clone());
@@ -127,7 +132,7 @@ pub mod pallet {
 				TransferKind::ToNonReserve => Pallet::<T>::transfer_to_non_reserve_asset(
 					assets,
 					self.fee.clone(),
-					self.dest,
+					asset_reserved_location,
 					self.dest,
 					self.recipient,
 					WeightLimit::Limited(self.weight),
@@ -162,10 +167,25 @@ pub mod pallet {
 
 	impl<T: Config> AssetReserveLocationParser for Pallet<T> {
 		fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation> {
-			match (&asset.id, &asset.fun) {
+			let location = match (&asset.id, &asset.fun) {
+				// So far our native asset is concrete
 				(Concrete(id), Fungible(_)) => Some(*id),
 				_ => None,
-			}
+			};
+
+			location.and_then(|id| {
+				match (id.parents, id.first_interior()) {
+					// Sibling parachain
+					(1, Some(Parachain(id))) => Some(MultiLocation::new(1, X1(Parachain(*id)))),
+					// Parent
+					(1, _) => Some(MultiLocation::parent()),
+					// Children parachain
+					(0, Some(Parachain(id))) => Some(MultiLocation::new(0, X1(Parachain(*id)))),
+					// Local: (0, Here)
+					(0, None) => Some(id),
+					_ => None,
+				}
+			})
 		}
 	}
 
@@ -185,23 +205,22 @@ pub mod pallet {
 					.position(|a| a.0 == asset.id)
 					.map(|idx| { T::MinXcmFee::get()[idx].1 })
 					.is_some(),
-				Error::<T>::NoXcmMiNFeeSet
+				Error::<T>::NoXcmMinFeeSet
 			);
 			let fee_per_asset = T::MinXcmFee::get()
 				.iter()
 				.position(|a| a.0 == asset.id)
 				.map(|idx| T::MinXcmFee::get()[idx].1)
 				.unwrap();
-
-			let fee_to_dest: MultiAsset = (asset.id, fee_per_asset).into();
+			let min_fee_to_dest: MultiAsset = (asset.id, fee_per_asset).into();
 
 			let xcm = XcmObject::<T> {
 				asset: asset.clone(),
-				fee: fee_to_dest,
+				fee: min_fee_to_dest,
 				origin: origin_location,
 				dest: dest_location,
 				recipient,
-				weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64),
+				weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64), // TODO: configure weight
 				_unused: PhantomData,
 			};
 
@@ -236,7 +255,6 @@ pub mod pallet {
 			assets: MultiAssets,
 			fee: MultiAsset,
 			dest: MultiLocation,
-
 			recipient: MultiLocation,
 			dest_weight_limit: WeightLimit,
 		) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
@@ -288,15 +306,13 @@ pub mod pallet {
 			let max_assets = assets.len() as u32;
 
 			Ok(Xcm(vec![
-				WithdrawAsset(assets), // local
+				WithdrawAsset(assets),
 				InitiateReserveWithdraw {
-					// local + forward
 					assets: All.into(),
 					reserve,
 					xcm: Xcm(vec![
 						Self::buy_execution(Self::half(&fee), &reserve, dest_weight_limit.clone())?,
 						DepositReserveAsset {
-							//
 							assets: AllCounted(max_assets).into(),
 							dest: reanchored_dest,
 							xcm: Xcm(vec![
@@ -345,21 +361,70 @@ pub mod pallet {
 
 	#[cfg(test)]
 	mod test {
-		use frame_support::assert_ok;
+		use frame_support::{
+			assert_ok, traits::tokens::fungibles::metadata::Mutate as MetaMutate,
+			traits::tokens::fungibles::Create as FungibleCerate,
+		};
+		use polkadot_parachain_primitives::primitives::Sibling;
+		use sp_runtime::traits::AccountIdConversion;
+		use sp_runtime::AccountId32;
 		use sp_std::{boxed::Box, vec};
 		use xcm_simulator::TestExt;
 
-		use crate::mock::para::{assert_events, Runtime, RuntimeEvent, UsdtAssetId, UsdtLocation};
+		use super::*;
+		use crate::mock::para::{
+			assert_events, Assets, NativeAssetId, PBALocation, Runtime, RuntimeEvent,
+			RuntimeOrigin, UsdtAssetId, UsdtLocation,
+		};
 		use crate::mock::{
-			ParaA, ParaAssets, ParaB, ParaBalances, TestNet, ALICE, BOB, ENDOWED_BALANCE,
+			ParaA, ParaAssets, ParaB, ParaBalances, ParaC, TestNet, ALICE, ASSET_OWNER, BOB,
+			ENDOWED_BALANCE,
 		};
 		use crate::Event as SygmaXcmBridgeEvent;
 
-		use super::*;
+		fn init_logger() {
+			let _ = env_logger::builder()
+				// Include all events in tests
+				.filter_level(log::LevelFilter::max())
+				// Ensure events are captured by `cargo test`
+				.is_test(true)
+				// Ignore errors initializing the logger if tests race to configure it
+				.try_init();
+		}
+
+		fn sibling_account(para_id: u32) -> AccountId32 {
+			Sibling::from(para_id).into_account_truncating()
+		}
 
 		#[test]
 		fn test_transfer_self_reserve_asset_to_parachain() {
+			init_logger();
+
 			TestNet::reset();
+
+			// sending 10 tokens
+			let amount = 10_000_000_000_000u128;
+			let fee = 4u128;
+
+			ParaB::execute_with(|| {
+				// ParaB register the native asset of paraA
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(NativeAssetId::get(), ASSET_OWNER, true, 1,));
+
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as MetaMutate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::set(
+					NativeAssetId::get(),
+					&ASSET_OWNER,
+					b"ParaAAsset".to_vec(),
+					b"PAA".to_vec(),
+					12,
+				));
+
+				// make sure Bob on parachain B holds none of NativeAsset of paraA
+				assert_eq!(ParaAssets::balance(NativeAssetId::get(), &BOB), 0u128);
+			});
 
 			// sending native asset from parachain A to parachain B
 			ParaA::execute_with(|| {
@@ -368,8 +433,7 @@ pub mod pallet {
 				// transfer parachain A native asset from Alice to parachain B on Bob
 				assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ALICE.into(),
-					(Concrete(MultiLocation::new(0, Here)), Fungible(10_000_000_000_000u128))
-						.into(),
+					(Concrete(MultiLocation::new(0, Here)), Fungible(amount)).into(),
 					MultiLocation::new(
 						1,
 						X2(
@@ -378,18 +442,268 @@ pub mod pallet {
 						),
 					)
 				));
-				assert_eq!(
-					ParaBalances::free_balance(&ALICE),
-					ENDOWED_BALANCE - 10_000_000_000_000u128
-				);
+
+				// Alice should lost the amount of native asset of paraA
+				assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - amount);
 
 				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
 					SygmaXcmBridgeEvent::XCMTransferSend {
 						asset: Box::new(
-							(
-								Concrete(MultiLocation::new(0, Here)),
-								Fungible(10_000_000_000_000u128),
-							)
+							(Concrete(MultiLocation::new(0, Here)), Fungible(amount)).into(),
+						),
+						origin: Box::new(
+							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
+						),
+						dest: Box::new(MultiLocation::new(
+							1,
+							X2(
+								Parachain(2u32),
+								Junction::AccountId32 { network: None, id: BOB.into() },
+							),
+						)),
+					},
+				)]);
+
+				// sibling_account of B on A should have amount of native asset as well
+				assert_eq!(ParaBalances::free_balance(sibling_account(2)), amount);
+			});
+
+			ParaB::execute_with(|| {
+				// Bob should get amount - fee of the native asset of paraA on paraB
+				assert_eq!(ParaAssets::balance(NativeAssetId::get(), &BOB), amount - fee);
+			});
+		}
+
+		#[test]
+		fn test_transfer_to_reserve_to_parachain() {
+			init_logger();
+
+			TestNet::reset();
+
+			// sending 10 tokens
+			let amount = 10_000_000_000_000u128;
+			let fee = 4u128;
+
+			// register PBA on paraA
+			ParaA::execute_with(|| {
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(NativeAssetId::get(), ASSET_OWNER, true, 1,));
+
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as MetaMutate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::set(
+					NativeAssetId::get(),
+					&ASSET_OWNER,
+					b"ParaBAsset".to_vec(),
+					b"PBA".to_vec(),
+					12,
+				));
+			});
+
+			// transfer PBA from Alice on parachain B to Alice on parachain A
+			ParaB::execute_with(|| {
+				// Bob now has ENDOWED_BALANCE of PBB on parachain B
+				assert_eq!(ParaBalances::free_balance(&BOB), ENDOWED_BALANCE);
+
+				assert_ok!(BridgeImpl::<Runtime>::transfer(
+					ALICE.into(),
+					(Concrete(MultiLocation::new(0, Here)), Fungible(amount)).into(),
+					MultiLocation::new(
+						1,
+						X2(
+							Parachain(1u32),
+							Junction::AccountId32 { network: None, id: ALICE.into() },
+						),
+					)
+				));
+				assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - amount);
+				assert_eq!(ParaBalances::free_balance(sibling_account(1)), amount);
+			});
+
+			// transfer PBA back to parachain B
+			ParaA::execute_with(|| {
+				assert_eq!(ParaAssets::balance(NativeAssetId::get(), &ALICE), amount - fee);
+
+				// transfer PBA back to Bob on parachain B with (amount - fee)
+				assert_ok!(BridgeImpl::<Runtime>::transfer(
+					ALICE.into(),
+					(PBALocation::get(), Fungible(amount - fee)).into(),
+					MultiLocation::new(
+						1,
+						X2(
+							Parachain(2u32),
+							Junction::AccountId32 { network: None, id: BOB.into() }
+						)
+					)
+				));
+
+				// now Alice holds 0 of PBA
+				assert_eq!(ParaAssets::balance(NativeAssetId::get(), &ALICE), 0u128);
+
+				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
+					SygmaXcmBridgeEvent::XCMTransferSend {
+						asset: Box::new(
+							(Concrete(PBALocation::get()), Fungible(amount - fee)).into(),
+						),
+						origin: Box::new(
+							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
+						),
+						dest: Box::new(MultiLocation::new(
+							1,
+							X2(
+								Parachain(2u32),
+								Junction::AccountId32 { network: None, id: BOB.into() },
+							),
+						)),
+					},
+				)]);
+			});
+
+			ParaB::execute_with(|| {
+				// Bob should get amount - fee * 2 bcs there are two times of xcm transfer
+				assert_eq!(ParaBalances::free_balance(&BOB), ENDOWED_BALANCE + amount - fee * 2);
+				assert_eq!(ParaBalances::free_balance(sibling_account(1)), 4u128);
+			});
+		}
+
+		#[test]
+		fn test_transfer_to_non_reserve_to_parachain() {
+			init_logger();
+
+			TestNet::reset();
+
+			// register token on Parachain C
+			ParaC::execute_with(|| {
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as MetaMutate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::set(
+					UsdtAssetId::get(),
+					&ASSET_OWNER,
+					b"USDT".to_vec(),
+					b"USDT".to_vec(),
+					12,
+				));
+
+				// mint USDT to ASSET_OWNER
+				assert_ok!(Assets::mint(
+					RuntimeOrigin::signed(ASSET_OWNER),
+					UsdtAssetId::get(),
+					ASSET_OWNER,
+					ENDOWED_BALANCE,
+				));
+
+				// checking USDT balances
+				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &ASSET_OWNER), ENDOWED_BALANCE);
+				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &ALICE), 0u128);
+				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &BOB), 0u128);
+
+				// checking native asset balances
+				assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE);
+				assert_eq!(ParaBalances::free_balance(&BOB), ENDOWED_BALANCE);
+
+				// make sure the sibling_account of parachain A has enough native asset
+				// this is used in WithdrawAsset xcm instruction in InitiateReserveWithdraw
+				assert_ok!(ParaBalances::transfer_keep_alive(
+					RuntimeOrigin::signed(ASSET_OWNER),
+					Sibling::from(1u32).into_account_truncating(),
+					1_000_000_000_000_000_u128
+				));
+				assert_eq!(
+					ParaBalances::free_balance(sibling_account(1)),
+					1_000_000_000_000_000_u128
+				);
+
+				// sibling_account of B has 0 balance at this moment
+				assert_eq!(ParaBalances::free_balance(sibling_account(2)), 0u128);
+			});
+
+			// register token on Parachain A
+			ParaA::execute_with(|| {
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as MetaMutate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::set(
+					UsdtAssetId::get(),
+					&ASSET_OWNER,
+					b"USDT".to_vec(),
+					b"USDT".to_vec(),
+					12,
+				));
+			});
+
+			// transfer some USDT from C to Alice on A
+			ParaC::execute_with(|| {
+				assert_ok!(BridgeImpl::<Runtime>::transfer(
+					ASSET_OWNER.into(),
+					(Concrete(UsdtLocation::get()), Fungible(100_000_000u128)).into(),
+					MultiLocation::new(
+						1,
+						X2(
+							Parachain(1u32),
+							Junction::AccountId32 { network: None, id: ALICE.into() },
+						),
+					)
+				));
+				assert_eq!(
+					ParaAssets::balance(UsdtAssetId::get(), &ASSET_OWNER),
+					ENDOWED_BALANCE - 100_000_000u128
+				);
+			});
+
+			// Alice should get the USDT token - fee
+			ParaA::execute_with(|| {
+				assert_eq!(
+					ParaAssets::balance(UsdtAssetId::get(), &ALICE),
+					100_000_000u128 - 4u128
+				);
+			});
+
+			// Parachain B register USDT token
+			ParaB::execute_with(|| {
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as FungibleCerate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::create(UsdtAssetId::get(), ASSET_OWNER, true, 1,));
+				assert_ok!(<pallet_assets::pallet::Pallet<Runtime> as MetaMutate<
+					<Runtime as frame_system::Config>::AccountId,
+				>>::set(
+					UsdtAssetId::get(),
+					&ASSET_OWNER,
+					b"USDT".to_vec(),
+					b"USDT".to_vec(),
+					12,
+				));
+
+				// Bob on parachain B has 0 USDT at this moment
+				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &BOB), 0u128);
+			});
+
+			// send USDT token from parachainA to parachainB
+			ParaA::execute_with(|| {
+				// Alice transfer USDT token from parachain A to Bob on parachain B
+				assert_ok!(BridgeImpl::<Runtime>::transfer(
+					ALICE.into(),
+					(Concrete(UsdtLocation::get()), Fungible(100_000_000u128 - 4u128)).into(),
+					MultiLocation::new(
+						1,
+						X2(
+							Parachain(2u32),
+							Junction::AccountId32 { network: None, id: BOB.into() },
+						),
+					)
+				));
+				// Alice has 0 USDT now
+				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &ALICE), 0u128);
+
+				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
+					SygmaXcmBridgeEvent::XCMTransferSend {
+						asset: Box::new(
+							(Concrete(UsdtLocation::get()), Fungible(100_000_000u128 - 4u128))
 								.into(),
 						),
 						origin: Box::new(
@@ -406,133 +720,27 @@ pub mod pallet {
 				)]);
 			});
 
+			ParaC::execute_with(|| {
+				// on C, the sibling_account of parachain A will be withdrawn the same amount of Parachain C native assets
+				assert_eq!(
+					ParaBalances::free_balance(sibling_account(1)),
+					1_000_000_000_000_000_u128 - (100_000_000u128 - 4u128)
+				);
+
+				// on C, the sibling_account of parachain B will be deposited the same amount of Parachain C native assets - xcm fee
+				assert_eq!(
+					ParaBalances::free_balance(sibling_account(2)),
+					(100_000_000u128 - 4u128) - 4u128
+				);
+			});
+
+			// Bob on Parachain B has USDT token now
 			ParaB::execute_with(|| {
-				assert_eq!(ParaAssets::balance(1u32, &ALICE), ENDOWED_BALANCE);
-				assert_eq!(ParaAssets::balance(1u32, &BOB), 9_000_000_000_000u128);
-			});
-		}
-
-		#[test]
-		fn test_transfer_to_reserve_to_parachain() {
-			TestNet::reset();
-
-			let para_a_location = MultiLocation { parents: 1, interior: X1(Parachain(1)) };
-
-			// Prepare step
-			// sending parachainB native asset to parachainA
-			ParaB::execute_with(|| {
-				assert_ok!(BridgeImpl::<Runtime>::transfer(
-					ALICE.into(),
-					(Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
-					MultiLocation::new(
-						1,
-						X2(
-							Parachain(1u32),
-							Junction::AccountId32 { network: None, id: BOB.into() }
-						)
-					)
-				));
-
-				assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10);
-
-				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
-					SygmaXcmBridgeEvent::XCMTransferSend {
-						asset: Box::new(
-							(Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into(),
-						),
-						origin: Box::new(
-							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
-						),
-						dest: Box::new(MultiLocation::new(
-							1,
-							X2(
-								Parachain(1u32),
-								Junction::AccountId32 { network: None, id: BOB.into() },
-							),
-						)),
-					},
-				)]);
-			});
-			// Bob on parachainA should have parachainB's native asset
-			ParaA::execute_with(|| {
-				assert_eq!(ParaAssets::balance(0u32, &BOB), 10);
-			});
-
-			// sending parachainB's native asset from parachainA back to parachainB
-			ParaA::execute_with(|| {
-				assert_ok!(BridgeImpl::<Runtime>::transfer(
-					BOB.into(),
-					(Concrete(para_a_location), Fungible(5u128)).into(), // sending 5 tokens
-					MultiLocation::new(
-						1,
-						X2(
-							Parachain(2u32),
-							Junction::AccountId32 { network: None, id: ALICE.into() }
-						)
-					)
-				));
-
-				assert_eq!(ParaAssets::balance(0u32, &BOB), 10 - 5);
-
-				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
-					SygmaXcmBridgeEvent::XCMTransferSend {
-						asset: Box::new((Concrete(para_a_location), Fungible(5u128)).into()),
-						origin: Box::new(
-							Junction::AccountId32 { network: None, id: BOB.into() }.into(),
-						),
-						dest: Box::new(MultiLocation::new(
-							1,
-							X2(
-								Parachain(2u32),
-								Junction::AccountId32 { network: None, id: ALICE.into() },
-							),
-						)),
-					},
-				)]);
-			});
-			ParaA::execute_with(|| {
-				assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - 10 + 5);
-			});
-		}
-
-		#[test]
-		fn test_transfer_to_non_reserve_to_parachain() {
-			TestNet::reset();
-
-			// send USDT token from parachainA to parachainB
-			ParaA::execute_with(|| {
-				assert_ok!(BridgeImpl::<Runtime>::transfer(
-					ALICE.into(),
-					(Concrete(UsdtLocation::get()), Fungible(10u128)).into(),
-					MultiLocation::new(
-						1,
-						X2(
-							Parachain(2u32),
-							Junction::AccountId32 { network: None, id: BOB.into() },
-						),
-					)
-				));
-				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &ALICE), ENDOWED_BALANCE - 10);
-
-				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
-					SygmaXcmBridgeEvent::XCMTransferSend {
-						asset: Box::new((Concrete(UsdtLocation::get()), Fungible(10u128)).into()),
-						origin: Box::new(
-							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
-						),
-						dest: Box::new(MultiLocation::new(
-							1,
-							X2(
-								Parachain(2u32),
-								Junction::AccountId32 { network: None, id: BOB.into() },
-							),
-						)),
-					},
-				)]);
-			});
-
-			ParaB::execute_with(|| {
-				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &BOB), 10);
+				// transferred amount from parachain is (100_000_000u128 - 4u128) minus the xcm fee twice on the reserved chain and the dest chain
+				assert_eq!(
+					ParaAssets::balance(UsdtAssetId::get(), &BOB),
+					100_000_000u128 - 4u128 - 4u128 * 2
+				);
 			});
 		}
 	}
