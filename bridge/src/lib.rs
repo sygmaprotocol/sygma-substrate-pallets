@@ -688,10 +688,14 @@ pub mod pallet {
 	where
 		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
 	{
-		fn transfer(sender: [u8; 32], asset: MultiAsset, dest: MultiLocation) -> DispatchResult {
+		fn transfer(
+			sender: [u8; 32],
+			asset: MultiAsset,
+			dest: MultiLocation,
+			_max_weight: Option<Weight>,
+		) -> DispatchResult {
 			let sender_origin = OriginFor::<T>::from(RawOrigin::Signed(sender.into()));
 			Pallet::<T>::deposit(sender_origin, Box::from(asset), Box::from(dest))?;
-
 			Ok(())
 		}
 	}
@@ -1365,7 +1369,7 @@ pub mod pallet {
 				};
 
 				// Call transfer instead of deposit
-				assert_ok!(SygmaBridge::transfer(ALICE.into(), asset.clone(), dest));
+				assert_ok!(SygmaBridge::transfer(ALICE.into(), asset.clone(), dest, None));
 
 				// Check balances
 				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);

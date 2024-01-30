@@ -45,7 +45,8 @@ pub mod pallet {
 			what: MultiAsset,
 			dest: MultiLocation,
 		) -> DispatchResult {
-			T::XCMBridge::transfer(origin, what.clone(), dest)?;
+			let cap_weight: Weight = Weight::from_parts(6_000_000_000u64, 2_000_000u64);
+			T::XCMBridge::transfer(origin, what.clone(), dest, Some(cap_weight))?;
 
 			let origin_location: MultiLocation =
 				Junction::AccountId32 { network: None, id: origin }.into();
@@ -64,7 +65,7 @@ pub mod pallet {
 			what: MultiAsset,
 			dest: MultiLocation,
 		) -> DispatchResult {
-			T::SygmaBridge::transfer(origin, what.clone(), dest)?;
+			T::SygmaBridge::transfer(origin, what.clone(), dest, None)?;
 
 			let origin_location: MultiLocation =
 				Junction::AccountId32 { network: None, id: origin }.into();

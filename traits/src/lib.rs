@@ -82,7 +82,12 @@ pub trait TransactorForwarder {
 }
 
 pub trait Bridge {
-	fn transfer(sender: [u8; 32], asset: MultiAsset, dest: MultiLocation) -> DispatchResult;
+	fn transfer(
+		sender: [u8; 32],
+		asset: MultiAsset,
+		dest: MultiLocation,
+		max_weight: Option<Weight>,
+	) -> DispatchResult;
 }
 
 pub trait AssetReserveLocationParser {

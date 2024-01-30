@@ -168,7 +168,6 @@ pub mod pallet {
 	impl<T: Config> AssetReserveLocationParser for Pallet<T> {
 		fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation> {
 			let location = match (&asset.id, &asset.fun) {
-				// So far our native asset is concrete
 				(Concrete(id), Fungible(_)) => Some(*id),
 				_ => None,
 			};
@@ -192,7 +191,12 @@ pub mod pallet {
 	pub struct BridgeImpl<T>(PhantomData<T>);
 
 	impl<T: Config> Bridge for BridgeImpl<T> {
-		fn transfer(sender: [u8; 32], asset: MultiAsset, dest: MultiLocation) -> DispatchResult {
+		fn transfer(
+			sender: [u8; 32],
+			asset: MultiAsset,
+			dest: MultiLocation,
+			max_weight: Option<XCMWeight>,
+		) -> DispatchResult {
 			let origin_location: MultiLocation =
 				Junction::AccountId32 { network: None, id: sender }.into();
 
@@ -220,7 +224,7 @@ pub mod pallet {
 				origin: origin_location,
 				dest: dest_location,
 				recipient,
-				weight: XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64), // TODO: configure weight
+				weight: max_weight.unwrap_or(XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64)),
 				_unused: PhantomData,
 			};
 
@@ -440,7 +444,8 @@ pub mod pallet {
 							Parachain(2u32),
 							Junction::AccountId32 { network: None, id: BOB.into() },
 						),
-					)
+					),
+					None
 				));
 
 				// Alice should lost the amount of native asset of paraA
@@ -515,7 +520,8 @@ pub mod pallet {
 							Parachain(1u32),
 							Junction::AccountId32 { network: None, id: ALICE.into() },
 						),
-					)
+					),
+					None
 				));
 				assert_eq!(ParaBalances::free_balance(&ALICE), ENDOWED_BALANCE - amount);
 				assert_eq!(ParaBalances::free_balance(sibling_account(1)), amount);
@@ -535,7 +541,8 @@ pub mod pallet {
 							Parachain(2u32),
 							Junction::AccountId32 { network: None, id: BOB.into() }
 						)
-					)
+					),
+					None
 				));
 
 				// now Alice holds 0 of PBA
@@ -648,7 +655,8 @@ pub mod pallet {
 							Parachain(1u32),
 							Junction::AccountId32 { network: None, id: ALICE.into() },
 						),
-					)
+					),
+					None
 				));
 				assert_eq!(
 					ParaAssets::balance(UsdtAssetId::get(), &ASSET_OWNER),
@@ -695,7 +703,8 @@ pub mod pallet {
 							Parachain(2u32),
 							Junction::AccountId32 { network: None, id: BOB.into() },
 						),
-					)
+					),
+					None
 				));
 				// Alice has 0 USDT now
 				assert_eq!(ParaAssets::balance(UsdtAssetId::get(), &ALICE), 0u128);

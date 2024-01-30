@@ -19,6 +19,7 @@ use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_runtime::{AccountId32, BuildStorage};
 use xcm::latest::{BodyId, Junction, MultiAsset, MultiLocation, NetworkId};
 use xcm::prelude::{Concrete, Fungible, GeneralKey, Parachain, X3};
+use xcm::v3::Weight;
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
 	SiblingParachainConvertsVia,
@@ -149,7 +150,12 @@ impl sygma_bridge_forwarder::Config for Runtime {
 
 pub struct BridgeImplRuntime<T>(PhantomData<T>);
 impl<T> Bridge for BridgeImplRuntime<T> {
-	fn transfer(_sender: [u8; 32], _asset: MultiAsset, _dest: MultiLocation) -> DispatchResult {
+	fn transfer(
+		_sender: [u8; 32],
+		_asset: MultiAsset,
+		_dest: MultiLocation,
+		_max_weight: Option<Weight>,
+	) -> DispatchResult {
 		Ok(())
 	}
 }
