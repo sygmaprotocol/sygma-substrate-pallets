@@ -100,13 +100,11 @@ pub mod pallet {
 	#[cfg(test)]
 	mod test {
 		use codec::Encode;
-		use frame_support::{
-			assert_noop, assert_ok, traits::tokens::fungibles::Create as FungibleCerate,
-		};
+		use frame_support::{assert_ok, traits::tokens::fungibles::Create as FungibleCerate};
 		use hex_literal::hex;
 		use xcm::latest::{Junction, XcmContext};
 		use xcm::prelude::{
-			AccountId32, Concrete, Fungible, GeneralKey, Here, Parachain, XcmError, X1, X2, X5,
+			AccountId32, Concrete, Fungible, GeneralKey, Here, Parachain, X1, X2, X3, X4,
 		};
 		use xcm::v3::Junction::GeneralIndex;
 		use xcm::v3::{MultiAsset, MultiLocation};
@@ -246,8 +244,7 @@ pub mod pallet {
 				let dest_domain_id = 1;
 				let outer_recipient: MultiLocation = MultiLocation::new(
 					1,
-					X5(
-						Parachain(1000),
+					X4(
 						GeneralKey {
 							length: 5,
 							data: hex![
@@ -376,29 +373,30 @@ pub mod pallet {
 		}
 
 		#[test]
-		fn test_xcm_asset_transactor_not_supported_dest() {
+		fn test_xcm_asset_transactor_other_dest() {
 			new_test_ext().execute_with(|| {
-				let none_supported_recipient: MultiLocation = MultiLocation::new(
+				let other_recipient: MultiLocation = MultiLocation::new(
 					2,
-					X2(Parachain(2005), slice_to_generalkey(b"substrate recipient")),
+					X3(
+						Parachain(2005),
+						slice_to_generalkey(b"substrate recipient"),
+						AccountId32 { network: None, id: BOB.into() },
+					),
 				);
 
 				// send native asset to non-supported world
 				let native_asset: MultiAsset =
 					(Concrete(MultiLocation::new(0, Here)), Fungible(10u128)).into();
-				assert_noop!(
-					XCMAssetTransactor::<
-						CurrencyTransactor,
-						FungiblesTransactor,
-						NativeAssetTypeIdentifier<ParachainInfo>,
-						ForwarderImplRuntime,
-					>::deposit_asset(
-						&native_asset,
-						&none_supported_recipient,
-						&XcmContext::with_message_id([0; 32])
-					),
-					XcmError::DestinationUnsupported
-				);
+				assert_ok!(XCMAssetTransactor::<
+					CurrencyTransactor,
+					FungiblesTransactor,
+					NativeAssetTypeIdentifier<ParachainInfo>,
+					ForwarderImplRuntime,
+				>::deposit_asset(
+					&native_asset,
+					&other_recipient,
+					&XcmContext::with_message_id([0; 32])
+				));
 
 				// asset tmp holder for substrate world and outer world transfer, should not receive any token
 				let tmp_account_outer = sp_io::hashing::blake2_256(
@@ -413,7 +411,7 @@ pub mod pallet {
 				);
 				assert_eq!(
 					Balances::free_balance(sp_runtime::AccountId32::from(tmp_account_substrate)),
-					0u128
+					10u128
 				);
 			})
 		}

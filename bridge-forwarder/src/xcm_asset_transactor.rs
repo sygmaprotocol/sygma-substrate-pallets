@@ -38,13 +38,13 @@ impl<
 				}
 			},
 			// recipient is on the remote chain
-			(1, Some(Parachain(_))) => {
+			_ => {
 				// 2. recipient is on non-substrate chain(evm, cosmos, etc.), will forward to sygma bridge pallet
 				match who.interior {
-                    // sygma: 7379676d61000000000000000000000000000000000000000000000000000000
+					// sygma: 7379676d61000000000000000000000000000000000000000000000000000000
                     // sygma-bridge: 7379676d612d6272696467650000000000000000000000000000000000000000
-					// outer world multilocation pattern: { Parachain(1000), GeneralKey { length: 5, data: b"sygma"},  GeneralKey { length: 12, data: b"sygma-bridge"}, GeneralIndex(domainID), GeneralKey { length: length_of_recipient_address, data: recipient_address} }
-                    X5(Parachain(1000), GeneralKey { length: 5, data: hex!["7379676d61000000000000000000000000000000000000000000000000000000"]},  GeneralKey { length: 12, data: hex!["7379676d612d6272696467650000000000000000000000000000000000000000"]}, GeneralIndex(..), GeneralKey { .. }) => {
+					// outer world multilocation pattern: { Parachain(X), GeneralKey { length: 5, data: b"sygma"},  GeneralKey { length: 12, data: b"sygma-bridge"}, GeneralIndex(domainID), GeneralKey { length: length_of_recipient_address, data: recipient_address} }
+                    X4(GeneralKey { length: 5, data: hex!["7379676d61000000000000000000000000000000000000000000000000000000"]},  GeneralKey { length: 12, data: hex!["7379676d612d6272696467650000000000000000000000000000000000000000"]}, GeneralIndex(..), GeneralKey { .. }) => {
 						// check if the asset is native or foreign, and deposit the asset to a tmp account first
                         let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey { length: 8, data: [1u8; 32] })).encode());
                         if AssetTypeChecker::is_native_asset(what) {
@@ -55,9 +55,9 @@ impl<
 
                         Forwarder::other_world_transactor_forwarder(tmp_account, what.clone(), *who).map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
                     }
+					// 3. recipient is on remote parachain, will forward to xcm bridge pallet
                     _ => {
-                        // 3. recipient is on remote parachain
-                        // xcm message must have a sender(origin), so a tmp account derived from pallet would be necessary here
+						// xcm message must have a sender(origin), so a tmp account derived from pallet would be necessary here
                         let tmp_account = sp_io::hashing::blake2_256(&MultiLocation::new(0, X1(GeneralKey { length: 8, data: [2u8; 32] })).encode());
 
                         // check if the asset is native or foreign, and call the corresponding deposit_asset(), recipient will be the derived tmp account
@@ -71,10 +71,6 @@ impl<
                         Forwarder::xcm_transactor_forwarder(tmp_account, what.clone(), *who).map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
                     }
                 }
-			},
-			// Other destination multiLocation not supported, return Err
-			_ => {
-				return Err(XcmError::DestinationUnsupported);
 			},
 		}
 
