@@ -29,7 +29,7 @@ impl<
 	fn deposit_asset(what: &MultiAsset, who: &MultiLocation, context: &XcmContext) -> XcmResult {
 		match (who.parents, who.first_interior()) {
 			// 1. recipient is on the local parachain
-			(0, Some(AccountId32 { .. })) => {
+			(0, Some(AccountId32 { .. })) | (0, Some(AccountKey20 { .. })) => {
 				// check if the asset is native, and call the corresponding deposit_asset()
 				if AssetTypeChecker::is_native_asset(what) {
 					CurrencyTransactor::deposit_asset(what, who, context)?;

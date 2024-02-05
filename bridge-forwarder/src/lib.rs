@@ -6,18 +6,16 @@
 pub use self::pallet::*;
 
 #[cfg(test)]
-mod mock;
+pub mod mock;
 pub mod xcm_asset_transactor;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cumulus_primitives_core::ParaId;
 	use frame_support::pallet_prelude::*;
 	use frame_support::traits::StorageVersion;
 	use xcm::latest::{Junction, MultiAsset, MultiLocation};
-	use xcm::prelude::{Concrete, Fungible, Parachain, X1};
 
-	use sygma_traits::{AssetTypeIdentifier, Bridge, TransactorForwarder};
+	use sygma_traits::{Bridge, TransactorForwarder};
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -80,23 +78,6 @@ pub mod pallet {
 		}
 	}
 
-	pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
-	impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
-		/// check if the given MultiAsset is a native asset
-		fn is_native_asset(asset: &MultiAsset) -> bool {
-			// currently there are two multilocations are considered as native asset:
-			// 1. integrated parachain native asset(MultiLocation::here())
-			// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
-			let native_locations =
-				[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
-
-			match (&asset.id, &asset.fun) {
-				(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
-				_ => false,
-			}
-		}
-	}
-
 	#[cfg(test)]
 	mod test {
 		use codec::Encode;
@@ -114,14 +95,11 @@ pub mod pallet {
 
 		use crate::mock::{
 			assert_events, new_test_ext, slice_to_generalkey, Assets, Balances, CurrencyTransactor,
-			ForwarderImplRuntime, FungiblesTransactor, ParachainInfo, Runtime, RuntimeEvent,
-			RuntimeOrigin, SygmaBridgeForwarder, UsdtAssetId, UsdtLocation, ALICE, ASSET_OWNER,
-			BOB, ENDOWED_BALANCE,
+			ForwarderImplRuntime, FungiblesTransactor, NativeAssetTypeIdentifier, ParachainInfo,
+			Runtime, RuntimeEvent, RuntimeOrigin, SygmaBridgeForwarder, UsdtAssetId, UsdtLocation,
+			ALICE, ASSET_OWNER, BOB, ENDOWED_BALANCE,
 		};
-		use crate::{
-			xcm_asset_transactor::XCMAssetTransactor, Event as SygmaBridgeForwarderEvent,
-			NativeAssetTypeIdentifier,
-		};
+		use crate::{xcm_asset_transactor::XCMAssetTransactor, Event as SygmaBridgeForwarderEvent};
 
 		#[test]
 		fn test_xcm_transactor_forwarder() {

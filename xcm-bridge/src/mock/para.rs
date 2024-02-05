@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use std::result;
 
 use cumulus_primitives_core::{ChannelStatus, GetChannelInfo, ParaId, Weight};
+use frame_support::pallet_prelude::Get;
 use frame_support::traits::{ConstU16, ConstU64, Nothing};
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -15,6 +16,7 @@ use frame_system::EnsureRoot;
 use polkadot_parachain_primitives::primitives::Sibling;
 use sp_core::{crypto::AccountId32, H256};
 use sp_runtime::traits::{IdentityLookup, Zero};
+use sygma_traits::AssetTypeIdentifier;
 use xcm::latest::{
 	AssetId as XcmAssetId, InteriorMultiLocation, MultiAsset, MultiLocation, NetworkId,
 	Weight as XCMWeight, XcmContext,
@@ -30,8 +32,6 @@ use xcm_executor::{
 	traits::{Error as ExecutionError, MatchesFungibles, WeightTrader, WithOriginFilter},
 	Assets as XcmAssets, Config, XcmExecutor,
 };
-
-use sygma_bridge_forwarder;
 
 use crate as sygma_xcm_bridge;
 use crate::BridgeImpl;
@@ -140,7 +140,7 @@ impl sygma_xcm_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type AssetReservedChecker = sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>;
+	type AssetReservedChecker = NativeAssetTypeIdentifier<ParachainInfo>;
 	type UniversalLocation = UniversalLocation;
 	type SelfLocation = SelfLocation;
 	type MinXcmFee = MinXcmFee;
@@ -280,6 +280,25 @@ pub type FungiblesTransactor = FungiblesAdapter<
 	// The account to use for tracking teleports.
 	CheckingAccount,
 >;
+
+/// NativeAssetTypeIdentifier impl AssetTypeIdentifier for XCMAssetTransactor
+/// This impl is only for local mock purpose, the integrated parachain might have their own version
+pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
+impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
+	/// check if the given MultiAsset is a native asset
+	fn is_native_asset(asset: &MultiAsset) -> bool {
+		// currently there are two multilocations are considered as native asset:
+		// 1. integrated parachain native asset(MultiLocation::here())
+		// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+		let native_locations =
+			[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
+
+		match (&asset.id, &asset.fun) {
+			(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
+			_ => false,
+		}
+	}
+}
 
 pub struct ChannelInfo;
 
