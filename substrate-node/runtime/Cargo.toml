@@ -59,6 +59,18 @@ xcm = { package = "staging-xcm", git = "https://github.com/paritytech/polkadot-s
 xcm-builder = { package = "staging-xcm-builder", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 xcm-executor = { package = "staging-xcm-executor", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 polkadot-parachain-primitives = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+pallet-xcm = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+polkadot-primitives = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0",  default-features = false }
+
+# Cumulus
+cumulus-primitives-core = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-pallet-dmp-queue = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-pallet-xcmp-queue = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-pallet-xcm = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-primitives-utility = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-pallet-parachain-system = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-primitives-timestamp = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-pallet-aura-ext = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 
 # Local Dependencies
 sygma-basic-feehandler = { path = "../../basic-fee-handler", default-features = false }
@@ -69,6 +81,8 @@ sygma-access-segregator = { path = "../../access-segregator", default-features =
 sygma-fee-handler-router = { path = "../../fee-handler-router", default-features = false }
 sygma-runtime-api = { path = "../../runtime-api", default-features = false }
 pallet-parachain-info = { path = "../../parachain-info", default-features = false }
+sygma-bridge-forwarder = { path = "../../bridge-forwarder", default-features = false }
+sygma-xcm-bridge = { path = "../../xcm-bridge", default-features = false }
 
 [build-dependencies]
 substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
@@ -118,6 +132,18 @@ std = [
 	"xcm-executor/std",
 	"polkadot-parachain-primitives/std",
 	"primitive-types/std",
+	"cumulus-primitives-core/std",
+	"cumulus-primitives-utility/std",
+	"cumulus-pallet-xcm/std",
+	"cumulus-pallet-dmp-queue/std",
+	"cumulus-pallet-xcmp-queue/std",
+	"cumulus-pallet-parachain-system/std",
+	"cumulus-primitives-timestamp/std",
+	"cumulus-pallet-aura-ext/std",
+	"pallet-xcm/std",
+	"polkadot-primitives/std",
+	"sygma-bridge-forwarder/std",
+	"sygma-xcm-bridge/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -154,4 +180,12 @@ try-runtime = [
 	"sygma-bridge/try-runtime",
 	"sygma-access-segregator/try-runtime",
 	"sygma-fee-handler-router/try-runtime",
+	"sygma-bridge-forwarder/try-runtime",
+	"sygma-xcm-bridge/try-runtime",
+	"cumulus-pallet-xcm/try-runtime",
+	"cumulus-pallet-dmp-queue/try-runtime",
+	"cumulus-pallet-xcmp-queue/try-runtime",
+	"cumulus-pallet-parachain-system/try-runtime",
+	"cumulus-pallet-aura-ext/try-runtime",
+	"pallet-xcm/try-runtime",
 ]

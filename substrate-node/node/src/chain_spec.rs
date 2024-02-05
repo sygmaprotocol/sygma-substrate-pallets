@@ -160,6 +160,12 @@ fn testnet_genesis(
 			key: Some(root_key),
 		},
 		parachain_info: ParachainInfoConfig { parachain_id: id, ..Default::default() },
+		parachain_system: Default::default(),
+		polkadot_xcm: node_template_runtime::PolkadotXcmConfig {
+			safe_xcm_version: Some(3),
+			..Default::default()
+		},
 		transaction_payment: Default::default(),
+		aura_ext: Default::default(),
 	}
 }

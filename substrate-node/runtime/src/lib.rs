@@ -9,6 +9,10 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+mod weight;
+
+use cumulus_pallet_parachain_system::RelayNumberStrictlyIncreases;
+use cumulus_primitives_core::{ChannelStatus, GetChannelInfo, ParaId};
 use fixed::{types::extra::U16, FixedU128};
 use frame_support::{pallet_prelude::*, traits::ContainsPair, PalletId};
 use pallet_grandpa::AuthorityId as GrandpaId;
@@ -35,14 +39,21 @@ use sygma_traits::{
 	ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, ResourceId,
 	VerifyingContractAddress,
 };
-use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
+use sygma_xcm_bridge::BridgeImpl;
+use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation, Weight as XCMWeight};
 use xcm_builder::{
-	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
-	SiblingParachainConvertsVia,
+	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter,
+	EnsureXcmOrigin, FixedWeightBounds, FungiblesAdapter, IsConcrete, NativeAsset, NoChecking,
+	ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
+	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
 };
-use xcm_executor::traits::{Error as ExecutionError, MatchesFungibles};
+use xcm_executor::traits::{
+	Error as ExecutionError, MatchesFungibles, WeightTrader, WithOriginFilter,
+};
+use xcm_executor::Assets as XcmAssets;
 
 // A few exports that help ease life for downstream crates.
+use frame_support::traits::{Everything, Nothing};
 pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
@@ -57,14 +68,50 @@ pub use frame_support::{
 	},
 	StorageValue,
 };
+use frame_system::EnsureRoot;
 pub use frame_system::{Call as SystemCall, EnsureSigned};
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::{
 	ConstFeeMultiplier, CurrencyAdapter as PaymentCurrencyAdapter, Multiplier,
 };
+use sp_runtime::traits::Zero;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
+use sygma_bridge_forwarder::xcm_asset_transactor::XCMAssetTransactor;
+use xcm_executor::{Config, XcmExecutor};
+
+// Create the runtime by composing the FRAME pallets that were previously configured.
+construct_runtime!(
+	pub struct Runtime {
+		System: frame_system,
+		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
+		Timestamp: pallet_timestamp,
+		Aura: pallet_aura,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>} = 8,
+
+		SygmaAccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
+		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
+		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
+		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
+		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 13,
+		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>},
+		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>},
+
+		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config<T>},
+		ParachainSystem: cumulus_pallet_parachain_system::{Pallet, Call, Config<T>, Storage, Inherent, Event<T>, ValidateUnsigned},
+
+		XcmpQueue: cumulus_pallet_xcmp_queue::{Pallet, Call, Storage, Event<T>},
+		CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
+		DmpQueue: cumulus_pallet_dmp_queue::{Pallet, Call, Storage, Event<T>},
+		PolkadotXcm: pallet_xcm::{Pallet, Storage, Call, Event<T>, Origin, Config<T>},
+		AuraExt: cumulus_pallet_aura_ext::{Pallet, Storage, Config<T>},
+	}
+);
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -215,7 +262,7 @@ impl frame_system::Config for Runtime {
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
 	type SS58Prefix = SS58Prefix;
 	/// The set code logic, just the default since we're not a parachain.
-	type OnSetCode = ();
+	type OnSetCode = cumulus_pallet_parachain_system::ParachainSetCode<Self>;
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
@@ -421,7 +468,6 @@ parameter_types! {
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160::from_slice(hex::decode(DEST_VERIFYING_CONTRACT_ADDRESS).ok().unwrap().as_slice());
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
-	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
 	pub AssetsPalletLocation: MultiLocation =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
@@ -729,26 +775,210 @@ pub fn slice_to_generalkey(key: &[u8]) -> Junction {
 	}
 }
 
-// Create the runtime by composing the FRAME pallets that were previously configured.
-construct_runtime!(
-	pub struct Runtime {
-		System: frame_system,
-		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
-		Timestamp: pallet_timestamp,
-		Aura: pallet_aura,
-		Grandpa: pallet_grandpa,
-		Balances: pallet_balances,
-		TransactionPayment: pallet_transaction_payment,
-		Sudo: pallet_sudo,
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>} = 8,
-		SygmaAccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 9,
-		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 10,
-		SygmaBridge: sygma_bridge::{Pallet, Call, Storage, Event<T>} = 11,
-		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
-		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 13,
-		ParachainInfo: pallet_parachain_info = 20,
-	}
+parameter_types! {
+	pub const RelayNetwork: NetworkId = NetworkId::Rococo;
+	pub RelayChainOrigin: RuntimeOrigin = cumulus_pallet_xcm::Origin::Relay.into();
+	pub UnitWeightCost: XCMWeight = XCMWeight::from_parts(200_000_000u64, 0);
+	pub const MaxInstructions: u32 = 100;
+}
+
+pub type XcmRouter = (
+	// Two routers - use UMP to communicate with the relay chain:
+	cumulus_primitives_utility::ParentAsUmp<ParachainSystem, PolkadotXcm, ()>,
+	// ..and XCMP to communicate with the sibling chains.
+	XcmpQueue,
 );
+impl sygma_xcm_bridge::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+	type XcmExecutor = XcmExecutor<XcmConfig>;
+	type AssetReservedChecker = sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>;
+	type UniversalLocation = UniversalLocation;
+	type SelfLocation = SelfLocation;
+	type MinXcmFee = MinXcmFee;
+}
+
+impl sygma_bridge_forwarder::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type SygmaBridge = BridgeImpl<Runtime>;
+	type XCMBridge = BridgeImpl<Runtime>;
+}
+
+parameter_types! {
+	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into())));
+	pub UniversalLocation: InteriorMultiLocation = X2(GlobalConsensus(RelayNetwork::get()), Parachain(ParachainInfo::parachain_id().into()));
+
+	// set 1 token as min fee
+	pub MinXcmFee: Vec<(XcmAssetId, u128)> = vec![(NativeLocation::get().into(), 1_000_000_000_000u128)];
+}
+
+pub struct ChannelInfo;
+
+impl GetChannelInfo for ChannelInfo {
+	fn get_channel_status(_id: ParaId) -> ChannelStatus {
+		ChannelStatus::Ready(10, 10)
+	}
+	fn get_channel_max(_id: ParaId) -> Option<usize> {
+		Some(usize::max_value())
+	}
+}
+
+impl cumulus_pallet_xcmp_queue::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type XcmExecutor = XcmExecutor<XcmConfig>;
+	type ChannelInfo = ChannelInfo;
+	type VersionWrapper = ();
+	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
+	type ControllerOrigin = EnsureRoot<AccountId>;
+	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
+	type PriceForSiblingDelivery = ();
+	type WeightInfo = ();
+}
+
+impl cumulus_pallet_xcm::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type XcmExecutor = XcmExecutor<XcmConfig>;
+}
+
+impl cumulus_pallet_dmp_queue::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type XcmExecutor = XcmExecutor<XcmConfig>;
+	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
+}
+
+parameter_types! {
+	pub const ReservedXcmpWeight: Weight = Weight::from_parts(
+		WEIGHT_REF_TIME_PER_SECOND.saturating_div(2),
+		polkadot_primitives::MAX_POV_SIZE as u64,
+	).saturating_div(4);
+	pub const ReservedDmpWeight: Weight = Weight::from_parts(
+		WEIGHT_REF_TIME_PER_SECOND.saturating_div(2),
+		polkadot_primitives::MAX_POV_SIZE as u64,
+	).saturating_div(4);
+}
+
+impl cumulus_pallet_parachain_system::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type OnSystemEvent = ();
+	type SelfParaId = pallet_parachain_info::Pallet<Runtime>;
+	type DmpMessageHandler = DmpQueue;
+	type ReservedDmpWeight = ReservedDmpWeight;
+	type OutboundXcmpMessageSource = XcmpQueue;
+	type XcmpMessageHandler = XcmpQueue;
+	type ReservedXcmpWeight = ReservedXcmpWeight;
+	type CheckAssociatedRelayNumber = RelayNumberStrictlyIncreases;
+}
+
+pub struct XcmConfig;
+impl Config for XcmConfig {
+	type RuntimeCall = RuntimeCall;
+	type XcmSender = XcmRouter;
+	type AssetTransactor = XCMAssetTransactor<
+		CurrencyTransactor,
+		FungiblesTransactor,
+		sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>,
+		SygmaBridgeForwarder,
+	>;
+	type OriginConverter = XcmOriginToTransactDispatchOrigin;
+	type IsReserve = NativeAsset;
+	type IsTeleporter = ();
+	type UniversalLocation = UniversalLocation;
+	type Barrier = Barrier;
+	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+	type Trader = AllTokensAreCreatedEqualToWeight;
+	type ResponseHandler = ();
+	type AssetTrap = ();
+	type AssetClaims = ();
+	type SubscriptionService = ();
+	type PalletInstancesInfo = AllPalletsWithSystem;
+	type MaxAssetsIntoHolding = ConstU32<64>;
+	type AssetLocker = ();
+	type AssetExchanger = ();
+	type FeeManager = ();
+	type MessageExporter = ();
+	type UniversalAliases = Nothing;
+	type CallDispatcher = WithOriginFilter<Everything>;
+	type SafeCallFilter = Everything;
+	type Aliasers = ();
+}
+
+pub type Barrier = (
+	TakeWeightCredit,
+	AllowTopLevelPaidExecutionFrom<Everything>,
+	AllowUnpaidExecutionFrom<Everything>,
+);
+
+pub type XcmOriginToTransactDispatchOrigin = (
+	SovereignSignedViaLocation<LocationToAccountId, RuntimeOrigin>,
+	RelayChainAsNative<RelayChainOrigin, RuntimeOrigin>,
+	SiblingParachainAsNative<cumulus_pallet_xcm::Origin, RuntimeOrigin>,
+	SignedAccountId32AsNative<RelayNetwork, RuntimeOrigin>,
+);
+
+impl cumulus_pallet_aura_ext::Config for Runtime {}
+
+pub struct AllTokensAreCreatedEqualToWeight(MultiLocation);
+impl WeightTrader for AllTokensAreCreatedEqualToWeight {
+	fn new() -> Self {
+		Self(MultiLocation::parent())
+	}
+
+	fn buy_weight(
+		&mut self,
+		weight: Weight,
+		payment: XcmAssets,
+		_context: &XcmContext,
+	) -> Result<XcmAssets, XcmError> {
+		let asset_id = payment.fungible.iter().next().expect("Payment must be something; qed").0;
+		let required = MultiAsset { id: *asset_id, fun: Fungible(weight.ref_time() as u128) };
+
+		if let MultiAsset { fun: _, id: Concrete(ref id) } = &required {
+			self.0 = *id;
+		}
+
+		let unused = payment.checked_sub(required).map_err(|_| XcmError::TooExpensive)?;
+		Ok(unused)
+	}
+
+	fn refund_weight(&mut self, weight: Weight, _context: &XcmContext) -> Option<MultiAsset> {
+		if weight.is_zero() {
+			None
+		} else {
+			Some((self.0, weight.ref_time() as u128).into())
+		}
+	}
+}
+
+pub type LocalOriginToLocation = SignedToAccountId32<RuntimeOrigin, AccountId, RelayNetwork>;
+
+impl pallet_xcm::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	/// No local origins on this chain are allowed to dispatch XCM sends.
+	type SendXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, ()>;
+	type XcmRouter = XcmRouter;
+	type ExecuteXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
+	type XcmExecuteFilter = Nothing;
+	type XcmExecutor = XcmExecutor<XcmConfig>;
+	type XcmTeleportFilter = Nothing;
+	type XcmReserveTransferFilter = Everything;
+	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+	type UniversalLocation = UniversalLocation;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
+	type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
+	type Currency = Balances;
+	type CurrencyMatcher = ();
+	type TrustedLockers = ();
+	type SovereignAccountOf = ();
+	type MaxLockers = ConstU32<8>;
+	type MaxRemoteLockConsumers = ConstU32<0>;
+	type RemoteLockConsumerIdentifier = ();
+	type WeightInfo = crate::weight::pallet_xcm::WeightInfo<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type ReachableDest = ReachableDest;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+}
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
@@ -1051,6 +1281,34 @@ impl_runtime_apis! {
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
 		}
 	}
+}
+
+struct CheckInherents;
+impl cumulus_pallet_parachain_system::CheckInherents<Block> for CheckInherents {
+	fn check_inherents(
+		block: &Block,
+		relay_state_proof: &cumulus_pallet_parachain_system::RelayChainStateProof,
+	) -> sp_inherents::CheckInherentsResult {
+		let relay_chain_slot = relay_state_proof
+			.read_slot()
+			.expect("Could not read the relay chain slot from the proof");
+
+		let inherent_data =
+			cumulus_primitives_timestamp::InherentDataProvider::from_relay_chain_slot_and_duration(
+				relay_chain_slot,
+				sp_std::time::Duration::from_secs(6),
+			)
+			.create_inherent_data()
+			.expect("Could not create the timestamp inherent data");
+
+		inherent_data.check_extrinsics(block)
+	}
+}
+
+cumulus_pallet_parachain_system::register_validate_block! {
+	Runtime = Runtime,
+	BlockExecutor = cumulus_pallet_aura_ext::BlockExecutor::<Runtime, Executive>,
+	CheckInherents = CheckInherents,
 }
 
 #[cfg(test)]
