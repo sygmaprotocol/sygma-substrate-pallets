@@ -40,6 +40,7 @@ use sygma_traits::{
 	VerifyingContractAddress,
 };
 use sygma_xcm_bridge::BridgeImpl;
+use sygma_bridge;
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation, Weight as XCMWeight};
 use xcm_builder::{
 	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter,
@@ -58,7 +59,7 @@ pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU32, ConstU64, ConstU8,
-		KeyOwnerProofSystem, Randomness, StorageInfo,
+		KeyOwnerProofSystem, Randomness, StorageInfo, OnUnbalanced, Currency
 	},
 	weights::{
 		constants::{
@@ -800,7 +801,7 @@ impl sygma_xcm_bridge::Config for Runtime {
 
 impl sygma_bridge_forwarder::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type SygmaBridge = BridgeImpl<Runtime>;
+	type SygmaBridge = SygmaBridge;
 	type XCMBridge = BridgeImpl<Runtime>;
 }
 

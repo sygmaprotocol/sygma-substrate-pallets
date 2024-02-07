@@ -51,7 +51,6 @@ construct_runtime!(
 		DmpQueue: cumulus_pallet_dmp_queue::{Pallet, Call, Storage, Event<T>},
 
 		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>},
-		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>},
 	}
 );
 
@@ -144,12 +143,6 @@ impl sygma_xcm_bridge::Config for Runtime {
 	type UniversalLocation = UniversalLocation;
 	type SelfLocation = SelfLocation;
 	type MinXcmFee = MinXcmFee;
-}
-
-impl sygma_bridge_forwarder::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type SygmaBridge = BridgeImpl<Runtime>;
-	type XCMBridge = BridgeImpl<Runtime>;
 }
 
 impl pallet_parachain_info::Config for Runtime {}
