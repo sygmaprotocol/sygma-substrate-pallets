@@ -36,7 +36,10 @@ targets = [
 # (https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)
 # these are the unlicensed dependencies
 exclude = ["xcm", "xcm-executor", "xcm-builder", "cumulus-primitives-core", "cumulus-primitives-utility", "parachains-common",
-    "polkadot-core-primitives", "polkadot-parachain-primitives", "polkadot-primitives", "ring", "cumulus-pallet-xcm"]
+    "polkadot-core-primitives", "polkadot-parachain-primitives", "polkadot-primitives", "ring", "cumulus-pallet-xcm",
+    "cumulus-pallet-aura-ext", "cumulus-pallet-dmp-queue", "cumulus-pallet-parachain-system", "cumulus-pallet-parachain-system-proc-macro",
+    "cumulus-pallet-xcmp-queue", "cumulus-primitives-parachain-inherent", "cumulus-primitives-timestamp", "cumulus-relay-chain-interface", "cumulus-test-relay-sproof-builder",
+    "Zlib"]
 # If true, metadata will be collected with `--all-features`. Note that this can't
 # be toggled off if true, if you want to conditionally enable `--all-features` it
 # is recommended to pass `--all-features` on the cmd line instead
