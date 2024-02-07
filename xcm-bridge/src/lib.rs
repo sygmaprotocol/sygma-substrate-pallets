@@ -570,7 +570,7 @@ pub mod pallet {
 			ParaB::execute_with(|| {
 				// Bob should get amount - fee * 2 bcs there are two times of xcm transfer
 				assert_eq!(ParaBalances::free_balance(&BOB), ENDOWED_BALANCE + amount - fee * 2);
-				assert_eq!(ParaBalances::free_balance(sibling_account(1)), 4u128);
+				assert_eq!(ParaBalances::free_balance(sibling_account(1)), amount - (amount - fee));
 			});
 		}
 

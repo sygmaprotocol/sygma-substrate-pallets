@@ -36,11 +36,10 @@ use sp_std::{marker::PhantomData, prelude::*, result, vec::Vec};
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sygma_traits::{
-	ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, ResourceId,
-	VerifyingContractAddress,
+	AssetTypeIdentifier, ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData,
+	ResourceId, VerifyingContractAddress,
 };
 use sygma_xcm_bridge::BridgeImpl;
-use sygma_bridge;
 use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation, Weight as XCMWeight};
 use xcm_builder::{
 	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter,
@@ -58,8 +57,8 @@ use frame_support::traits::{Everything, Nothing};
 pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU32, ConstU64, ConstU8,
-		KeyOwnerProofSystem, Randomness, StorageInfo, OnUnbalanced, Currency
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, Currency,
+		KeyOwnerProofSystem, OnUnbalanced, Randomness, StorageInfo,
 	},
 	weights::{
 		constants::{
@@ -793,7 +792,7 @@ impl sygma_xcm_bridge::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type AssetReservedChecker = sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>;
+	type AssetReservedChecker = NativeAssetTypeIdentifier<ParachainInfo>;
 	type UniversalLocation = UniversalLocation;
 	type SelfLocation = SelfLocation;
 	type MinXcmFee = MinXcmFee;
@@ -877,7 +876,7 @@ impl Config for XcmConfig {
 	type AssetTransactor = XCMAssetTransactor<
 		CurrencyTransactor,
 		FungiblesTransactor,
-		sygma_bridge_forwarder::NativeAssetTypeIdentifier<ParachainInfo>,
+		NativeAssetTypeIdentifier<ParachainInfo>,
 		SygmaBridgeForwarder,
 	>;
 	type OriginConverter = XcmOriginToTransactDispatchOrigin;
@@ -917,6 +916,25 @@ pub type XcmOriginToTransactDispatchOrigin = (
 );
 
 impl cumulus_pallet_aura_ext::Config for Runtime {}
+
+/// NativeAssetTypeIdentifier impl AssetTypeIdentifier for XCMAssetTransactor
+/// This impl is only for local mock purpose, the integrated parachain might have their own version
+pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
+impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
+	/// check if the given MultiAsset is a native asset
+	fn is_native_asset(asset: &MultiAsset) -> bool {
+		// currently there are two multilocations are considered as native asset:
+		// 1. integrated parachain native asset(MultiLocation::here())
+		// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+		let native_locations =
+			[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
+
+		match (&asset.id, &asset.fun) {
+			(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
+			_ => false,
+		}
+	}
+}
 
 pub struct AllTokensAreCreatedEqualToWeight(MultiLocation);
 impl WeightTrader for AllTokensAreCreatedEqualToWeight {
