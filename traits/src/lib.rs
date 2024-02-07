@@ -4,6 +4,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::dispatch::DispatchResult;
 use primitive_types::{H160, U256};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
@@ -60,4 +61,35 @@ pub trait DecimalConverter {
 	/// convert_from converts a u128 to MultiAsset when bridging to sygma substrate pallet.
 	/// Sygma relayer will always send asset in 18 decimal
 	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset>;
+}
+
+// when integrating with parachain, parachain team can implement their own version
+pub trait AssetTypeIdentifier {
+	fn is_native_asset(asset: &MultiAsset) -> bool;
+}
+
+pub trait TransactorForwarder {
+	fn xcm_transactor_forwarder(
+		sender: [u8; 32],
+		what: MultiAsset,
+		dest: MultiLocation,
+	) -> DispatchResult;
+	fn other_world_transactor_forwarder(
+		sender: [u8; 32],
+		what: MultiAsset,
+		dest: MultiLocation,
+	) -> DispatchResult;
+}
+
+pub trait Bridge {
+	fn transfer(
+		sender: [u8; 32],
+		asset: MultiAsset,
+		dest: MultiLocation,
+		max_weight: Option<Weight>,
+	) -> DispatchResult;
+}
+
+pub trait AssetReserveLocationParser {
+	fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation>;
 }

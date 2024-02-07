@@ -3,16 +3,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[macro_use]
+extern crate arrayref;
+
+pub use weights::*;
+
+pub use self::pallet::*;
+
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod migration;
 pub mod weights;
-pub use weights::*;
-
-#[macro_use]
-extern crate arrayref;
-
-pub use self::pallet::*;
 
 mod eip712;
 mod encode;
@@ -24,16 +25,15 @@ mod mock;
 #[allow(clippy::large_enum_variant)]
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::encode::{abi::encode_packed, SolidityDataType};
 	use codec::{Decode, Encode};
 	use ethabi::{encode as abi_encode, token::Token};
+	use frame_support::dispatch::RawOrigin;
 	use frame_support::{
 		dispatch::DispatchResult,
 		pallet_prelude::*,
 		traits::{ContainsPair, StorageVersion},
 		transactional, PalletId,
 	};
-
 	use frame_system::pallet_prelude::*;
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
@@ -42,16 +42,18 @@ pub mod pallet {
 		traits::{AccountIdConversion, Clear},
 		RuntimeDebug,
 	};
+	use sp_std::collections::btree_map::BTreeMap;
 	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
 	use xcm::latest::{prelude::*, MultiLocation};
 	use xcm_executor::traits::TransactAsset;
 
-	use crate::eip712;
-	use sp_std::collections::btree_map::BTreeMap;
 	use sygma_traits::{
-		ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData, FeeHandler,
-		MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
+		Bridge, ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData,
+		FeeHandler, MpcAddress, ResourceId, TransferType, VerifyingContractAddress,
 	};
+
+	use crate::eip712;
+	use crate::encode::{abi::encode_packed, SolidityDataType};
 
 	#[allow(dead_code)]
 	const LOG_TARGET: &str = "runtime::sygmabridge";
@@ -284,7 +286,7 @@ pub mod pallet {
 	{
 		/// Pause bridge, this would lead to bridge transfer failure before it being unpaused.
 		#[pallet::call_index(0)]
-		#[pallet::weight(<T as Config>::WeightInfo::pause_bridge())]
+		#[pallet::weight(< T as Config >::WeightInfo::pause_bridge())]
 		pub fn pause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -306,7 +308,7 @@ pub mod pallet {
 
 		/// Unpause bridge.
 		#[pallet::call_index(1)]
-		#[pallet::weight(<T as Config>::WeightInfo::unpause_bridge())]
+		#[pallet::weight(< T as Config >::WeightInfo::unpause_bridge())]
 		pub fn unpause_bridge(origin: OriginFor<T>, dest_domain_id: DomainID) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -331,7 +333,7 @@ pub mod pallet {
 
 		/// Mark an ECDSA address as a MPC account.
 		#[pallet::call_index(2)]
-		#[pallet::weight(<T as Config>::WeightInfo::set_mpc_address())]
+		#[pallet::weight(< T as Config >::WeightInfo::set_mpc_address())]
 		pub fn set_mpc_address(origin: OriginFor<T>, addr: MpcAddress) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -355,7 +357,7 @@ pub mod pallet {
 
 		/// Mark the give dest domainID with chainID to be enabled
 		#[pallet::call_index(3)]
-		#[pallet::weight(<T as Config>::WeightInfo::register_domain())]
+		#[pallet::weight(< T as Config >::WeightInfo::register_domain())]
 		pub fn register_domain(
 			origin: OriginFor<T>,
 			dest_domain_id: DomainID,
@@ -388,7 +390,7 @@ pub mod pallet {
 
 		/// Mark the give dest domainID with chainID to be disabled
 		#[pallet::call_index(4)]
-		#[pallet::weight(<T as Config>::WeightInfo::unregister_domain())]
+		#[pallet::weight(< T as Config >::WeightInfo::unregister_domain())]
 		pub fn unregister_domain(
 			origin: OriginFor<T>,
 			dest_domain_id: DomainID,
@@ -430,7 +432,7 @@ pub mod pallet {
 		/// Initiates a transfer.
 		#[transactional]
 		#[pallet::call_index(5)]
-		#[pallet::weight(<T as Config>::WeightInfo::deposit())]
+		#[pallet::weight(< T as Config >::WeightInfo::deposit())]
 		pub fn deposit(
 			origin: OriginFor<T>,
 			asset: Box<MultiAsset>,
@@ -532,7 +534,7 @@ pub mod pallet {
 		/// This method is used to trigger the process for retrying failed deposits on the MPC side.
 		#[transactional]
 		#[pallet::call_index(6)]
-		#[pallet::weight(<T as Config>::WeightInfo::retry())]
+		#[pallet::weight(< T as Config >::WeightInfo::retry())]
 		pub fn retry(
 			origin: OriginFor<T>,
 			deposit_on_block_height: u128,
@@ -566,7 +568,7 @@ pub mod pallet {
 		/// Executes a batch of deposit proposals (only if signature is signed by MPC).
 		#[transactional]
 		#[pallet::call_index(7)]
-		#[pallet::weight(<T as Config>::WeightInfo::execute_proposal(proposals.len() as u32))]
+		#[pallet::weight(< T as Config >::WeightInfo::execute_proposal(proposals.len() as u32))]
 		pub fn execute_proposal(
 			_origin: OriginFor<T>,
 			proposals: Vec<Proposal>,
@@ -628,7 +630,7 @@ pub mod pallet {
 
 		/// Pause all registered bridges
 		#[pallet::call_index(8)]
-		#[pallet::weight(<T as Config>::WeightInfo::pause_all_bridges())]
+		#[pallet::weight(< T as Config >::WeightInfo::pause_all_bridges())]
 		pub fn pause_all_bridges(origin: OriginFor<T>) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -654,7 +656,7 @@ pub mod pallet {
 
 		/// Unpause all registered bridges
 		#[pallet::call_index(9)]
-		#[pallet::weight(<T as Config>::WeightInfo::unpause_all_bridges())]
+		#[pallet::weight(< T as Config >::WeightInfo::unpause_all_bridges())]
 		pub fn unpause_all_bridges(origin: OriginFor<T>) -> DispatchResult {
 			ensure!(
 				<sygma_access_segregator::pallet::Pallet<T>>::has_access(
@@ -678,6 +680,22 @@ pub mod pallet {
 			};
 			Self::deposit_event(Event::AllBridgeUnpaused { sender });
 
+			Ok(())
+		}
+	}
+
+	impl<T: Config> Bridge for Pallet<T>
+	where
+		<T as frame_system::Config>::AccountId: From<[u8; 32]> + Into<[u8; 32]>,
+	{
+		fn transfer(
+			sender: [u8; 32],
+			asset: MultiAsset,
+			dest: MultiLocation,
+			_max_weight: Option<Weight>,
+		) -> DispatchResult {
+			let sender_origin = OriginFor::<T>::from(RawOrigin::Signed(sender.into()));
+			Pallet::<T>::deposit(sender_origin, Box::from(asset), Box::from(dest))?;
 			Ok(())
 		}
 	}
@@ -724,9 +742,9 @@ pub mod pallet {
 		/// Parse proposals and construct the original signing message
 		pub fn construct_ecdsa_signing_proposals_data(proposals: &Vec<Proposal>) -> [u8; 32] {
 			let proposals_typehash = keccak_256(
-				"Proposals(Proposal[] proposals)Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
-					.as_bytes(),
-			);
+                "Proposals(Proposal[] proposals)Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
+                    .as_bytes(),
+            );
 			let proposal_typehash = keccak_256(
 				"Proposal(uint8 originDomainID,uint64 depositNonce,bytes32 resourceID,bytes data)"
 					.as_bytes(),
@@ -932,20 +950,6 @@ pub mod pallet {
 
 	#[cfg(test)]
 	mod test {
-		use crate as bridge;
-		use crate::{
-			mock::{AstrAssetId, AstrLocation, AstrResourceId},
-			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
-			Proposal,
-		};
-		use bridge::mock::{
-			assert_events, new_test_ext, slice_to_generalkey, AccessSegregator, Assets, Balances,
-			BridgeAccountNative, BridgeAccountOtherTokens, BridgePalletIndex, NativeLocation,
-			NativeResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler,
-			SygmaBridge, SygmaFeeHandlerRouter, SygmaPercentageFeeHandler, TreasuryAccount,
-			UsdtAssetId, UsdtLocation, UsdtResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID,
-			ENDOWED_BALANCE,
-		};
 		use codec::{self, Encode};
 		use frame_support::{
 			assert_noop, assert_ok, crypto::ecdsa::ECDSAExt,
@@ -955,9 +959,25 @@ pub mod pallet {
 		use primitive_types::U256;
 		use sp_core::{ecdsa, ByteArray, Pair};
 		use sp_std::{boxed::Box, vec};
-		use sygma_fee_handler_router::FeeHandlerType;
-		use sygma_traits::{DomainID, MpcAddress, TransferType};
 		use xcm::latest::prelude::*;
+
+		use bridge::mock::{
+			assert_events, new_test_ext, slice_to_generalkey, AccessSegregator, Assets, Balances,
+			BridgeAccountNative, BridgeAccountOtherTokens, BridgePalletIndex, NativeLocation,
+			NativeResourceId, Runtime, RuntimeEvent, RuntimeOrigin as Origin, SygmaBasicFeeHandler,
+			SygmaBridge, SygmaFeeHandlerRouter, SygmaPercentageFeeHandler, TreasuryAccount,
+			UsdtAssetId, UsdtLocation, UsdtResourceId, ALICE, ASSET_OWNER, BOB, DEST_DOMAIN_ID,
+			ENDOWED_BALANCE,
+		};
+		use sygma_fee_handler_router::FeeHandlerType;
+		use sygma_traits::{Bridge, DomainID, MpcAddress, TransferType};
+
+		use crate as bridge;
+		use crate::{
+			mock::{AstrAssetId, AstrLocation, AstrResourceId},
+			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
+			Proposal,
+		};
 
 		#[test]
 		fn get_token_reserved_account_test() {
@@ -1313,13 +1333,87 @@ pub mod pallet {
 		}
 
 		#[test]
+		fn transfer_wrap_deposit_should_work() {
+			new_test_ext().execute_with(|| {
+				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
+				let fee = 1_000_000_000_000u128; // 1 with 12 decimals
+				let amount = 200_000_000_000_000u128; // 200 with 12 decimals
+				let final_amount_in_deposit_event = 199_000_000_000_000_000_000; // 200 - 1 then adjust to 18 decimals
+
+				assert_ok!(SygmaBridge::register_domain(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					U256::from(1)
+				));
+				assert_ok!(SygmaBasicFeeHandler::set_fee(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					fee
+				));
+				assert_ok!(SygmaFeeHandlerRouter::set_fee_handler(
+					Origin::root(),
+					DEST_DOMAIN_ID,
+					Box::new(NativeLocation::get().into()),
+					FeeHandlerType::BasicFeeHandler,
+				));
+				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
+
+				let asset: MultiAsset = (Concrete(NativeLocation::get()), Fungible(amount)).into();
+				let dest: MultiLocation = MultiLocation {
+					parents: 0,
+					interior: X2(
+						slice_to_generalkey(b"ethereum recipient"),
+						slice_to_generalkey(&[1]),
+					),
+				};
+
+				// Call transfer instead of deposit
+				assert_ok!(SygmaBridge::transfer(ALICE.into(), asset.clone(), dest, None));
+
+				// Check balances
+				assert_eq!(Balances::free_balance(ALICE), ENDOWED_BALANCE - amount);
+				assert_eq!(
+					Balances::free_balance(AccountId::new(
+						SygmaBridge::get_token_reserved_account(&NativeLocation::get().into())
+							.unwrap()
+					)),
+					amount - fee
+				);
+				assert_eq!(Balances::free_balance(TreasuryAccount::get()), fee);
+				// Check event
+				assert_events(vec![
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::Deposit {
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						deposit_nonce: 0,
+						sender: ALICE,
+						transfer_type: TransferType::FungibleTransfer,
+						deposit_data: SygmaBridge::create_deposit_data(
+							final_amount_in_deposit_event,
+							b"ethereum recipient".to_vec(),
+						),
+						handler_response: vec![],
+					}),
+					RuntimeEvent::SygmaBridge(SygmaBridgeEvent::FeeCollected {
+						fee_payer: ALICE,
+						dest_domain_id: DEST_DOMAIN_ID,
+						resource_id: NativeResourceId::get(),
+						fee_amount: fee,
+						fee_asset_id: NativeLocation::get().into(),
+					}),
+				]);
+			})
+		}
+
+		#[test]
 		fn hex_zero_padding_32_test() {
 			new_test_ext().execute_with(|| {
 				assert_eq!(
 					SygmaBridge::hex_zero_padding_32(100).to_vec(),
 					vec![
 						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 100
+						0, 0, 0, 0, 0, 0, 100,
 					]
 				);
 				let recipient = String::from("0x95ECF5ae000e0fe0e0dE63aDE9b7D82a372038b4");
@@ -1327,7 +1421,7 @@ pub mod pallet {
 					SygmaBridge::hex_zero_padding_32(recipient.len() as u128).to_vec(),
 					vec![
 						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 42
+						0, 0, 0, 0, 0, 0, 42,
 					]
 				);
 			})
@@ -1347,7 +1441,7 @@ pub mod pallet {
 						0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 						0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 48, 120, 57, 53, 69, 67, 70,
 						53, 97, 101, 48, 48, 48, 101, 48, 102, 101, 48, 101, 48, 100, 69, 54, 51,
-						97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52
+						97, 68, 69, 57, 98, 55, 68, 56, 50, 97, 51, 55, 50, 48, 51, 56, 98, 52,
 					]
 				);
 			})
@@ -1413,7 +1507,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					amount - fee
 				);
@@ -1810,7 +1904,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					400_000_000_000_000
 				);
@@ -1927,7 +2021,7 @@ pub mod pallet {
 				assert_eq!(Assets::balance(UsdtAssetId::get(), &BOB), 0);
 				assert!(SygmaBridge::verify_by_mpc_address(
 					final_message,
-					proposals_with_valid_signature.encode()
+					proposals_with_valid_signature.encode(),
 				));
 				assert_ok!(SygmaBridge::execute_proposal(
 					Origin::signed(ALICE),
@@ -1956,7 +2050,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					200_000_000_000_000
 				);
@@ -2296,7 +2390,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					122_456_789_123_456_789_123
 				);
@@ -2369,7 +2463,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&AstrLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					amount_astr_asset - fee_astr_asset
 				);
@@ -2404,7 +2498,8 @@ pub mod pallet {
 
 				// deposit astr asset which has 24 decimal, extreme small amount edge case
 				let amount_astr_asset_extreme_small_amount = 100_000; // 0.000000000000000000100000 astr
-				let fee_astr_asset_extreme_small_amount = 1; // 0.000000000000000000000001 astr
+				let fee_astr_asset_extreme_small_amount = 1;
+				// 0.000000000000000000000001 astr
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -2451,7 +2546,8 @@ pub mod pallet {
 					U256::from(1)
 				));
 				let fee = 1_000_000_000_000u128; // 1 token in 12 decimals
-				let init_deposit = 10_000_000_000_000u128; // 12 token in 12 decimal
+				let init_deposit = 10_000_000_000_000u128;
+				// 12 token in 12 decimal
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
@@ -2545,7 +2641,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&UsdtLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					ENDOWED_BALANCE
 				);
@@ -2600,7 +2696,7 @@ pub mod pallet {
 						AccountId::new(
 							SygmaBridge::get_token_reserved_account(&AstrLocation::get().into())
 								.unwrap()
-						)
+						),
 					),
 					ENDOWED_BALANCE
 				);
@@ -3082,7 +3178,8 @@ pub mod pallet {
 
 				// test fee bound: fee rate 5%
 				let fee_lower_bound = 100_000_000_000_000u128; // 100
-				let fee_upper_bound = 1_000_000_000_000_000u128; // 1000
+				let fee_upper_bound = 1_000_000_000_000_000u128;
+				// 1000
 				assert_ok!(SygmaPercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					DEST_DOMAIN_ID,

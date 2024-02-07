@@ -34,11 +34,19 @@ xcm = { package = "staging-xcm", git = "https://github.com/paritytech/polkadot-s
 xcm-builder = { package = "staging-xcm-builder", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 xcm-executor = { package = "staging-xcm-executor", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 
+# Cumulus
+cumulus-primitives-core = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-pallet-xcm = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+cumulus-primitives-utility = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
+
+# Local
 sygma-traits = { path = "../traits", default-features = false }
 sygma-access-segregator = { path = "../access-segregator", default-features = false }
 sygma-basic-feehandler = { path = "../basic-fee-handler", default-features = false }
 sygma-percentage-feehandler = { path = "../percentage-fee-handler", default-features = false }
 sygma-fee-handler-router = { path = "../fee-handler-router", default-features = false }
+sygma-bridge-forwarder = { path = "../bridge-forwarder", default-features = false }
+sygma-xcm-bridge =  { path = "../xcm-bridge", default-features = false }
 
 [dev-dependencies]
 assert_matches = "1.4.0"
@@ -62,6 +70,7 @@ polkadot-parachain-primitives = { git = "https://github.com/paritytech/polkadot-
 
 parachains-common = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 
+# Local
 sygma-basic-feehandler = { path = "../basic-fee-handler" }
 sygma-traits = { path = "../traits" }
 
@@ -88,6 +97,9 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
+	"cumulus-primitives-core/std",
+	"cumulus-primitives-utility/std",
+	"cumulus-pallet-xcm/std",
 	"xcm/std",
 	"xcm-builder/std",
 	"xcm-executor/std",
@@ -98,5 +110,7 @@ std = [
 	"sygma-basic-feehandler/std",
 	"sygma-percentage-feehandler/std",
 	"sygma-fee-handler-router/std",
+	"sygma-bridge-forwarder/std",
+	"sygma-xcm-bridge/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
