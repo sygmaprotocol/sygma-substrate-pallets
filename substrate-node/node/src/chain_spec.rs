@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 use cumulus_primitives_core::ParaId;
-use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GrandpaConfig, ParachainInfoConfig,
-	RuntimeGenesisConfig, Signature, SudoConfig, SystemConfig, WASM_BINARY,
-};
+use node_template_runtime::{AccountId, AuraConfig, BalancesConfig, CollatorSelectionConfig, GrandpaConfig, ParachainInfoConfig, ParachainSystemConfig, PolkadotXcmConfig, RuntimeGenesisConfig, SessionConfig, Signature, SudoConfig, SystemConfig, WASM_BINARY};
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_consensus_grandpa::AuthorityId as GrandpaId;
+use sp_consensus_grandpa::{AuthorityId as GrandpaId, AuthorityId};
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
@@ -35,9 +32,9 @@ where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Generate an Aura authority key.
-pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
-	(get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
+/// Generate an Aura authority key with AccountID.
+pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId, AccountId) {
+	(get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s), get_account_id_from_seed::<sr25519::Public>(s))
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
@@ -128,10 +125,14 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	))
 }
 
+pub fn session_keys(keys: AuraId, grandpa_keys: GrandpaId) -> node_template_runtime::opaque::SessionKeys {
+	node_template_runtime::opaque::SessionKeys { aura: keys, grandpa: grandpa_keys }
+}
+
 /// Configure initial storage state for FRAME modules.
 fn testnet_genesis(
 	wasm_binary: &[u8],
-	initial_authorities: Vec<(AuraId, GrandpaId)>,
+	initial_authorities: Vec<(AuraId, GrandpaId, AccountId)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
@@ -148,24 +149,37 @@ fn testnet_genesis(
 			// Configure endowed accounts with initial balance of 1 << 60.
 			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
 		},
-		aura: AuraConfig {
-			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
-		},
-		grandpa: GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
-			..Default::default()
-		},
 		sudo: SudoConfig {
 			// Assign network admin rights.
 			key: Some(root_key),
 		},
 		parachain_info: ParachainInfoConfig { parachain_id: id, ..Default::default() },
+		collator_selection: CollatorSelectionConfig {
+			desired_candidates: 32,
+			candidacy_bond: 1_000_000_000_000 * 16,
+			invulnerables: initial_authorities.iter().map(|x| x.2.clone()).collect::<Vec<_>>(),
+		},
+		session: SessionConfig {
+			keys: initial_authorities
+				.iter()
+				.cloned()
+				.map(|(aura, grandpa, acc)| {
+					(
+						acc.clone(),              // account id
+						acc.clone(),              // validator id
+						session_keys(aura, grandpa), // session keys
+					)
+				})
+				.collect(),
+		},
+		aura: Default::default(),
+		aura_ext: Default::default(),
+		grandpa: Default::default(),
 		parachain_system: Default::default(),
-		polkadot_xcm: node_template_runtime::PolkadotXcmConfig {
+		polkadot_xcm: PolkadotXcmConfig {
 			safe_xcm_version: Some(3),
 			..Default::default()
 		},
 		transaction_payment: Default::default(),
-		aura_ext: Default::default(),
 	}
 }
