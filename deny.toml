@@ -38,8 +38,11 @@ targets = [
 exclude = ["xcm", "xcm-executor", "xcm-builder", "cumulus-primitives-core", "cumulus-primitives-utility", "parachains-common",
     "polkadot-core-primitives", "polkadot-parachain-primitives", "polkadot-primitives", "ring", "cumulus-pallet-xcm",
     "cumulus-pallet-aura-ext", "cumulus-pallet-dmp-queue", "cumulus-pallet-parachain-system", "cumulus-pallet-parachain-system-proc-macro",
-    "cumulus-pallet-xcmp-queue", "cumulus-primitives-parachain-inherent", "cumulus-primitives-timestamp", "cumulus-relay-chain-interface", "cumulus-test-relay-sproof-builder",
-    "Zlib"]
+    "cumulus-pallet-xcmp-queue", "cumulus-primitives-parachain-inherent", "cumulus-primitives-timestamp", "cumulus-relay-chain-interface", "cumulus-test-relay-sproof-builder", "Zlib",
+    "cumulus-client-cli", "cumulus-client-collator", "cumulus-client-consensus-aura", "cumulus-client-consensus-common", "cumulus-client-consensus-proposer", "cumulus-client-network",
+    "cumulus-client-pov-recovery", "cumulus-client-service", "cumulus-primitives-aura", "cumulus-relay-chain-inprocess-interface", "cumulus-relay-chain-minimal-node",
+    "cumulus-relay-chain-rpc-interface",
+]
 # If true, metadata will be collected with `--all-features`. Note that this can't
 # be toggled off if true, if you want to conditionally enable `--all-features` it
 # is recommended to pass `--all-features` on the cmd line instead
@@ -116,7 +119,8 @@ allow = [
     "BSD-3-Clause",
     "CC0-1.0",
     "BSD-2-Clause",
-    "Apache-2.0 WITH LLVM-exception"
+    "Apache-2.0 WITH LLVM-exception",
+    "Zlib"
 ]
 # List of explicitly disallowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses

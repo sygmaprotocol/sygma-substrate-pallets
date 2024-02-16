@@ -18,7 +18,7 @@ test-benchmark:
 # license-check Checks for missing license crates
 license-check:
 	@echo "  >  \033[Checking for license headers...\033[0m "
-	cargo deny check license
+	cargo-deny -L error check license
 
 # build the binary locally
 build:

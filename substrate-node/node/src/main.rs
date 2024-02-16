@@ -7,7 +7,7 @@
 mod chain_spec;
 #[macro_use]
 mod service;
-mod benchmarking;
+// mod benchmarking;
 mod cli;
 mod command;
 mod rpc;
