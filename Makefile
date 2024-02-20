@@ -63,3 +63,12 @@ build-subbridge-e2e-test-image:
 # run the preconfigured e2e subbridge docker image
 start-subbridge-e2e-image:
 	 docker run -p 9944:9944 -it sygma_substrate_pallets_subbridge_e2e_preconfigured
+
+##################### Zombienet ##################
+# prepare parachain-node binary and polkadot-sdk binary
+build-zombienet: build
+	./zombienet/scripts/zombienet_prepare.sh
+
+# launch the parachain node in local zombienet with relay chain and parachain
+start-zombienet:
+	./zombienet/zombienet-macos spawn -p native ./zombienet/local_zombienet.toml

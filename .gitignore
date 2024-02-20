@@ -11,3 +11,8 @@ chain-spec.json
 .idea
 
 .env
+
+polkadot
+polkadot-execute-worker
+polkadot-prepare-worker
+zombienet-macos
