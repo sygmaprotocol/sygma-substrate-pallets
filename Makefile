@@ -71,4 +71,4 @@ build-zombienet: build
 
 # launch the parachain node in local zombienet with relay chain and parachain
 start-zombienet:
-	./zombienet/zombienet-macos spawn -p native ./zombienet/local_zombienet.toml
+	./zombienet/zombienet spawn -p native ./zombienet/local_zombienet.toml
