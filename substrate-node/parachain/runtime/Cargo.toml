@@ -77,16 +77,16 @@ cumulus-pallet-parachain-system = { git = "https://github.com/paritytech/polkado
 cumulus-pallet-aura-ext = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 
 # Local Dependencies
-pallet-parachain-info = { path = "../../parachain-info", default-features = false }
-sygma-basic-feehandler = { path = "../../basic-fee-handler", default-features = false }
-sygma-percentage-feehandler = { path = "../../percentage-fee-handler", default-features = false }
-sygma-traits = { path = "../../traits", default-features = false }
-sygma-bridge = { path = "../../bridge", default-features = false }
-sygma-access-segregator = { path = "../../access-segregator", default-features = false }
-sygma-fee-handler-router = { path = "../../fee-handler-router", default-features = false }
-sygma-runtime-api = { path = "../../runtime-api", default-features = false }
-sygma-bridge-forwarder = { path = "../../bridge-forwarder", default-features = false }
-sygma-xcm-bridge = { path = "../../xcm-bridge", default-features = false }
+pallet-parachain-info = { path = "../../../parachain-info", default-features = false }
+sygma-basic-feehandler = { path = "../../../basic-fee-handler", default-features = false }
+sygma-percentage-feehandler = { path = "../../../percentage-fee-handler", default-features = false }
+sygma-traits = { path = "../../../traits", default-features = false }
+sygma-bridge = { path = "../../../bridge", default-features = false }
+sygma-access-segregator = { path = "../../../access-segregator", default-features = false }
+sygma-fee-handler-router = { path = "../../../fee-handler-router", default-features = false }
+sygma-runtime-api = { path = "../../../runtime-api", default-features = false }
+sygma-bridge-forwarder = { path = "../../../bridge-forwarder", default-features = false }
+sygma-xcm-bridge = { path = "../../../xcm-bridge", default-features = false }
 
 [features]
 default = [ "std" ]

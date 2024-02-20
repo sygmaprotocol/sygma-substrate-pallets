@@ -8,9 +8,9 @@ NODE_DB_DIR=${PWD}/db
 
 # Run dev node
 echo "start the dev node up..."
-./node-template --dev --rpc-external --base-path "$NODE_DB_DIR" > substrate_node.log 2>&1 &
+./standalone-node-template --dev --rpc-external --base-path "$NODE_DB_DIR" > substrate_node.log 2>&1 &
 
-echo "waiting for dev nodes start..."
+echo "waiting for dev node start..."
 sleep 60
 
 SETUP_SCRIPTS_DIR=${PWD}
@@ -25,11 +25,11 @@ sleep 10
 
 # Run chain snapshot after setup
 echo "set up is done, now export the chain state..."
-./node-template export-state > $CHAINSPECFILE
+./standalone-node-template export-state > $CHAINSPECFILE
 
 # Stop the node
 echo "stopping the dev node..."
-nPid=`pgrep -f "node-template"`
+nPid=`pgrep -f "standalone-node-template"`
 if [ "$nPid" ]
 then
   echo "terminating dev node"

@@ -11,7 +11,7 @@ FROM ubuntu:20.04
 WORKDIR /node
 
 # Copy the node binary.
-COPY --from=builder /code/target/release/node-template .
+COPY --from=builder /code/target/release/standalone-node-template .
 
 # Install root certs, see: https://github.com/paritytech/substrate/issues/9984
 RUN apt update && \
@@ -25,4 +25,4 @@ EXPOSE 9944
 # JSON-RPC HTTP server
 EXPOSE 9933
 
-ENTRYPOINT ["./node-template"]
+ENTRYPOINT ["./standalone-node-template"]

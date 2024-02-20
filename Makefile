@@ -20,18 +20,20 @@ license-check:
 	@echo "  >  \033[Checking for license headers...\033[0m "
 	cargo-deny -L error check license
 
-# build the binary locally
+# build the binaries locally
+# this will build both standalone node binary and the parachain node binary
 build:
 	cargo build --release
 
-# build the binary locally with benchmark
+# build the binaries locally with benchmark
+# this will build both standalone node binary and the parachain node binary
 build-benchmark:
 	cargo build --release --features runtime-benchmarks
 
 ############################## Local node ############################
-# launch the local node in dev mode
+# launch the standalone node in dev mode
 start-dev:
-	./target/release/node-template --dev --rpc-external
+	./target/release/standalone-node-template --dev --rpc-external
 
 # run setup js script to setup the local substrate node
 # substrate node is required, run make start-dev first
