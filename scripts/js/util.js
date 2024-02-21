@@ -322,15 +322,15 @@ async function registerDomain(api, domainID, chainID, finalization, sudo) {
 }
 
 function getUSDCAssetId(api) {
-    return api.createType('XcmV3MultiassetAssetId', {
-        Concrete: api.createType('XcmV3MultiLocation', {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('XcmV3Junctions', {
+            interior: api.createType('StagingXcmV3Junctions', {
                 X3: [
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
                     }),
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         // 0x7379676d61 is general key of USDC defined in sygma substrate pallet runtime for testing
                         // see UsdcLocation definition in runtime.rs
                         GeneralKey: {
@@ -338,7 +338,7 @@ function getUSDCAssetId(api) {
                             data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
                         }
                     }),
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         // 0x75736463 is general key of USDC defined in sygma substrate pallet runtime for testing
                         // see UsdcLocation definition in runtime.rs
                         GeneralKey: {
@@ -353,21 +353,21 @@ function getUSDCAssetId(api) {
 }
 
 function getERC20TSTAssetId(api) {
-    return api.createType('XcmV3MultiassetAssetId', {
-        Concrete: api.createType('XcmV3MultiLocation', {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('XcmV3Junctions', {
+            interior: api.createType('StagingXcmV3Junctions', {
                 X3: [
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
                     }),
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         GeneralKey: {
                             length: 5,
                             data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
                         } // sygma
                     }),
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         GeneralKey: {
                             length: 8,
                             data: '0x6572633230747374000000000000000000000000000000000000000000000000'
@@ -380,21 +380,21 @@ function getERC20TSTAssetId(api) {
 }
 
 function getERC20TSTD20AssetId(api) {
-    return api.createType('XcmV3MultiassetAssetId', {
-        Concrete: api.createType('XcmV3MultiLocation', {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
             parents: 1,
-            interior: api.createType('XcmV3Junctions', {
+            interior: api.createType('StagingXcmV3Junctions', {
                 X3: [
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         Parachain: api.createType('Compact<U32>', 2004)
                     }),
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         GeneralKey: {
                             length: 5,
                             data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
                         } // sygma
                     }),
-                    api.createType('XcmV3Junction', {
+                    api.createType('StagingXcmV3Junction', {
                         GeneralKey: {
                             length: 11,
                             data: '0x6572633230747374643230000000000000000000000000000000000000000000'
@@ -407,10 +407,10 @@ function getERC20TSTD20AssetId(api) {
 }
 
 function getNativeAssetId(api) {
-    return api.createType('XcmV3MultiassetAssetId', {
-        Concrete: api.createType('XcmV3MultiLocation', {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
             parents: 0,
-            interior: api.createType('XcmV3Junctions', 'Here')
+            interior: api.createType('StagingXcmV3Junctions', 'Here')
         })
     })
 }
