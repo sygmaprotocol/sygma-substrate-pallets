@@ -1,0 +1,23 @@
+[relaychain]
+default_image = "docker.io/parity/polkadot:latest"
+default_command = "./zombienet/polkadot"
+default_args = [ "-lparachain=debug" ]
+
+chain = "rococo-local"
+
+  [[relaychain.nodes]]
+  name = "relaychain-alice"
+  validator = true
+
+  [[relaychain.nodes]]
+  name = "relaychain-bob"
+  validator = true
+
+[[parachains]]
+id = 1000
+
+  [parachains.collator]
+  name = "parachain-01"
+  image = "docker.io/parity/polkadot-parachain:latest"
+  command = "./target/release/parachain-node-template"
+  args = ["-lparachain=debug"]

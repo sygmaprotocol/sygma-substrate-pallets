@@ -11,11 +11,11 @@
 use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
-use node_template_runtime::{opaque::Block, AccountId, Balance, Nonce};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
+use standalone_template_runtime::{opaque::Block, AccountId, Balance, Nonce};
 
 pub use sc_rpc_api::DenyUnsafe;
 

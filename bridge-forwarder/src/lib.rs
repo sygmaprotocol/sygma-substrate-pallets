@@ -6,7 +6,7 @@
 pub use self::pallet::*;
 
 #[cfg(test)]
-pub mod mock;
+mod mock;
 pub mod xcm_asset_transactor;
 
 #[frame_support::pallet]

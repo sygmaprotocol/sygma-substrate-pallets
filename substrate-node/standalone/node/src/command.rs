@@ -8,10 +8,10 @@ use crate::{
 	service,
 };
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
-use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
 use sc_cli::SubstrateCli;
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
+use standalone_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
 
 #[cfg(feature = "try-runtime")]
 use try_runtime_cli::block_building_info::timestamp_with_aura_info;

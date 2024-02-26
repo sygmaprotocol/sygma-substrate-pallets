@@ -10,8 +10,10 @@ members = [
     "traits",
     "runtime-api",
     "rpc",
-    "substrate-node/node",
-    "substrate-node/runtime",
+    "substrate-node/parachain/node",
+    "substrate-node/parachain/runtime",
+    "substrate-node/standalone/node",
+    "substrate-node/standalone/runtime",
     "parachain-info",
     "bridge-forwarder",
     "xcm-bridge"

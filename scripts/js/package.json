@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
-    "@polkadot/api": "^10.8.1",
-    "@polkadot/api-augment": "^10.7.3",
-    "@polkadot/keyring": "^10.1.13",
-    "@polkadot/rpc-provider": "^10.8.1",
-    "@polkadot/types": "^10.7.3",
-    "@polkadot/util": "^10.1.13",
-    "@polkadot/util-crypto": "^10.1.13",
+    "@polkadot/api": "^10.11.2",
+    "@polkadot/api-augment": "^10.11.2",
+    "@polkadot/keyring": "^12.6.2",
+    "@polkadot/rpc-provider": "^10.11.2",
+    "@polkadot/types": "^10.11.2",
+    "@polkadot/util": "^12.6.2",
+    "@polkadot/util-crypto": "^12.6.2",
     "bn.js": "^5.2.1",
     "dotenv": "^16.0.3"
   }

@@ -1,5 +1,5 @@
 [package]
-name = "node-template-runtime"
+name = "standalone-template-runtime"
 version = "4.0.3-dev"
 description = "A fresh FRAME-based Substrate node, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
@@ -24,14 +24,14 @@ fixed = {version = "1.23.0", default-features = false }
 pallet-assets = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 pallet-aura = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 pallet-balances = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
-frame-support = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 pallet-grandpa = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 pallet-insecure-randomness-collective-flip = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 pallet-sudo = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
-frame-system = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
-frame-try-runtime = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", optional = true, branch = "release-polkadot-v1.2.0" }
 pallet-timestamp = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 pallet-transaction-payment = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
+frame-support = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
+frame-system = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
+frame-try-runtime = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", optional = true, branch = "release-polkadot-v1.2.0" }
 frame-executive = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 sp-api = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 sp-block-builder = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
@@ -61,14 +61,14 @@ xcm-executor = { package = "staging-xcm-executor", git = "https://github.com/par
 polkadot-parachain-primitives = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0", default-features = false }
 
 # Local Dependencies
-sygma-basic-feehandler = { path = "../../basic-fee-handler", default-features = false }
-sygma-percentage-feehandler = { path = "../../percentage-fee-handler", default-features = false }
-sygma-traits = { path = "../../traits", default-features = false }
-sygma-bridge = { path = "../../bridge", default-features = false }
-sygma-access-segregator = { path = "../../access-segregator", default-features = false }
-sygma-fee-handler-router = { path = "../../fee-handler-router", default-features = false }
-sygma-runtime-api = { path = "../../runtime-api", default-features = false }
-pallet-parachain-info = { path = "../../parachain-info", default-features = false }
+sygma-basic-feehandler = { path = "../../../basic-fee-handler", default-features = false }
+sygma-percentage-feehandler = { path = "../../../percentage-fee-handler", default-features = false }
+sygma-traits = { path = "../../../traits", default-features = false }
+sygma-bridge = { path = "../../../bridge", default-features = false }
+sygma-access-segregator = { path = "../../../access-segregator", default-features = false }
+sygma-fee-handler-router = { path = "../../../fee-handler-router", default-features = false }
+sygma-runtime-api = { path = "../../../runtime-api", default-features = false }
+pallet-parachain-info = { path = "../../../parachain-info", default-features = false }
 
 [build-dependencies]
 substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }

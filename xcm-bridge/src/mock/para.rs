@@ -5,7 +5,10 @@ use std::marker::PhantomData;
 use std::result;
 
 use cumulus_primitives_core::{ChannelStatus, GetChannelInfo, ParaId, Weight};
+
 use frame_support::pallet_prelude::Get;
+
+use crate as sygma_xcm_bridge;
 use frame_support::traits::{ConstU16, ConstU64, Nothing};
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -33,9 +36,6 @@ use xcm_executor::{
 	Assets as XcmAssets, Config, XcmExecutor,
 };
 
-use crate as sygma_xcm_bridge;
-use crate::BridgeImpl;
-
 use super::ParachainXcmRouter;
 
 construct_runtime!(
@@ -51,7 +51,6 @@ construct_runtime!(
 		DmpQueue: cumulus_pallet_dmp_queue::{Pallet, Call, Storage, Event<T>},
 
 		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>},
-		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>},
 	}
 );
 
@@ -144,12 +143,6 @@ impl sygma_xcm_bridge::Config for Runtime {
 	type UniversalLocation = UniversalLocation;
 	type SelfLocation = SelfLocation;
 	type MinXcmFee = MinXcmFee;
-}
-
-impl sygma_bridge_forwarder::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type SygmaBridge = BridgeImpl<Runtime>;
-	type XCMBridge = BridgeImpl<Runtime>;
 }
 
 impl pallet_parachain_info::Config for Runtime {}
