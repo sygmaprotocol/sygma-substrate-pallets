@@ -49,15 +49,29 @@ const supportedDestDomains = [
 const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
 const TransferReserveAccount = "5EMepC39b7E2zfM9g6CkPp8KCAxGTh7D4w4T2tFjmjpd4tPw";
 
+// this script take one param as the ss58Format, default is 42 if not provided
+// other param is injected by env var:
+// process.env.PALLETWSENDPOINT: pallet ws endpoint, default is ws://127.0.0.1:9944
+// process.env.SUBSTRATE_MNEMONIC: signing account mnemonic, default is //Alice
+// process.env.MPCADDR: MPC address, default is 0x1c5541A79AcC662ab2D2647F3B141a3B7Cdb2Ae4
 async function main() {
+    const [ss58Format] = process.argv.slice(2);
+
     const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9944');
     const api = await ApiPromise.create({
         provider: sygmaPalletProvider,
     });
 
     await cryptoWaitReady();
-    const keyring = new Keyring({type: 'sr25519'});
-    const sudo = keyring.addFromUri('//Alice');
+    const keyring = new Keyring({ type: 'sr25519', ss58Format: ss58Format || 42 });
+
+    let sudo = keyring.addFromUri('//Alice')
+    if (process.env.SUBSTRATE_MNEMONIC) {
+        sudo = keyring.addFromMnemonic(process.env.SUBSTRATE_MNEMONIC)
+    }
+    console.log(`signing account: ${sudo.address}`)
+    console.log(`ss58Format: ${ss58Format || 42}`);
+
     const basicFeeAmount = bn1e12.mul(new BN(1)); // 1 * 10 ** 12
     const percentageFeeRate = 500; // 5%
     const feeRateLowerBound = 0;
