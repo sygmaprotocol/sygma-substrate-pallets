@@ -75,6 +75,8 @@ cumulus_based = true
 
 	[[parachains.collators]]
 	name = "asset-hub-bob-collator"
+	rpc_port = 9811
+	ws_port = 9810
 	command = "./polkadot-parachain"
 	args = [
 		"-lparachain=debug,xcm=trace,runtime::bridge-transfer=trace",

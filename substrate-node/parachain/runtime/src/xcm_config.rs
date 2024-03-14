@@ -25,12 +25,17 @@ use xcm::latest::prelude::*;
 use xcm_builder::{
 	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowTopLevelPaidExecutionFrom,
 	CurrencyAdapter, DenyReserveTransferToRelayChain, DenyThenTry, EnsureXcmOrigin,
-	FixedWeightBounds, IsConcrete, NativeAsset, ParentIsPreset, RelayChainAsNative,
+	FixedWeightBounds, NativeAsset, ParentIsPreset, RelayChainAsNative,
 	SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative,
 	SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId,
 	UsingComponents, WithComputedOrigin, WithUniqueTopic,
 };
-use xcm_executor::XcmExecutor;
+use xcm_executor::{
+	traits::{MatchesFungible},
+	XcmExecutor,
+};
+use sp_runtime::traits::CheckedConversion;
+
 
 parameter_types! {
 	pub const RelayLocation: MultiLocation = MultiLocation::parent();
@@ -59,7 +64,7 @@ pub type LocalAssetTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
-	IsConcrete<RelayLocation>,
+	NativeAssetMatcher<NativeAssetTypeIdentifier<ParachainInfo>>,
 	// Do a simple punn to convert an AccountId32 MultiLocation into a native chain account ID:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -219,6 +224,18 @@ impl sygma_bridge_forwarder::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type SygmaBridge = SygmaBridge;
 	type XCMBridge = BridgeImpl<Runtime>;
+}
+
+pub struct NativeAssetMatcher<C>(PhantomData<C>);
+impl<C: AssetTypeIdentifier, B: TryFrom<u128>> MatchesFungible<B> for NativeAssetMatcher<C> {
+	fn matches_fungible(a: &MultiAsset) -> Option<B> {
+		match (&a.id, &a.fun) {
+			(Concrete(_), Fungible(ref amount)) if C::is_native_asset(a) => {
+				CheckedConversion::checked_from(*amount)
+			}
+			_ => None,
+		}
+	}
 }
 
 /// NativeAssetTypeIdentifier impl AssetTypeIdentifier for XCMAssetTransactor
