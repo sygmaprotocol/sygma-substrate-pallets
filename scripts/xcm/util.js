@@ -1,7 +1,26 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
+const {WsProvider} = require("@polkadot/api");
 require('dotenv').config();
+
+// those account are configured in the substrate-node runtime, and are only applicable for sygma pallet standalone node,
+// other parachain might have different runtime config so those account address need to be adjusted accordingly
+const FeeReserveAccount = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
+const NativeTokenTransferReserveAccount = "5EYCAe5jLbHcAAMKvLFSXgCTbPrLgBJusvPwfKcaKzuf5X5e";
+const OtherTokenTransferReserveAccount = "5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp";
+
+// UsdcAssetId: AssetId defined in runtime.rs
+const usdcAssetID = 2000;
+const usdcMinBalance = 100;
+const usdcName = "USDC test asset";
+const usdcSymbol = "USDC";
+const usdcDecimal = 12;
+
+// asset hub parachain
+const assetHubProvider = new WsProvider(process.env.ASSETHUBENDPOINT || 'ws://127.0.0.1:9910');
+// bridge hub parachain
+const bridgeHubProvider = new WsProvider(process.env.BRIDGEHUBENDPOINT || 'ws://127.0.0.1:8943');
 
 async function transferBalance(api, who, value, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
@@ -482,6 +501,8 @@ async function queryMPCAddress(api) {
 }
 
 module.exports = {
+    assetHubProvider,
+    bridgeHubProvider,
     getNativeAssetId,
     getNativeMultiAsset,
     getAssetDepositDest,
@@ -502,4 +523,12 @@ module.exports = {
     queryAssetBalance,
     queryBalance,
     queryMPCAddress,
+    FeeReserveAccount,
+    NativeTokenTransferReserveAccount,
+    OtherTokenTransferReserveAccount,
+    usdcAssetID,
+    usdcMinBalance,
+    usdcName,
+    usdcSymbol,
+    usdcDecimal,
 }

@@ -6,6 +6,8 @@ require('dotenv').config();
 const {ApiPromise, WsProvider, Keyring} = require('@polkadot/api');
 const {cryptoWaitReady} = require('@polkadot/util-crypto');
 const {
+    assetHubProvider,
+    bridgeHubProvider,
     transferBalance,
     setFeeHandler,
     setMpcAddress,
@@ -17,7 +19,15 @@ const {
     setAssetMetadata,
     mintAsset,
     getUSDCAssetId,
-    queryBridgePauseStatus
+    queryBridgePauseStatus,
+    FeeReserveAccount,
+    NativeTokenTransferReserveAccount,
+    OtherTokenTransferReserveAccount,
+    usdcAssetID,
+    usdcMinBalance,
+    usdcName,
+    usdcSymbol,
+    usdcDecimal,
 } = require("./util");
 
 const BN = require('bn.js');
@@ -38,21 +48,12 @@ const supportedDestDomains = [
     }
 ]
 
-// those account are configured in the substrate-node runtime, and are only applicable for sygma pallet standalone node,
-// other parachain might have different runtime config so those account address need to be adjusted accordingly
-const FeeReserveAccountAddress = "5ELLU7ibt5ZrNEYRwohtaRBDBa3TzcWwwPELBPSWWd2mbgv3";
-const NativeTokenTransferReserveAccount = "5EYCAe5jLbHcAAMKvLFSXgCTbPrLgBJusvPwfKcaKzuf5X5e";
-const OtherTokenTransferReserveAccount = "5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp";
-
 async function main() {
     // asset hub parachain
-    const assetHubProvider = new WsProvider(process.env.ASSETHUBENDPOINT || 'ws://127.0.0.1:9910');
     const assetHubApi = await ApiPromise.create({
         provider: assetHubProvider,
     });
-
     // bridge hub parachain
-    const bridgeHubProvider = new WsProvider(process.env.BRIDGEHUBENDPOINT || 'ws://127.0.0.1:8943');
     const bridgeHubApi = await ApiPromise.create({
         provider: bridgeHubProvider,
     });
@@ -62,13 +63,8 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
 
-    // UsdcAssetId: AssetId defined in runtime.rs
-    const usdcAssetID = 2000;
+    // USDC token admin
     const usdcAdmin = sudo.address;
-    const usdcMinBalance = 100;
-    const usdcName = "USDC test asset";
-    const usdcSymbol = "USDC";
-    const usdcDecimal = 12;
 
     // create USDC test asset (foreign asset) on asset hub
     await createAsset(assetHubApi, usdcAssetID, usdcAdmin, usdcMinBalance, true, sudo);
@@ -105,9 +101,14 @@ async function main() {
     }
 
     // transfer some native asset to FeeReserveAccount and TransferReserveAccount as Existential Deposit(aka ED) on bridge hub
-    await transferBalance(bridgeHubApi, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
+    await transferBalance(bridgeHubApi, FeeReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
     await transferBalance(bridgeHubApi, NativeTokenTransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset reserved account
     await transferBalance(bridgeHubApi, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 other asset reserved account
+
+    // mint 1 USDC to reserve and fee acount so that in the testcase they will not have null as balance
+    await mintAsset(bridgeHubApi, usdcAssetID, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 USDC to OtherTokenTransferReserveAccount
+    await mintAsset(bridgeHubApi, usdcAssetID, FeeReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 USDC to FeeReserveAccount
+
 
     // set up MPC address(will also unpause all registered domains) on bridge hub
     if (mpcAddr) {
