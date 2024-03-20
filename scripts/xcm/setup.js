@@ -6,6 +6,7 @@ require('dotenv').config();
 const {ApiPromise, WsProvider, Keyring} = require('@polkadot/api');
 const {cryptoWaitReady} = require('@polkadot/util-crypto');
 const {
+    relayChainProvider,
     assetHubProvider,
     bridgeHubProvider,
     transferBalance,
@@ -23,6 +24,10 @@ const {
     FeeReserveAccount,
     NativeTokenTransferReserveAccount,
     OtherTokenTransferReserveAccount,
+    hrmpChannelOpenRequest,
+    getHRMPChannelMessage,
+    getHRMPChannelDest,
+    delay,
     usdcAssetID,
     usdcMinBalance,
     usdcName,
@@ -49,6 +54,10 @@ const supportedDestDomains = [
 ]
 
 async function main() {
+    // relay chain
+    const relayChainApi = await ApiPromise.create({
+        provider: relayChainProvider,
+    });
     // asset hub parachain
     const assetHubApi = await ApiPromise.create({
         provider: assetHubProvider,
@@ -62,6 +71,23 @@ async function main() {
     await cryptoWaitReady();
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
+
+    // sovereignaccount of parachain 1000 on relaychain:
+    const sovereignAccount1000 = "5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ";
+    // sovereignaccount of parachain 1013 on relaychain:
+    const sovereignAccount1013 = "5Ec4AhPcMD9pfD1dC3vbyKXoZdZjigWthS9nEwGqaSJksLJv";
+    // transfer native asset to parachain sovereignaccount on relay chain
+    await transferBalance(relayChainApi, sovereignAccount1000, bn1e12.mul(new BN(100)), true, sudo); // set balance to 100 native asset
+    await transferBalance(relayChainApi, sovereignAccount1013, bn1e12.mul(new BN(100)), true, sudo); // set balance to 100 native asset
+
+    // checking if parachains start to producing blocks
+    let currentBlockNumber = 0;
+    while (currentBlockNumber < 1) {
+        const signedBlock = await assetHubApi.rpc.chain.getBlock();
+        const blockNumber = signedBlock.block.header.number.toHuman();
+        await delay(1000);
+        currentBlockNumber = blockNumber
+    }
 
     // USDC token admin
     const usdcAdmin = sudo.address;
@@ -97,7 +123,7 @@ async function main() {
     // set fee for tokens with domains on bridge hub
     for (const domain of supportedDestDomains) {
         await setFeeHandler(bridgeHubApi, domain.domainID, getUSDCAssetId(bridgeHubApi), feeHandlerType.PercentageFeeHandler, true, sudo)
-        await setFeeRate(bridgeHubApi, domain.domainID, getUSDCAssetId(bridgeHubApi), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
+        await setFeeRate(bridgeHubApi, domain.domainID, getUSDCAssetId(bridgeHubApi), percentageFeeRate, feeRateLowerBound, feeRateUpperBound, true, sudo);
     }
 
     // transfer some native asset to FeeReserveAccount and TransferReserveAccount as Existential Deposit(aka ED) on bridge hub
@@ -105,10 +131,9 @@ async function main() {
     await transferBalance(bridgeHubApi, NativeTokenTransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset reserved account
     await transferBalance(bridgeHubApi, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 other asset reserved account
 
-    // mint 1 USDC to reserve and fee acount so that in the testcase they will not have null as balance
+    // mint 1 USDC to reserve and fee account so that in the testcase they will not have null as balance
     await mintAsset(bridgeHubApi, usdcAssetID, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 USDC to OtherTokenTransferReserveAccount
     await mintAsset(bridgeHubApi, usdcAssetID, FeeReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 USDC to FeeReserveAccount
-
 
     // set up MPC address(will also unpause all registered domains) on bridge hub
     if (mpcAddr) {
@@ -121,6 +146,30 @@ async function main() {
     }
 
     console.log('🚀 Sygma substrate pallet setup is done! 🚀');
+
+    // setup HRMP channel between two parachains
+    // init HRMP channel open request from 1000 to 1013
+    const openHRMPChannelRequestEncodedData1000To1013 = "0x3c00f50300000800000000001000";
+    await hrmpChannelOpenRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, openHRMPChannelRequestEncodedData1000To1013, 1000), 1000, 1013, true, sudo);
+    console.log("wait processing on the relay chain...")
+    await delay(15000);
+    // accept HRMP channel open request on 1013
+    const acceptHRMPChannelRequestEncodedData1000To1013 = "0x3c01e8030000";
+    await hrmpChannelOpenRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, acceptHRMPChannelRequestEncodedData1000To1013, 1013), 1000, 1013, true, sudo);
+
+    await delay(15000);
+
+    // init HRMP channel open request from 1013 to 1000
+    const openHRMPChannelRequestEncodedData1013To1000 = "0x3c00e80300000800000000001000";
+    await hrmpChannelOpenRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, openHRMPChannelRequestEncodedData1013To1000, 1013), 1013, 1000, true, sudo);
+    console.log("wait processing on the relay chain...")
+    await delay(15000);
+    // accept HRMP channel open request on 1000
+    const acceptHRMPChannelRequestEncodedData1013To1000 = "0x3c01f5030000";
+    await hrmpChannelOpenRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, acceptHRMPChannelRequestEncodedData1013To1000, 1000), 1013, 1000, true, sudo);
+
+    console.log('🚀 HRMP Channel setup is done! 🚀');
 }
+
 
 main().catch(console.error).finally(() => process.exit());

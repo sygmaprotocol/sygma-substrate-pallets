@@ -17,6 +17,8 @@ const usdcName = "USDC test asset";
 const usdcSymbol = "USDC";
 const usdcDecimal = 12;
 
+// relay chain
+const relayChainProvider = new WsProvider(process.env.RELAYCHAINENDPOINT || 'ws://127.0.0.1:9942');
 // asset hub parachain
 const assetHubProvider = new WsProvider(process.env.ASSETHUBENDPOINT || 'ws://127.0.0.1:9910');
 // bridge hub parachain
@@ -451,7 +453,7 @@ async function executeProposal(api, proposalList, signature, finalization, sudo)
     });
 }
 
-async function depositLocal(api, asset, dest, finalization, sudo) {
+async function deposit(api, asset, dest, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
@@ -459,6 +461,116 @@ async function depositLocal(api, asset, dest, finalization, sudo) {
             `--- Submitting extrinsic to deposit. (nonce: ${nonce}) ---`
         );
         const unsub = await api.tx.sygmaBridge.deposit(asset, dest)
+            .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
+                console.log(`Current status is ${result.status}`);
+                if (result.status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${result.status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+                } else if (result.status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${result.status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (result.isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
+function getHRMPChannelDest(api) {
+    return api.createType('StagingXcmVersionedMultiLocation', {
+        V2: api.createType('StagingXcmV2MultiLocation', {
+            parents: 1,
+            interior: api.createType('StagingXcmV3Junctions', 'Here')
+        })
+    })
+}
+
+function getHRMPChannelMessage(api, encodedData, fromParaID) {
+    return api.createType('StagingXcmVersionedXcm', {
+        V2: api.createType('StagingXcmV2Xcm', [
+            api.createType('StagingXcmV2Instruction', {
+                WithdrawAsset: [
+                    api.createType('StagingXcmV2MultiAsset', {
+                        id: api.createType('StagingXcmV2MultiassetAssetId', {
+                            Concrete: api.createType('StagingXcmV2MultiLocation', {
+                                parents: 0,
+                                interior: api.createType('StagingXcmV2MultilocationJunctions', 'Here')
+                            }),
+                        }),
+                        fun: api.createType('StagingXcmV2MultiassetFungibility', {
+                            Fungible: api.createType('Compact<U128>', 1000000000000)
+                        })
+                    })
+                ]
+            }),
+            api.createType('StagingXcmV2Instruction', {
+                BuyExecution: {
+                    fees: api.createType('StagingXcmV2MultiAsset', {
+                        id: api.createType('StagingXcmV2MultiassetAssetId', {
+                            Concrete: api.createType('StagingXcmV2MultiLocation', {
+                                parents: 0,
+                                interior: api.createType('StagingXcmV2MultilocationJunctions', 'Here')
+                            }),
+                        }),
+                        fun: api.createType('StagingXcmV2MultiassetFungibility', {
+                            Fungible: api.createType('Compact<U128>', 1000000000000)
+                        })
+                    }),
+                    weightLimit: api.createType('StagingXcmV2WeightLimit', "Unlimited")
+                },
+            }),
+            api.createType('StagingXcmV2Instruction', {
+                Transact: {
+                    originType: api.createType('StagingXcmV2OriginKind', "Native"),
+                    requireWeightAtMost: api.createType('Compact<U64>', 4000000000),
+                    call: api.createType('StagingXcmDoubleEncoded', {
+                        encoded: api.createType('Bytes', encodedData),
+                    }),
+                },
+            }),
+            api.createType('StagingXcmV2Instruction', {
+                RefundSurplus: {},
+            }),
+            api.createType('StagingXcmV2Instruction', {
+                DepositAsset: {
+                    assets: api.createType('StagingXcmV2MultiassetMultiAssetFilter', {
+                        Wild: api.createType('StagingXcmV2MultiassetWildMultiAsset', "All")
+                    }),
+                    maxAssets: api.createType('Compact<U32>', 1),
+                    beneficiary: api.createType('StagingXcmV2MultiLocation', {
+                        parents: 0,
+                        interior: api.createType('StagingXcmV2MultilocationJunctions', {
+                            X1: api.createType('StagingXcmV2Junction', {
+                                Parachain: api.createType('Compact<U32>', fromParaID)
+                            })
+                        })
+                    })
+                }
+            })
+        ])
+    })
+}
+
+async function hrmpChannelOpenRequest(api, dest, message, fromParachainID, toParachainID, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting HRMP channel open request from ${fromParachainID} to ${toParachainID}. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.sudo
+            .sudo(api.tx.polkadotXcm.send(dest, message))
             .signAndSend(sudo, {nonce: nonce, era: 0}, (result) => {
                 console.log(`Current status is ${result.status}`);
                 if (result.status.isInBlock) {
@@ -500,7 +612,12 @@ async function queryMPCAddress(api) {
     return result.toJSON()
 }
 
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 module.exports = {
+    relayChainProvider,
     assetHubProvider,
     bridgeHubProvider,
     getNativeAssetId,
@@ -508,7 +625,7 @@ module.exports = {
     getAssetDepositDest,
     getUSDCAssetId,
     getUSDCMultiAsset,
-    depositLocal,
+    deposit,
     registerDomain,
     mintAsset,
     setAssetMetadata,
@@ -523,6 +640,10 @@ module.exports = {
     queryAssetBalance,
     queryBalance,
     queryMPCAddress,
+    hrmpChannelOpenRequest,
+    getHRMPChannelMessage,
+    getHRMPChannelDest,
+    delay,
     FeeReserveAccount,
     NativeTokenTransferReserveAccount,
     OtherTokenTransferReserveAccount,
