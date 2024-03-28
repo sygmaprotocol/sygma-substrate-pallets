@@ -562,7 +562,7 @@ function getHRMPChannelMessage(api, encodedData, fromParaID) {
     })
 }
 
-async function hrmpChannelOpenRequest(api, dest, message, fromParachainID, toParachainID, finalization, sudo) {
+async function hrmpChannelRequest(api, dest, message, fromParachainID, toParachainID, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
 
@@ -640,7 +640,7 @@ module.exports = {
     queryAssetBalance,
     queryBalance,
     queryMPCAddress,
-    hrmpChannelOpenRequest,
+    hrmpChannelRequest,
     getHRMPChannelMessage,
     getHRMPChannelDest,
     delay,

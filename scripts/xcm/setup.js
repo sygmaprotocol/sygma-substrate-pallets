@@ -24,7 +24,7 @@ const {
     FeeReserveAccount,
     NativeTokenTransferReserveAccount,
     OtherTokenTransferReserveAccount,
-    hrmpChannelOpenRequest,
+    hrmpChannelRequest,
     getHRMPChannelMessage,
     getHRMPChannelDest,
     delay,
@@ -72,6 +72,9 @@ async function main() {
     const keyring = new Keyring({type: 'sr25519'});
     const sudo = keyring.addFromUri('//Alice');
 
+    console.log('======= Relaychain setup begin =======');
+
+    // relaychain setup
     // sovereignaccount of parachain 1000 on relaychain:
     const sovereignAccount1000 = "5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ";
     // sovereignaccount of parachain 1013 on relaychain:
@@ -80,7 +83,10 @@ async function main() {
     await transferBalance(relayChainApi, sovereignAccount1000, bn1e12.mul(new BN(100)), true, sudo); // set balance to 100 native asset
     await transferBalance(relayChainApi, sovereignAccount1013, bn1e12.mul(new BN(100)), true, sudo); // set balance to 100 native asset
 
+    console.log('======= Relaychain setup is done =======');
+
     // checking if parachains start to producing blocks
+    console.log("wait for the parachain stars producting blocks...")
     let currentBlockNumber = 0;
     while (currentBlockNumber < 1) {
         const signedBlock = await assetHubApi.rpc.chain.getBlock();
@@ -89,6 +95,7 @@ async function main() {
         currentBlockNumber = blockNumber
     }
 
+    console.log('======= Parchain setup begin =======');
     // USDC token admin
     const usdcAdmin = sudo.address;
 
@@ -131,6 +138,7 @@ async function main() {
     await transferBalance(bridgeHubApi, NativeTokenTransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset reserved account
     await transferBalance(bridgeHubApi, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 other asset reserved account
 
+    // TODO: create another token on bridge hub for testcase 1 and 2, USDC will be used for xcm transfer testcase
     // mint 1 USDC to reserve and fee account so that in the testcase they will not have null as balance
     await mintAsset(bridgeHubApi, usdcAssetID, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 USDC to OtherTokenTransferReserveAccount
     await mintAsset(bridgeHubApi, usdcAssetID, FeeReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 USDC to FeeReserveAccount
@@ -144,29 +152,39 @@ async function main() {
             if (!await queryBridgePauseStatus(bridgeHubApi, domain.domainID)) console.log(`DestDomainID: ${domain.domainID} is ready✅`);
         }
     }
-
     console.log('🚀 Sygma substrate pallet setup is done! 🚀');
 
+    // transfer native asset to parachain sovereignaccount on each parachain
+    await transferBalance(assetHubApi, sovereignAccount1013, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
+    await transferBalance(bridgeHubApi, sovereignAccount1000, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
+    console.log('======= Parachain setup is done =======');
+
+    console.log('======= HRMP channel setup begin =======');
     // setup HRMP channel between two parachains
     // init HRMP channel open request from 1000 to 1013
     const openHRMPChannelRequestEncodedData1000To1013 = "0x3c00f50300000800000000001000";
-    await hrmpChannelOpenRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, openHRMPChannelRequestEncodedData1000To1013, 1000), 1000, 1013, true, sudo);
+    await hrmpChannelRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, openHRMPChannelRequestEncodedData1000To1013, 1000), 1000, 1013, true, sudo);
     console.log("wait processing on the relay chain...")
     await delay(15000);
     // accept HRMP channel open request on 1013
     const acceptHRMPChannelRequestEncodedData1000To1013 = "0x3c01e8030000";
-    await hrmpChannelOpenRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, acceptHRMPChannelRequestEncodedData1000To1013, 1013), 1000, 1013, true, sudo);
+    await hrmpChannelRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, acceptHRMPChannelRequestEncodedData1000To1013, 1013), 1000, 1013, true, sudo);
 
     await delay(15000);
 
     // init HRMP channel open request from 1013 to 1000
     const openHRMPChannelRequestEncodedData1013To1000 = "0x3c00e80300000800000000001000";
-    await hrmpChannelOpenRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, openHRMPChannelRequestEncodedData1013To1000, 1013), 1013, 1000, true, sudo);
+    await hrmpChannelRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, openHRMPChannelRequestEncodedData1013To1000, 1013), 1013, 1000, true, sudo);
     console.log("wait processing on the relay chain...")
     await delay(15000);
     // accept HRMP channel open request on 1000
     const acceptHRMPChannelRequestEncodedData1013To1000 = "0x3c01f5030000";
-    await hrmpChannelOpenRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, acceptHRMPChannelRequestEncodedData1013To1000, 1000), 1013, 1000, true, sudo);
+    await hrmpChannelRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, acceptHRMPChannelRequestEncodedData1013To1000, 1000), 1013, 1000, true, sudo);
+
+    // transfer native asset to FungiblesTransactor CheckingAccount on both parachains
+    const CheckingAccount = "5EYCAe5ijiYgWYWi1fs8Xz1td1djEtJVVnNfzvDRP4VtLL7Y";
+    await transferBalance(assetHubApi, CheckingAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
+    await transferBalance(bridgeHubApi, CheckingAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
 
     console.log('🚀 HRMP Channel setup is done! 🚀');
 }

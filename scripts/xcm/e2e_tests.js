@@ -127,7 +127,7 @@ async function testcase2(bridgeHubApi, sudo, failedTestcases) {
     }
 }
 
-// testcase 3: Native token deposit on Asset hub, dest on Bridge hub
+// testcase 3: Foreign token(USDC) deposit on Asset hub, dest on Bridge hub
 async function testcase3(assetHubApi, sudo, failedTestcases) {
     // const nativeBalanceBeforeAlice = await queryBalance(bridgeHubApi, sudo.address);
     // console.log('Alice native asset balance before: ', nativeBalanceBeforeAlice.data.free);
