@@ -17,6 +17,18 @@ const usdcName = "USDC test asset";
 const usdcSymbol = "USDC";
 const usdcDecimal = 12;
 
+const ahnAssetID = 2001;
+const ahnMinBalance = 100;
+const ahnName = "Asset Hub Native";
+const ahnSymbol = "AHN";
+const ahnDecimal = 12;
+
+const tttAssetID = 2002;
+const tttMinBalance = 100;
+const tttName = "Test Token Tub";
+const tttSymbol = "TTT";
+const tttDecimal = 12;
+
 // relay chain
 const relayChainProvider = new WsProvider(process.env.RELAYCHAINENDPOINT || 'ws://127.0.0.1:9942');
 // asset hub parachain
@@ -194,11 +206,6 @@ async function setMpcAddress(api, mpcAddr, finalization, sudo) {
     });
 }
 
-async function queryBridgePauseStatus(api, domainID) {
-    let result = await api.query.sygmaBridge.isPaused(domainID);
-    return result.toJSON()
-}
-
 async function createAsset(api, id, admin, minBalance, finalization, sudo) {
     return new Promise(async (resolve, reject) => {
         const nonce = Number((await api.query.system.account(sudo.address)).nonce);
@@ -353,16 +360,143 @@ function getNativeMultiAsset(api, amount) {
         })
     })
 }
+function getAHNAssetId(api) {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
+            parents: 1,
+            interior: api.createType('StagingXcmV3Junctions', {
+                X1:
+                    api.createType('StagingXcmV3Junction', {
+                        Parachain: api.createType('Compact<U32>', 1000)
+                    })
+            })
+        })
+    })
+}
+
+function getAHNMultiAsset(api, amount) {
+    return api.createType('StagingXcmV3MultiAsset', {
+        id: getAHNAssetId(api),
+        fun: api.createType('StagingXcmV3MultiassetFungibility', {
+            Fungible: api.createType('Compact<U128>', amount)
+        })
+    })
+}
+
+// return USDC assetID with parachain(full X3)
+function getUSDCAssetId(api) {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
+            parents: 1,
+            interior: api.createType('StagingXcmV3Junctions', {
+                X3: [
+                    api.createType('StagingXcmV3Junction', {
+                        Parachain: api.createType('Compact<U32>', 1000)
+                    }),
+                    api.createType('StagingXcmV3Junction', {
+                        PalletInstance: 50
+                    }),
+                    api.createType('StagingXcmV3Junction', {
+                        GeneralIndex: 2000
+                    }),
+                ]
+            })
+        })
+    })
+}
+
+// return USDC assetID but without parachain(only X2)
+function getUSDCAssetIdX2(api) {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
+            parents: 0,
+            interior: api.createType('StagingXcmV3Junctions', {
+                X2: [
+                    api.createType('StagingXcmV3Junction', {
+                        PalletInstance: 50
+                    }),
+                    api.createType('StagingXcmV3Junction', {
+                        GeneralIndex: 2000
+                    }),
+                ]
+            })
+        })
+    })
+}
+
+function getUSDCMultiAsset(api, amount) {
+    return api.createType('StagingXcmV3MultiAsset', {
+        id: getUSDCAssetId(api),
+        fun: api.createType('StagingXcmV3MultiassetFungibility', {
+            Fungible: api.createType('Compact<U128>', amount)
+        })
+    })
+}
+
+function getUSDCMultiAssetX2(api, amount) {
+    return api.createType('StagingXcmV3MultiAsset', {
+        id: getUSDCAssetIdX2(api),
+        fun: api.createType('StagingXcmV3MultiassetFungibility', {
+            Fungible: api.createType('Compact<U128>', amount)
+        })
+    })
+}
+
+
+// TTT is used for foriegn token on Bridge hub test
+function getTTTMultiAsset(api, amount) {
+    return api.createType('StagingXcmV3MultiAsset', {
+        id: getTTTAssetId(api),
+        fun: api.createType('StagingXcmV3MultiassetFungibility', {
+            Fungible: api.createType('Compact<U128>', amount)
+        })
+    })
+}
+
+function getTTTAssetId(api) {
+    return api.createType('StagingXcmV3MultiassetAssetId', {
+        Concrete: api.createType('StagingXcmV3MultiLocation', {
+            parents: 1,
+            interior: api.createType('StagingXcmV3Junctions', {
+                X3: [
+                    api.createType('StagingXcmV3Junction', {
+                        Parachain: api.createType('Compact<U32>', 1013)
+                    }),
+                    api.createType('StagingXcmV3Junction', {
+                        // 0x7379676d61 is general key of sygma
+                        GeneralKey: {
+                            length: 5,
+                            data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
+                        }
+                    }),
+                    api.createType('StagingXcmV3Junction', {
+                        // 0x545454 is general key of TTT
+                        GeneralKey: {
+                            length: 3,
+                            data: '0x5454540000000000000000000000000000000000000000000000000000000000'
+                        }
+                    }),
+                ]
+            })
+        })
+    })
+}
 
 function getAssetDepositDest(api) {
     return api.createType('StagingXcmV3MultiLocation', {
         parents: 0,
         interior: api.createType('StagingXcmV3Junctions', {
-            X3: [
+            X4: [
                 api.createType('StagingXcmV3Junction', {
                     GeneralKey: {
                         length: 5,
                         data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
+                    }
+                }),
+                api.createType('StagingXcmV3Junction', {
+                    GeneralKey: {
+                        length: 12,
+                        data: '0x7379676d612d6272696467650000000000000000000000000000000000000000'
                     }
                 }),
                 api.createType('StagingXcmV3Junction', {
@@ -379,44 +513,56 @@ function getAssetDepositDest(api) {
     })
 }
 
-function getUSDCAssetId(api) {
-    return api.createType('StagingXcmV3MultiassetAssetId', {
-        Concrete: api.createType('StagingXcmV3MultiLocation', {
-            parents: 1,
+// The dest of teleport tokens from Asset hub
+function getAssetHubTeleportDest(api) {
+    return api.createType('StagingXcmVersionedMultiLocation', {
+         V3: api.createType('StagingXcmV3MultiLocation', {
+             parents: 1,
+             interior: api.createType('StagingXcmV3Junctions', {
+                 X1: api.createType('StagingXcmV3Junction', {
+                     Parachain: api.createType('Compact<U32>', 1013)
+                 }),
+             })
+         })
+    })
+}
+
+// The Beneficiary of teleport tokens from Asset hub to Bridge hub
+function getAssetHubTeleportBeneficiary(api, beneficiary) {
+    return api.createType('StagingXcmVersionedMultiLocation', {
+        V3: api.createType('StagingXcmV3MultiLocation', {
+            parents: 0,
             interior: api.createType('StagingXcmV3Junctions', {
-                X3: [
-                    api.createType('StagingXcmV3Junction', {
-                        Parachain: api.createType('Compact<U32>', 2005)
-                    }),
-                    api.createType('StagingXcmV3Junction', {
-                        // 0x7379676d61 is general key of "sygma" defined in sygma substrate pallet runtime for testing
-                        // see UsdcLocation definition in runtime.rs
-                        GeneralKey: {
-                            length: 5,
-                            data: '0x7379676d61000000000000000000000000000000000000000000000000000000'
-                        }
-                    }),
-                    api.createType('StagingXcmV3Junction', {
-                        // 0x75736463 is general key of "usdc" defined in sygma substrate pallet runtime for testing
-                        // see UsdcLocation definition in runtime.rs
-                        GeneralKey: {
-                            length: 4,
-                            data: '0x7573646300000000000000000000000000000000000000000000000000000000'
-                        }
-                    }),
-                ]
+                X1: api.createType('StagingXcmV3Junction', {
+                    AccountId32: {
+                        network: api.createType('Option<StagingXcmV3JunctionNetworkId>', 'rococo'),
+                        id: beneficiary,
+                    }
+                }),
             })
         })
     })
 }
 
-function getUSDCMultiAsset(api, amount) {
-    return api.createType('StagingXcmV3MultiAsset', {
-        id: getUSDCAssetId(api),
-        fun: api.createType('StagingXcmV3MultiassetFungibility', {
-            Fungible: api.createType('Compact<U128>', amount)
-        })
+// The Beneficiary of teleport tokens from Asset hub to Sygma via Bridge hub
+function getAssetHubTeleportBeneficiaryToSygma(api) {
+    return api.createType('StagingXcmVersionedMultiLocation', {
+        V3: api.createType('StagingXcmV3MultiLocation', getAssetDepositDest(api))
     })
+}
+
+// The asset of teleport tokens from Asset hub to Bridge hub
+function getAssetHubTeleportAsset(api, asset) {
+    return api.createType('StagingXcmVersionedMultiAssets', {
+        V3: api.createType('StagingXcmV3MultiassetMultiAssets', [
+            asset
+        ])
+    })
+}
+
+// The weight limit of teleport tokens from Asset hub
+function getAssetHubTeleportWeightLimit(api) {
+    return api.createType('StagingXcmV3WeightLimit', "Unlimited")
 }
 
 async function executeProposal(api, proposalList, signature, finalization, sudo) {
@@ -597,6 +743,77 @@ async function hrmpChannelRequest(api, dest, message, fromParachainID, toParacha
     });
 }
 
+async function teleportTokenViaXCM(api, {dest, beneficiary, assets, feeAssetItem, weightLimit, fromParachainID, toParachainID}, finalization, sudo) {
+    return new Promise(async (resolve, reject) => {
+        const nonce = Number((await api.query.system.account(sudo.address)).nonce);
+
+        console.log(
+            `--- Submitting Teleport Token call from ${fromParachainID} to ${toParachainID}. (nonce: ${nonce}) ---`
+        );
+        const unsub = await api.tx.polkadotXcm.limitedTeleportAssets(dest, beneficiary, assets, feeAssetItem, weightLimit)
+            .signAndSend(sudo, {nonce: nonce, era: 0}, ({ events = [], status, isError }) => {
+                console.log(`Current status is ${status}`);
+                if (status.isInBlock) {
+                    console.log(
+                        `Transaction included at blockHash ${status.asInBlock}`
+                    );
+                    if (finalization) {
+                        console.log('Waiting for finalization...');
+                    } else {
+                        unsub();
+                        resolve();
+                    }
+
+                    console.log('Events:');
+                    events.forEach(({ event: { data, method, section }, phase }) => {
+                        console.log('\t', phase.toString(), `: ${section}.${method}`, data.toString());
+                    });
+                } else if (status.isFinalized) {
+                    console.log(
+                        `Transaction finalized at blockHash ${status.asFinalized}`
+                    );
+                    unsub();
+                    resolve();
+                } else if (isError) {
+                    console.log(`Transaction Error`);
+                    reject(`Transaction Error`);
+                }
+            });
+    });
+}
+
+// Subscribe to system events via storage
+async function subEvents (api, eventsList) {
+    api.query.system.events((events) => {
+        console.log(`\nReceived ${events.length} events:`);
+
+        // Loop through the Vec<EventRecord>
+        events.forEach((record) => {
+            // Extract the phase, event and the event types
+            const { event, phase } = record;
+            const types = event.typeDef;
+
+            // Show what we are busy with
+            // console.log(`\t${event.section}:${event.method}:: (phase=${phase.toString()})`);
+            // console.log(`\t\t${event.meta}`);
+            console.log(`${event.section}:${event.method}`);
+            if (event.section.startsWith("sygmaBridge") || event.section.startsWith("sygmaBridgeForwarder")) {
+                eventsList.push(event.section);
+            }
+
+            // Loop through each of the parameters, displaying the type and data
+            // event.data.forEach((data, index) => {
+            //     console.log(`\t\t\t${types[index].type}: ${data.toString()}`);
+            // });
+        });
+    });
+}
+
+async function queryBridgePauseStatus(api, domainID) {
+    let result = await api.query.sygmaBridge.isPaused(domainID);
+    return result.toJSON()
+}
+
 async function queryAssetBalance(api, assetID, account) {
     let result = await api.query.assets.account(assetID, account);
     return result.toHuman()
@@ -622,27 +839,40 @@ module.exports = {
     bridgeHubProvider,
     getNativeAssetId,
     getNativeMultiAsset,
-    getAssetDepositDest,
     getUSDCAssetId,
+    getUSDCMultiAssetX2,
     getUSDCMultiAsset,
+    getUSDCAssetIdX2,
+    getAHNAssetId,
+    getAHNMultiAsset,
+    getTTTMultiAsset,
+    getTTTAssetId,
+    getAssetDepositDest,
     deposit,
     registerDomain,
-    mintAsset,
-    setAssetMetadata,
-    createAsset,
-    queryBridgePauseStatus,
     setMpcAddress,
     setFee,
     setFeeRate,
     setFeeHandler,
-    transferBalance,
     executeProposal,
+    transferBalance,
+    createAsset,
+    setAssetMetadata,
+    mintAsset,
+    subEvents,
+    queryBridgePauseStatus,
     queryAssetBalance,
     queryBalance,
     queryMPCAddress,
     hrmpChannelRequest,
     getHRMPChannelMessage,
     getHRMPChannelDest,
+    teleportTokenViaXCM,
+    getAssetHubTeleportDest,
+    getAssetHubTeleportBeneficiary,
+    getAssetHubTeleportBeneficiaryToSygma,
+    getAssetHubTeleportAsset,
+    getAssetHubTeleportWeightLimit,
     delay,
     FeeReserveAccount,
     NativeTokenTransferReserveAccount,
@@ -652,4 +882,14 @@ module.exports = {
     usdcName,
     usdcSymbol,
     usdcDecimal,
+    ahnAssetID,
+    ahnMinBalance,
+    ahnName,
+    ahnSymbol,
+    ahnDecimal,
+    tttAssetID,
+    tttMinBalance,
+    tttName,
+    tttSymbol,
+    tttDecimal,
 }
