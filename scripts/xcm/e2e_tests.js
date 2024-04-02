@@ -58,12 +58,18 @@ async function main() {
     let failedTestcases = [];
 
     // run testcases
+
+    // bridge hub parachain local test
     await testcase1(bridgeHubApi, sudo, failedTestcases);
     await testcase2(bridgeHubApi, sudo, failedTestcases);
+
+    // asset hub to bridge hub and then to sygma relayer test
     await testcase3(assetHubApi, bridgeHubApi, sudo, failedTestcases);
     await testcase4(assetHubApi, bridgeHubApi, sudo, failedTestcases);
     await testcase5(assetHubApi, bridgeHubApi, sudo, failedTestcases);
     await testcase6(assetHubApi, bridgeHubApi, sudo, failedTestcases);
+
+    // sygma relayer to bridge hub and then to asset hub test
 
     // checking if any testcase failed
     for (const item of failedTestcases) {
@@ -79,6 +85,8 @@ function str2BigInt(a) {
 
 // testcase 1: Native token deposit on Bridge hub, dest on relayer
 async function testcase1(bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 1 ...');
+
     const nativeBalanceBeforeAlice = await queryBalance(bridgeHubApi, sudo.address);
     console.log('Alice native asset balance before: ', nativeBalanceBeforeAlice.data.free);
 
@@ -116,6 +124,8 @@ async function testcase1(bridgeHubApi, sudo, failedTestcases) {
 
 // testcase 2: Foreign token TTT deposit on Bridge hub, dest on relayer
 async function testcase2(bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 2 ...');
+
     let tttBalanceBeforeAlice = await queryAssetBalance(bridgeHubApi, tttAssetID, sudo.address);
     console.log('Alice TTT asset balance before: ', tttBalanceBeforeAlice.balance);
 
@@ -153,6 +163,8 @@ async function testcase2(bridgeHubApi, sudo, failedTestcases) {
 
 // testcase 3: Foreign token(USDC) deposit on Asset hub, dest on Bridge hub
 async function testcase3(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 3 ...');
+
     const usdcBalanceBeforeAliceAssethub = await queryAssetBalance(assetHubApi, usdcAssetID, sudo.address);
     console.log('Alice USDC asset balance on Asset hub before: ', usdcBalanceBeforeAliceAssethub.balance);
 
@@ -193,6 +205,8 @@ async function testcase3(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
 
 // testcase 4: Native token deposit on Asset hub, dest on Bridge hub
 async function testcase4(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 4 ...');
+
     const beneficiaryAddressOnBridgehub = "5GYrSdyt7wydaQiqsnrvq11neaC2eTUBXCnXhSJKpUPT3hXP";
     const beneficiary = "0xc668b505f6a7012a50dca169757c629651bfd6cefbfc24301dea2d2cc0ab2732" // Alice_extension
 
@@ -235,6 +249,8 @@ async function testcase4(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
 
 // testcase 5: Foreign token(USDC) deposit on Asset hub, dest on sygma via Bridge hub
 async function testcase5(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 5 ...');
+
     const events = [];
     await subEvents(bridgeHubApi, events);
 
@@ -285,6 +301,8 @@ async function testcase5(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
 
 // testcase 6: Native token deposit on Asset hub, dest on sygma via Bridge hub
 async function testcase6(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 6 ...');
+
     const events = [];
     await subEvents(bridgeHubApi, events);
 
