@@ -3,6 +3,9 @@
 
 require('dotenv').config();
 
+const {decodeAddress} = require('@polkadot/util-crypto');
+const {utils} = require('ethers');
+
 const {ApiPromise, WsProvider, Keyring} = require('@polkadot/api');
 const {cryptoWaitReady} = require('@polkadot/util-crypto');
 const {
@@ -22,6 +25,7 @@ const {
     getAssetHubTeleportAsset,
     getAssetHubTeleportWeightLimit,
     deposit,
+    executeProposal,
     subEvents,
     queryBalance,
     queryAssetBalance,
@@ -38,7 +42,7 @@ const {
     tttMinBalance,
     tttName,
     tttSymbol,
-    tttDecimal,
+    tttDecimal, bhnAssetID,
 } = require("./util");
 
 async function main() {
@@ -70,11 +74,16 @@ async function main() {
     await testcase6(assetHubApi, bridgeHubApi, sudo, failedTestcases);
 
     // sygma relayer to bridge hub and then to asset hub test
+    await testcase7(bridgeHubApi, sudo, failedTestcases);
+    await testcase8(bridgeHubApi, sudo, failedTestcases);
+    await testcase9(bridgeHubApi, assetHubApi, sudo, failedTestcases);
+    await testcase10(bridgeHubApi, assetHubApi, sudo, failedTestcases);
 
     // checking if any testcase failed
     for (const item of failedTestcases) {
-        console.error('\x1b[31m%s\x1b[0m\n', item);
-        return
+        // console.error('\x1b[31m%s\x1b[0m\n', item);
+        // return
+        throw Error(`\x1b[31m${item}\x1b[0m`);
     }
     console.log('\x1b[32m%s\x1b[0m', "All testcases pass");
 }
@@ -351,6 +360,188 @@ async function testcase6(assetHubApi, bridgeHubApi, sudo, failedTestcases) {
     }
 }
 
+// testcase 7: Foreign token(USDC) send from sygma relayer to Bridge hub
+async function testcase7(bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 7 ...');
+
+    const events = [];
+    await subEvents(bridgeHubApi, events);
+
+    // transfer 0.0001 USDC from sygma relayer to Alice on bridge hub
+    const proposal_usdc = {
+        origin_domain_id: 1,
+        deposit_nonce: 111,
+        resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0],
+        data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125]
+    }
+    // signature is not used in the integration demo, this is just a placeholder
+    const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+
+    const usdcBalanceBefore = await queryAssetBalance(bridgeHubApi, usdcAssetID, sudo.address);
+    console.log('usdc asset balance before: ', usdcBalanceBefore.balance);
+
+    await executeProposal(bridgeHubApi, [proposal_usdc], signature, true, sudo);
+
+    const usdcbalanceAfter = await queryAssetBalance(bridgeHubApi, usdcAssetID, sudo.address);
+    console.log('usdc asset balance after: ', usdcbalanceAfter.balance);
+
+    // USDC balance of Alice on Bridge hub should not equal
+    // USDC is a configured as a reserved token
+    if (str2BigInt(usdcbalanceAfter.balance) !== str2BigInt(usdcBalanceBefore.balance) + BigInt(100000000)) {
+        failedTestcases.push('testcase 7 failed: USDC balance not match')
+    }
+
+    // checking if any sygma events emitted
+    for (const e of events) {
+        console.log('sygma pallets event emitted: \x1b[32m%s\x1b[0m\n', e);
+    }
+    if (events.length === 0) {
+        failedTestcases.push("testcase 7 failed: sygma pallets event not emitted");
+    }
+}
+
+// testcase 8: Native token of bridge hub send from sygma relayer to Bridge hub
+async function testcase8(bridgeHubApi, sudo, failedTestcases) {
+    console.log('testcase 8 ...');
+
+    const events = [];
+    await subEvents(bridgeHubApi, events);
+
+    // transfer 0.0001 native from sygma relayer to Alice on bridge hub
+    const proposal_native = {
+        origin_domain_id: 1,
+        deposit_nonce: 222,
+        resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 90, 243, 16, 122, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 1, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125]
+    }
+    // signature is not used in the integration demo, this is just a placeholder
+    const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+
+    const nativeBalanceBefore = await queryBalance(bridgeHubApi, sudo.address);
+    console.log('native asset balance before: ', nativeBalanceBefore.data.free);
+
+    await executeProposal(bridgeHubApi, [proposal_native], signature, true, sudo);
+
+    const nativeBalanceAfter = await queryBalance(bridgeHubApi, sudo.address);
+    console.log('native asset balance after: ', nativeBalanceAfter.data.free);
+
+    const before_num = BigInt(nativeBalanceBefore.data.free.replaceAll(',', ''));
+    const after_num = BigInt(nativeBalanceAfter.data.free.replaceAll(',', ''));
+
+    if (after_num <= before_num) {
+        failedTestcases.push('testcase 8 failed: Native asset not match')
+    }
+
+    // checking if any sygma events emitted
+    for (const e of events) {
+        console.log('sygma pallets event emitted: \x1b[32m%s\x1b[0m\n', e);
+    }
+    if (events.length === 0) {
+        failedTestcases.push("testcase 8 failed: sygma pallets event not emitted");
+    }
+}
+
+// testcase 9: Foreign token(USDC) send from sygma relayer to Bridge hub then to Asset hub via XCM
+async function testcase9(bridgeHubApi, assetHubApi, sudo, failedTestcases) {
+    console.log('testcase 9 ...');
+
+    const events = [];
+    await subEvents(bridgeHubApi, events);
+
+    // transfer 1 USDC token from sygma relayer to Alice on Asset hub via Bridge hub
+    // data: [0, 32] => amount, [33, 64] => recipient length, [64 - end] => recipient address(Alice)
+    const proposal_usdc = {
+        origin_domain_id: 1,
+        deposit_nonce: 333,
+        resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0],
+        data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 39, 1, 2, 0, 161, 15, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125],
+    }
+    // signature is not used in the integration demo, this is just a placeholder
+    const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+
+    const usdcBalanceBeforeBridgehub = await queryAssetBalance(bridgeHubApi, usdcAssetID, OtherTokenTransferReserveAccount);
+    console.log('usdc asset balance before on Bridge hub: ', usdcBalanceBeforeBridgehub.balance);
+
+    const usdcBalanceBeforeAssethub = await queryAssetBalance(assetHubApi, usdcAssetID, sudo.address);
+    console.log('usdc asset balance before on Asset hub: ', usdcBalanceBeforeAssethub.balance);
+
+    await executeProposal(bridgeHubApi, [proposal_usdc], signature, true, sudo);
+
+    const usdcBalanceAfterBridgehub = await queryAssetBalance(bridgeHubApi, usdcAssetID, OtherTokenTransferReserveAccount);
+    console.log('usdc asset balance after on Bridge hub: ', usdcBalanceAfterBridgehub.balance);
+
+    const usdcBalanceAfterAssethub = await queryAssetBalance(assetHubApi, usdcAssetID, sudo.address);
+    console.log('usdc asset balance after on Asset hub: ', usdcBalanceAfterAssethub.balance);
+
+    // OtherTokenTransferReserveAccount as the USDC token reserved account on Bridge hub, should be deducted by 1 USDC token
+    if (str2BigInt(usdcBalanceBeforeBridgehub.balance) - str2BigInt(usdcBalanceAfterBridgehub.balance) !== BigInt(1000000000000)) {
+        failedTestcases.push('testcase 9 failed: USDC asset not match in OtherTokenTransferReserveAccount')
+    }
+
+    // the recipient on Asset hub(Alice) should receive less than 1 USDC token bcs a small port of fee is charged
+    if (str2BigInt(usdcBalanceAfterAssethub.balance) - str2BigInt(usdcBalanceBeforeAssethub.balance) >= BigInt(1000000000000)) {
+        failedTestcases.push('testcase 9 failed: USDC asset not match in recipient account on Asset hub')
+    }
+
+    // checking if any sygma events emitted
+    for (const e of events) {
+        console.log('sygma pallets event emitted: \x1b[32m%s\x1b[0m\n', e);
+    }
+    if (events.length === 0) {
+        failedTestcases.push("testcase 9 failed: sygma pallets event not emitted");
+    }
+}
+
+// testcase 10: Native token of bridge hub send from sygma relayer to Bridge hub then to Asset hub via XCM
+async function testcase10(bridgeHubApi, assetHubApi, sudo, failedTestcases) {
+    console.log('testcase 10 ...');
+
+    const events = [];
+    await subEvents(bridgeHubApi, events);
+
+    // transfer 1 native from sygma relayer to Alice on Asset hub via Bridge hub
+    // data: [0, 32] => amount, [33, 64] => recipient length, [64 - end] => recipient address(Alice)
+    const proposal_native = {
+        origin_domain_id: 1,
+        deposit_nonce: 444,
+        resource_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 39, 1, 2, 0, 161, 15, 1, 0, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125],
+    }
+    // signature is not used in the integration demo, this is just a placeholder
+    const signature = [180, 250, 104, 54, 47, 69, 174, 209, 145, 226, 25, 32, 184, 96, 142, 125, 103, 53, 60, 180, 107, 207, 80, 188, 9, 138, 218, 97, 50, 132, 193, 10, 6, 15, 186, 139, 6, 21, 63, 39, 157, 144, 81, 12, 81, 165, 215, 213, 200, 105, 198, 105, 115, 193, 42, 183, 145, 118, 52, 47, 45, 198, 165, 5, 28];
+
+    const nativeBalanceBeforeBridgehub = await queryBalance(bridgeHubApi, NativeTokenTransferReserveAccount);
+    console.log('native asset balance before on Bridge hub: ', nativeBalanceBeforeBridgehub.data.free);
+
+    const nativeBalanceBeforeAssethub = await queryAssetBalance(assetHubApi, bhnAssetID, sudo.address);
+    console.log('native asset balance before on Asset hub: ', nativeBalanceBeforeAssethub.balance);
+
+    await executeProposal(bridgeHubApi, [proposal_native], signature, true, sudo);
+
+    const nativeBalanceAfterBridgehub = await queryBalance(bridgeHubApi, NativeTokenTransferReserveAccount);
+    console.log('native asset balance after on Bridge hub: ', nativeBalanceAfterBridgehub.data.free);
+
+    const nativeBalanceAfterAssethub = await queryAssetBalance(assetHubApi, bhnAssetID, sudo.address);
+    console.log('native asset balance after on Asset hub: ', nativeBalanceAfterAssethub.balance);
+
+    // NativeTokenTransferReserveAccount as the native token reserved account on Bridge hub, should be deducted by 1 token
+    if (str2BigInt(nativeBalanceBeforeBridgehub.data.free) - str2BigInt(nativeBalanceAfterBridgehub.data.free) !== BigInt(1000000000000)) {
+        failedTestcases.push('testcase 10 failed: native asset not match in NativeTokenTransferReserveAccount on Bridge hub')
+    }
+
+    // the recipient on Asset hub(Alice) should receive less than 1 BHN token bcs a small port of fee is charged
+    if (str2BigInt(nativeBalanceAfterAssethub.balance) - str2BigInt(nativeBalanceBeforeAssethub.balance) >= BigInt(1000000000000)) {
+        failedTestcases.push('testcase 10 failed: native asset not match in recipient account on Asset hub')
+    }
+
+    // checking if any sygma events emitted
+    for (const e of events) {
+        console.log('sygma pallets event emitted: \x1b[32m%s\x1b[0m\n', e);
+    }
+    if (events.length === 0) {
+        failedTestcases.push("testcase 10 failed: sygma pallets event not emitted");
+    }
+}
 
 main().catch(console.error).finally(() => process.exit());
 

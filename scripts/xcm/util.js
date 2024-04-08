@@ -11,23 +11,34 @@ const NativeTokenTransferReserveAccount = "5EYCAe5jLbHcAAMKvLFSXgCTbPrLgBJusvPwf
 const OtherTokenTransferReserveAccount = "5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp";
 
 // UsdcAssetId: AssetId defined in runtime.rs
+// USDC: Foreign token created on both Asset hub and Bridge hub
 const usdcAssetID = 2000;
 const usdcMinBalance = 100;
 const usdcName = "USDC test asset";
 const usdcSymbol = "USDC";
 const usdcDecimal = 12;
 
-const ahnAssetID = 2001;
+// AHN: Asset hub native token on Bridge hub
+const
+    ahnAssetID = 2001;
 const ahnMinBalance = 100;
 const ahnName = "Asset Hub Native";
 const ahnSymbol = "AHN";
 const ahnDecimal = 12;
 
+// TTT: Foreign token created on Bridge hub
 const tttAssetID = 2002;
 const tttMinBalance = 100;
 const tttName = "Test Token Tub";
 const tttSymbol = "TTT";
 const tttDecimal = 12;
+
+// BHN: Bridge hub native token on Asset hub
+const bhnAssetID = 2003;
+const bhnMinBalance = 100;
+const bhnName = "Bridge Hub Native";
+const bhnSymbol = "BHN";
+const bhnDecimal = 12;
 
 // relay chain
 const relayChainProvider = new WsProvider(process.env.RELAYCHAINENDPOINT || 'ws://127.0.0.1:9942');
@@ -798,7 +809,7 @@ async function subEvents (api, eventsList) {
             // console.log(`\t\t${event.meta}`);
             console.log(`${event.section}:${event.method}`);
             if (event.section.startsWith("sygmaBridge") || event.section.startsWith("sygmaBridgeForwarder")) {
-                eventsList.push(event.section);
+                eventsList.push(`${event.section}:${event.method}`);
             }
 
             // Loop through each of the parameters, displaying the type and data
@@ -892,4 +903,9 @@ module.exports = {
     tttName,
     tttSymbol,
     tttDecimal,
+    bhnAssetID,
+    bhnMinBalance,
+    bhnName,
+    bhnSymbol,
+    bhnDecimal,
 }

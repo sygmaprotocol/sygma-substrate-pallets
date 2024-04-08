@@ -17,6 +17,7 @@ use frame_system::EnsureRoot;
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain_primitives::primitives::Sibling;
 use polkadot_runtime_common::impls::ToAuthor;
+use sp_runtime::traits::CheckedConversion;
 use sp_std::vec;
 use sp_std::{marker::PhantomData, vec::Vec};
 use sygma_traits::AssetTypeIdentifier;
@@ -25,17 +26,12 @@ use xcm::latest::prelude::*;
 use xcm_builder::{
 	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowTopLevelPaidExecutionFrom,
 	CurrencyAdapter, DenyReserveTransferToRelayChain, DenyThenTry, EnsureXcmOrigin,
-	FixedWeightBounds, NativeAsset, ParentIsPreset, RelayChainAsNative,
-	SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative,
-	SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId,
-	UsingComponents, WithComputedOrigin, WithUniqueTopic,
+	FixedWeightBounds, NativeAsset, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
+	SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
+	SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId, UsingComponents,
+	WithComputedOrigin, WithUniqueTopic,
 };
-use xcm_executor::{
-	traits::{MatchesFungible},
-	XcmExecutor,
-};
-use sp_runtime::traits::CheckedConversion;
-
+use xcm_executor::{traits::MatchesFungible, XcmExecutor};
 
 parameter_types! {
 	pub const RelayLocation: MultiLocation = MultiLocation::parent();
@@ -232,7 +228,7 @@ impl<C: AssetTypeIdentifier, B: TryFrom<u128>> MatchesFungible<B> for NativeAsse
 		match (&a.id, &a.fun) {
 			(Concrete(_), Fungible(ref amount)) if C::is_native_asset(a) => {
 				CheckedConversion::checked_from(*amount)
-			}
+			},
 			_ => None,
 		}
 	}

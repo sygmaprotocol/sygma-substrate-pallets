@@ -884,24 +884,18 @@ impl ExtractDestinationData for DestinationDataParser {
 			(
 				0,
 				Junctions::X3(
-					GeneralKey {
-						length: path_len,
-						data: sygma_path,
-					},
+					GeneralKey { length: path_len, data: sygma_path },
 					GeneralIndex(dest_domain_id),
-					GeneralKey {
-						length: recipient_len,
-						data: recipient,
-					},
+					GeneralKey { length: recipient_len, data: recipient },
 				),
 			) => {
-				if &sygma_path[..*path_len as usize] == &[0x73, 0x79, 0x67, 0x6d, 0x61] {
-					return TryInto::<DomainID>::try_into(*dest_domain_id).ok().map(
-						|domain_id| (recipient[..*recipient_len as usize].to_vec(), domain_id),
-					);
+				if sygma_path[..*path_len as usize] == [0x73, 0x79, 0x67, 0x6d, 0x61] {
+					return TryInto::<DomainID>::try_into(*dest_domain_id).ok().map(|domain_id| {
+						(recipient[..*recipient_len as usize].to_vec(), domain_id)
+					});
 				}
 				None
-			}
+			},
 			_ => None,
 		}
 	}

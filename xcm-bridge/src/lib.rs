@@ -155,7 +155,7 @@ pub mod pallet {
 				self.origin,
 				xcm_instructions.clone(),
 				hash,
-				message_weight,
+				self.weight,
 				message_weight,
 			)
 			.ensure_complete()

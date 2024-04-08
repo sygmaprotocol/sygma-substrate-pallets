@@ -33,11 +33,10 @@ cumulus_based = true
 	rpc_port = 8933
 	ws_port = 8943
 	args = [
-		"-lparachain=debug,runtime::bridge-hub=trace,runtime::bridge=trace,runtime::bridge-dispatch=trace,bridge=trace,runtime::bridge-messages=trace,xcm=trace",
+		"-lparachain=warn,runtime::bridge-hub=debug,runtime::bridge=trace,runtime::bridge-dispatch=debug,bridge=trace,runtime::bridge-messages=debug,xcm=trace",
 	]
 	extra_args = [
-		"--force-authoring", "--no-mdns", "--bootnodes {{'bridge-hub-bob-collator'|zombie('multiAddress')}}",
-		"-- --port 41333 --rpc-port 48933 --ws-port 48943 --no-mdns", "--bootnodes {{'alice-validator'|zombie('multiAddress')}}"
+		"--force-authoring", "--no-mdns", "--bootnodes {{'bridge-hub-bob-collator'|zombie('multiAddress')}}", "--bootnodes {{'alice-validator'|zombie('multiAddress')}}"
 	]
 
 	# run bob as parachain collator
@@ -48,11 +47,10 @@ cumulus_based = true
 	rpc_port = 8934
 	ws_port = 8944
 	args = [
-		"-lparachain=trace,runtime::bridge-hub=trace,runtime::bridge=trace,runtime::bridge-dispatch=trace,bridge=trace,runtime::bridge-messages=trace,xcm=trace",
+		"-lparachain=warn,runtime::bridge-hub=debug,runtime::bridge=trace,runtime::bridge-dispatch=debug,bridge=trace,runtime::bridge-messages=debug,xcm=trace",
 	]
 	extra_args = [
-		"--force-authoring", "--no-mdns", "--bootnodes {{'bridge-hub-alice-collator'|zombie('multiAddress')}}",
-		"-- --port 41334 --rpc-port 48934 --ws-port 48944 --no-mdns", "--bootnodes {{'bob-validator'|zombie('multiAddress')}}"
+		"--force-authoring", "--no-mdns", "--bootnodes {{'bridge-hub-alice-collator'|zombie('multiAddress')}}", "--bootnodes {{'bob-validator'|zombie('multiAddress')}}"
 	]
 
 [[parachains]]
@@ -66,11 +64,10 @@ cumulus_based = true
 	ws_port = 9910
 	command = "./polkadot-parachain"
 	args = [
-		"-lparachain=debug,xcm=trace,runtime::bridge-transfer=trace",
+		"-lparachain=warn,runtime::bridge-hub=debug,runtime::bridge=trace,runtime::bridge-dispatch=debug,bridge=trace,runtime::bridge-messages=debug,xcm=trace",
 	]
 	extra_args = [
-		"--no-mdns", "--bootnodes {{'asset-hub-bob-collator'|zombie('multiAddress')}}",
-		"-- --port 51333 --rpc-port 58933 --ws-port 58943 --no-mdns", "--bootnodes {{'alice-validator'|zombie('multiAddress')}}"
+		"--no-mdns", "--bootnodes {{'asset-hub-bob-collator'|zombie('multiAddress')}}", "--bootnodes {{'alice-validator'|zombie('multiAddress')}}"
 	]
 
 	[[parachains.collators]]
@@ -79,21 +76,22 @@ cumulus_based = true
 	ws_port = 9810
 	command = "./polkadot-parachain"
 	args = [
-		"-lparachain=debug,xcm=trace,runtime::bridge-transfer=trace",
+		"-lparachain=warn,runtime::bridge-hub=debug,runtime::bridge=trace,runtime::bridge-dispatch=debug,bridge=trace,runtime::bridge-messages=debug,xcm=trace",
 	]
 	extra_args = [
-		"--no-mdns", "--bootnodes {{'asset-hub-alice-collator'|zombie('multiAddress')}}",
-		"-- --port 51433 --rpc-port 58833 --ws-port 58843 --no-mdns", "--bootnodes {{'alice-validator'|zombie('multiAddress')}}"
+		"--no-mdns", "--bootnodes {{'asset-hub-alice-collator'|zombie('multiAddress')}}", "--bootnodes {{'alice-validator'|zombie('multiAddress')}}"
 	]
 
-[[hrmp_channels]]
-sender = 1000
-recipient = 1013
-max_capacity = 4
-max_message_size = 524288
-
-[[hrmp_channels]]
-sender = 1013
-recipient = 1000
-max_capacity = 4
-max_message_size = 524288
+# TODO: open an issue on zombienet repo
+# for now, using setup scripts to build HRMP channels
+#[[hrmp_channels]]
+#sender = 1000
+#recipient = 1013
+#max_capacity = 8
+#max_message_size = 1048576
+#
+#[[hrmp_channels]]
+#sender = 1013
+#recipient = 1000
+#max_capacity = 8
+#max_message_size = 1048576

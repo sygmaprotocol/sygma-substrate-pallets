@@ -20,8 +20,8 @@ const {
     setAssetMetadata,
     mintAsset,
     getUSDCAssetId,
-    getAHNAssetId,
     getAHNMultiAsset,
+    getAHNAssetId,
     getTTTMultiAsset,
     getTTTAssetId,
     queryBridgePauseStatus,
@@ -47,6 +47,11 @@ const {
     tttName,
     tttSymbol,
     tttDecimal,
+    bhnAssetID,
+    bhnMinBalance,
+    bhnName,
+    bhnSymbol,
+    bhnDecimal,
 } = require("./util");
 
 const BN = require('bn.js');
@@ -114,8 +119,12 @@ async function main() {
     const usdcAdmin = sudo.address;
     // AHN token admin
     const ahnAdmin = sudo.address;
+    // BHN token admin
+    const bhnAdmin = sudo.address;
     // TTT token admin
     const tttAdmin = sudo.address;
+
+    const extensionAliceAccount = "5GYrSdyt7wydaQiqsnrvq11neaC2eTUBXCnXhSJKpUPT3hXP"
 
     // create USDC test asset (foreign asset) on asset hub
     await createAsset(assetHubApi, usdcAssetID, usdcAdmin, usdcMinBalance, true, sudo);
@@ -132,6 +141,12 @@ async function main() {
     await createAsset(bridgeHubApi, ahnAssetID, ahnAdmin, ahnMinBalance, true, sudo);
     await setAssetMetadata(bridgeHubApi, ahnAssetID, ahnName, ahnSymbol, ahnDecimal, true, sudo);
     await mintAsset(bridgeHubApi, ahnAssetID, ahnAdmin, bn1e12.mul(new BN(100)), true, sudo); // mint 100 AHN to Alice
+
+    // create Bridge Hub Native(BHN) test asset (foreign asset) on Asset hub
+    // this is for mapping the Bridge Hub Native asset on Asset hub
+    await createAsset(assetHubApi, bhnAssetID, bhnAdmin, bhnMinBalance, true, sudo);
+    await setAssetMetadata(assetHubApi, bhnAssetID, bhnName, bhnSymbol, bhnDecimal, true, sudo);
+    await mintAsset(assetHubApi, bhnAssetID, bhnAdmin, bn1e12.mul(new BN(100)), true, sudo); // mint 100 BHN to Alice
 
     // create TTT test asset (foreign asset) on bridge hub
     // this is for mapping the local foreign token on Bridge hub
@@ -181,6 +196,15 @@ async function main() {
     await mintAsset(bridgeHubApi, tttAssetID, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 TTT to OtherTokenTransferReserveAccount
     await mintAsset(bridgeHubApi, tttAssetID, FeeReserveAccount, bn1e12.mul(new BN(1)), true, sudo); // mint 1 TTT to FeeReserveAccount
 
+    // mint 100 USDC to reserve account so that the testcase 7 will have some init funds
+    await mintAsset(bridgeHubApi, usdcAssetID, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(100)), true, sudo); // mint 100 USDC to OtherTokenTransferReserveAccount
+
+    // mint 10 USDC to the sibling sovereignaccount of 1013 on asset hub
+    // USDC is reserved on asset hub, so in testcase 9, the reserved token from siblingSovereignAccount1013 will be transferred to the recipient on Asset hub
+    const siblingSovereignAccount1013= "5Eg2fntRRwLinojmk3sh5xscp7F3S6Zzm5oDVtoLTALKiypR";
+    await transferBalance(assetHubApi, siblingSovereignAccount1013, bn1e12.mul(new BN(10)), true, sudo); // make sure the sibling sovereignaccount of 1013 on asset hub exists
+    await mintAsset(assetHubApi, usdcAssetID, siblingSovereignAccount1013, bn1e12.mul(new BN(10)), true, sudo);
+
     // set up MPC address(will also unpause all registered domains) on bridge hub
     if (mpcAddr) {
         console.log(`set up mpc address: ${mpcAddr}`);
@@ -197,18 +221,26 @@ async function main() {
 
     // transfer native asset to extension alice account on bridge hub
     // this is for teleport native asset of Asset hub(AHN) -> Bridge hub testcase
-    const extensionAliceAccount = "5GYrSdyt7wydaQiqsnrvq11neaC2eTUBXCnXhSJKpUPT3hXP"
     await transferBalance(bridgeHubApi, extensionAliceAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
 
+    // mint 10 AHN to extensionAliceAccount, used in testcase 4
+    await mintAsset(bridgeHubApi, ahnAssetID, extensionAliceAccount, bn1e12.mul(new BN(10)), true, sudo);
+    // mint 10 AHN to OtherTokenTransferReserveAccount, used in testcase 6
+    await mintAsset(bridgeHubApi, ahnAssetID, OtherTokenTransferReserveAccount, bn1e12.mul(new BN(10)), true, sudo); // mint 10 AHN to OtherTokenTransferReserveAccount
+
+
     // transfer native asset to FungiblesTransactor CheckingAccount on both parachains
-    // this is part of the parachain launching setup, ideally should be done by parachain team after launching, but in our testing env we are using brand new chain, so we need to set this up.
+    // this is part of the parachain launching setup, ideally should be done by parachain team after launching, but in our testing env we are using brand-new chain, so we need to set this up.
     const CheckingAccount = "5EYCAe5ijiYgWYWi1fs8Xz1td1djEtJVVnNfzvDRP4VtLL7Y";
     await transferBalance(assetHubApi, CheckingAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
-    // await transferBalance(bridgeHubApi, CheckingAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
+    await transferBalance(bridgeHubApi, CheckingAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
 
-    // not sure what this account is, but it needs to exist as well
+    // some other addresses need to exist as well, they are tmp accounts in pallets
     const sygmaXCMTransactorAccount = "5ExVnaLuWGe8WqCpaY4jg65kMz5hefx5A2covME3RhE4Y1m1";
-    await transferBalance(bridgeHubApi, sygmaXCMTransactorAccount, bn1e12.mul(new BN(1)), true, sudo); // set balance to 1 native asset
+    const sygmaXCMTransactorAccount2 = "5D6gSNWpCcRowidpVC2k3FzmrfJjHX1Wu2NuBgsi717qtL5Y"; // when transfer BHN from sygma relayer to asset hub via bridge hub, this account received the BHN from NativeReservedAcoount on bridge hub
+    await transferBalance(bridgeHubApi, sygmaXCMTransactorAccount, bn1e12.mul(new BN(10)), true, sudo); // set balance to 10 native asset
+    await transferBalance(bridgeHubApi, sygmaXCMTransactorAccount2, bn1e12.mul(new BN(10)), true, sudo); // set balance to 10 native asset
+
     console.log('======= Parachain setup is done =======');
 
     console.log('======= HRMP channel setup begin =======');
@@ -217,18 +249,18 @@ async function main() {
     const openHRMPChannelRequestEncodedData1000To1013 = "0x3c00f50300000800000000001000";
     await hrmpChannelRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, openHRMPChannelRequestEncodedData1000To1013, 1000), 1000, 1013, true, sudo);
     console.log("wait processing on the relay chain...")
-    await delay(15000);
+    await delay(10000);
     // accept HRMP channel open request on 1013
     const acceptHRMPChannelRequestEncodedData1000To1013 = "0x3c01e8030000";
     await hrmpChannelRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, acceptHRMPChannelRequestEncodedData1000To1013, 1013), 1000, 1013, true, sudo);
 
-    await delay(15000);
+    await delay(5000);
 
     // init HRMP channel open request from 1013 to 1000
     const openHRMPChannelRequestEncodedData1013To1000 = "0x3c00e80300000800000000001000";
     await hrmpChannelRequest(bridgeHubApi, getHRMPChannelDest(bridgeHubApi), getHRMPChannelMessage(bridgeHubApi, openHRMPChannelRequestEncodedData1013To1000, 1013), 1013, 1000, true, sudo);
     console.log("wait processing on the relay chain...")
-    await delay(15000);
+    await delay(10000);
     // accept HRMP channel open request on 1000
     const acceptHRMPChannelRequestEncodedData1013To1000 = "0x3c01f5030000";
     await hrmpChannelRequest(assetHubApi, getHRMPChannelDest(assetHubApi), getHRMPChannelMessage(assetHubApi, acceptHRMPChannelRequestEncodedData1013To1000, 1000), 1013, 1000, true, sudo);
