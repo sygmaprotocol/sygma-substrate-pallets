@@ -1,0 +1,83 @@
+# The Licensed Work is (c) 2022 Sygma
+# SPDX-License-Identifier: LGPL-3.0-only
+
+FROM --platform=linux/amd64 paritytech/ci-linux:production as builder
+
+WORKDIR /code
+
+# git config setup
+RUN git config --global http.postBuffer 1048576000
+RUN git config --global https.postBuffer 1048576000
+RUN git config --global http.sslBackend gnutls
+
+# clone polkadot-sdk with demo integration branch
+# this demo integration branch is based on v1.2.0 of polkadot-sdk
+RUN git clone https://github.com/freddyli7/polkadot-sdk.git ./polkadot-sdk
+WORKDIR /code/polkadot-sdk
+RUN git checkout sygma/pallets-integration
+
+WORKDIR /code
+
+# download zombienet binary
+RUN apt-get update \
+     && apt-get install -y wget
+RUN wget https://github.com/paritytech/zombienet/releases/download/v1.3.94/zombienet-linux-x64
+RUN mv zombienet-linux-x64 ./polkadot-sdk/local-test/zombienet
+RUN chmod +x ./polkadot-sdk/local-test/zombienet
+
+# install rust toolchain
+RUN rustup toolchain install 1.74.0
+RUN rustup default 1.74.0
+RUN rustc --version
+RUN rustup target add wasm32-unknown-unknown --toolchain 1.74.0
+
+# build the polkdaot binary and parachain binary
+WORKDIR /code/polkadot-sdk
+
+ARG CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=true
+RUN cargo build --release -p polkadot-parachain-bin
+RUN cargo build --release -p polkadot
+
+FROM --platform=linux/amd64 node:18.14.2
+
+WORKDIR /scripts
+
+COPY --from=builder /code/polkadot-sdk/target ./polkadot-sdk/target
+COPY --from=builder /code/polkadot-sdk/local-test ./polkadot-sdk/local-test
+
+# setup script
+COPY ./scripts/xcm/ ./xcm
+COPY ./scripts/xcm_e2e_setup.sh .
+RUN chmod +x ./xcm_e2e_setup.sh
+
+# Install root certs, see: https://github.com/paritytech/substrate/issues/9984
+RUN apt update && \
+    apt install -y ca-certificates && \
+    update-ca-certificates && \
+    apt remove ca-certificates -y && \
+    rm -rf /var/lib/apt/lists/*
+
+# JSON-RPC WS server
+# relaychain
+EXPOSE 9943
+# Asset hub
+EXPOSE 9910
+# Bridge hub
+EXPOSE 8943
+
+# JSON-RPC HTTP server
+# relaychain
+EXPOSE 9933
+# Asset hub
+EXPOSE 9911
+# Bridge hub
+EXPOSE 8933
+
+ARG mpc_address
+ENV MPCADDR $mpc_address
+
+RUN ["./xcm_e2e_setup.sh"]
+
+WORKDIR /scripts/polkadot-sdk/local-test
+
+ENTRYPOINT ["./zombienet", "spawn", "--provider", "native", "./bridge_hub_rococo_local_network.toml", "-d", "./db"]
