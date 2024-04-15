@@ -99,6 +99,7 @@ async function main() {
     // sovereignaccount of parachain 1013 on relaychain:
     const sovereignAccount1013 = "5Ec4AhPcMD9pfD1dC3vbyKXoZdZjigWthS9nEwGqaSJksLJv";
     // transfer native asset to parachain sovereignaccount on relay chain
+    // this is for creating the HRMP channels bcs sovereignaccount will be the sender of the OpenHRMPChannel and AcceptHRMPChannel call on the relaychain
     await transferBalance(relayChainApi, sovereignAccount1000, bn1e12.mul(new BN(10)), true, sudo); // set balance to 10 native asset
     await transferBalance(relayChainApi, sovereignAccount1013, bn1e12.mul(new BN(10)), true, sudo); // set balance to 10 native asset
 
