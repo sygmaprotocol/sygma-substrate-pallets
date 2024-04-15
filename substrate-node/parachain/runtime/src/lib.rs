@@ -883,17 +883,18 @@ impl ExtractDestinationData for DestinationDataParser {
 		match (dest.parents, &dest.interior) {
 			(
 				0,
-				Junctions::X2(
+				Junctions::X3(
+					GeneralKey { length: path_len, data: sygma_path },
+					GeneralIndex(dest_domain_id),
 					GeneralKey { length: recipient_len, data: recipient },
-					GeneralKey { length: _domain_len, data: dest_domain_id },
 				),
 			) => {
-				let d = u8::default();
-				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
-				if *domain_id == d {
-					return None;
+				if sygma_path[..*path_len as usize] == [0x73, 0x79, 0x67, 0x6d, 0x61] {
+					return TryInto::<DomainID>::try_into(*dest_domain_id).ok().map(|domain_id| {
+						(recipient[..*recipient_len as usize].to_vec(), domain_id)
+					});
 				}
-				Some((recipient[..*recipient_len as usize].to_vec(), *domain_id))
+				None
 			},
 			_ => None,
 		}
