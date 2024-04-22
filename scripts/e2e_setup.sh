@@ -18,7 +18,7 @@ CHAINSPECFILE="chain-spec.json"
 
 # Run setup script
 echo "run scripts to set up pallets..."
-npm i --prefix $SETUP_SCRIPTS_DIR/scripts/js
+npm i --prefix $SETUP_SCRIPTS_DIR/scripts/standalone
 node $SETUP_SCRIPTS_DIR/scripts/standalone/setup.js
 
 sleep 10

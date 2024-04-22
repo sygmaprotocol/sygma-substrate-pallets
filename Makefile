@@ -39,7 +39,7 @@ start-dev:
 # run setup js script to setup the local substrate node
 # substrate node is required, run make start-dev first
 run-setup:
-	node ./scripts/js/setup.js
+	node ./scripts/standalone/setup.js
 
 # build-docker-image builds the docker image without setup the chain
 build-docker-image:
@@ -53,26 +53,26 @@ start-docker-image:
 
 # build-e2e-test-docker-image builds the e2e test docker image
 build-e2e-test-docker-image:
-	@echo "building the e2e test docker image..."
-	@echo "dockerfile in use: Dockerfile_e2e"
-	@echo "mpc address in env var: $(MPCADDR)"
+	@echo "\033[92m ==> building the e2e test docker image, dockerfile in use: Dockerfile_e2e \033[0m"
+	@echo "\033[92m ==> mpc address in env var: $(MPCADDR) \033[0m"
+
 	docker build --file ./Dockerfile_e2e -t sygma_substrate_pallets_e2e_preconfigured --build-arg mpc_address=$(MPCADDR) .
 
 # run the preconfigured e2e docker image
-start-e2e-image:
+start-e2e-test-docker-image:
 	 docker run -p 9944:9944 -it sygma_substrate_pallets_e2e_preconfigured
 
 ##################### Phala subbridge integration node E2E test image ##################
 
 # build-subbridge-e2e-test-image builds the phala subbridge integrated sygma pallet e2e test docker image
 # this e2e image is a relay chain + phala parachain with sygma pallets simulation env
-build-subbridge-e2e-test-image:
-	@echo "building the subbridge e2e test docker image..."
-	@echo "dockerfile in use: Dockerfile_subbridge_e2e"
+build-subbridge-e2e-test-docker-image:
+	@echo "\033[92m ==> building the subbridge e2e test docker image, dockerfile in use: Dockerfile_subbridge_e2e \033[0m"
+
 	docker build --file ./Dockerfile_subbridge_e2e -t sygma_substrate_pallets_subbridge_e2e_preconfigured .
 
 # run the preconfigured e2e subbridge docker image
-start-subbridge-e2e-image:
+start-subbridge-e2e-test-docker-image:
 	 docker run -p 9944:9944 -it sygma_substrate_pallets_subbridge_e2e_preconfigured
 
 ##################### Zombienet ##################
@@ -84,3 +84,19 @@ build-zombienet: build
 # launch the parachain node in local zombienet with relay chain and parachain
 start-zombienet:
 	./zombienet/zombienet spawn -p native ./zombienet/local_zombienet.toml
+
+##################### XCM E2E test image ##################
+
+# build a docker image with all sygma features integrated in Bridge hub parachain
+# this will also launch Asset hub parachain with Rococo relaychain by zombienet and then run xcm e2e setup script
+build-xcm-e2e-test-docker-image:
+	@echo "\033[92m ==> building the xcm e2e test docker image, dockerfile in use: Dockerfile_xcm_e2e \033[0m"
+	@echo "\033[92m ==> this cmd will take env var MPCADDR when building the image, if not provided, you can still manually set it up via sygma bridge pallet extrinsic after launching \033[0m"
+	@echo "\033[92m ==> mpc address in env var: $(MPCADDR) \033[0m"
+
+	docker build --file ./Dockerfile_xcm_e2e -t sygma_substrate_pallets_xcm_e2e_preconfigured --build-arg mpc_address=$(MPCADDR) .
+
+# run the preconfigured xcm e2e docker image
+# this will launch preconfigured zombienet with Rococo relaychain, Asset hub parachain, Bridge hub parachain(sygma pallets integrated)
+start-xcm-e2e-test-docker-image:
+	docker run --platform linux/amd64 -p 9943:9943 -p 9910:9910 -p 8943:8943 -it sygma_substrate_pallets_xcm_e2e_preconfigured
