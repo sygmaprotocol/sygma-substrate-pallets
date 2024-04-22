@@ -1,6 +1,6 @@
 [package]
 name = "parachain-node-template"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 description = "A fresh FRAME-based Substrate node, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
@@ -84,7 +84,7 @@ frame-benchmarking = { version = "4.0.0-dev", git = "https://github.com/parityte
 frame-benchmarking-cli = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.2.0" }
 
 # Local Dependencies
-parachain-template-runtime = { version = "4.0.3-dev", path = "../runtime" }
+parachain-template-runtime = { version = "4.0.4-dev", path = "../runtime" }
 sygma-rpc = { path = "../../../rpc", default-features = false }
 sygma-runtime-api = { path = "../../../runtime-api", default-features = false }
 

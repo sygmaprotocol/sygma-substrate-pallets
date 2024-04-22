@@ -1,6 +1,6 @@
 [package]
 name = "standalone-template-runtime"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 description = "A fresh FRAME-based Substrate node, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"

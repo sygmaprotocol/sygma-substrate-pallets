@@ -1,6 +1,6 @@
 [package]
 name = "parachain-template-runtime"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 description = "A new Cumulus FRAME-based Substrate Runtime, ready for hacking together a parachain."
 license = "LGPL-3.0"

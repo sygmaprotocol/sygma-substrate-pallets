@@ -6858,7 +6858,7 @@ dependencies = [
 
 [[package]]
 name = "parachain-node-template"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 dependencies = [
  "clap",
  "color-print",
@@ -6925,7 +6925,7 @@ dependencies = [
 
 [[package]]
 name = "parachain-template-runtime"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 dependencies = [
  "cumulus-pallet-aura-ext",
  "cumulus-pallet-dmp-queue",
@@ -12096,7 +12096,7 @@ dependencies = [
 
 [[package]]
 name = "standalone-node-template"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 dependencies = [
  "clap",
  "cumulus-primitives-core",
@@ -12146,7 +12146,7 @@ dependencies = [
 
 [[package]]
 name = "standalone-template-runtime"
-version = "4.0.3-dev"
+version = "4.0.4-dev"
 dependencies = [
  "fixed",
  "frame-benchmarking",
@@ -12390,7 +12390,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sygma-access-segregator"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -12405,7 +12405,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-basic-feehandler"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -12425,7 +12425,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-bridge"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "arrayref",
  "assert_matches",
@@ -12469,7 +12469,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-bridge-forwarder"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "cumulus-pallet-xcm",
  "cumulus-primitives-core",
@@ -12495,7 +12495,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-fee-handler-router"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -12517,7 +12517,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-percentage-feehandler"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -12537,7 +12537,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-rpc"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
@@ -12553,7 +12553,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-runtime-api"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "sp-api",
  "sygma-bridge",
@@ -12562,7 +12562,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-traits"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ethabi",
  "frame-support",
@@ -12576,7 +12576,7 @@ dependencies = [
 
 [[package]]
 name = "sygma-xcm-bridge"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "cumulus-pallet-dmp-queue",
  "cumulus-pallet-xcm",
