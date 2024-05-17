@@ -10,7 +10,7 @@ use frame_system::RawOrigin as SystemOrigin;
 
 use sp_std::vec;
 use sygma_traits::DomainID;
-use xcm::latest::prelude::*;
+use xcm::v4::prelude::*;
 
 #[benchmarks]
 mod benchmarks {
@@ -19,7 +19,7 @@ mod benchmarks {
 	#[benchmark]
 	fn set_fee() {
 		let dest_domain_id: DomainID = 1;
-		let native_location: MultiLocation = MultiLocation::here();
+		let native_location: Location = Location::here();
 		let fee = 1_000_000_000_000u128; // 1 with 12 decimals
 
 		#[extrinsic_call]

@@ -21,7 +21,8 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
-	use xcm::latest::{AssetId, MultiAsset};
+	use xcm::opaque::v4::Asset;
+	use xcm::v4::AssetId;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -96,7 +97,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
+		fn get_fee(domain: DomainID, asset: Asset) -> Option<u128> {
 			AssetFees::<T>::get((domain, &asset.id))
 		}
 	}
@@ -112,36 +113,41 @@ pub mod pallet {
 		use frame_support::{assert_noop, assert_ok};
 		use sp_std::boxed::Box;
 		use sygma_traits::DomainID;
-		use xcm::latest::{prelude::*, MultiLocation};
+		use xcm::opaque::v4::Junctions::Here;
+		use xcm::opaque::v4::Location;
+		use xcm::v4::prelude::*;
 
 		#[test]
 		fn set_get_fee() {
 			new_test_ext().execute_with(|| {
 				let dest_domain_id: DomainID = 0;
 				let another_dest_domain_id: DomainID = 1;
-				let asset_id_a = Concrete(MultiLocation::new(1, Here));
+				let asset_id_a = AssetId(Location::new(1, Here));
 				let amount_a = 100u128;
 
-				let asset_id_b = Concrete(MultiLocation::new(2, Here));
+				let asset_id_b = AssetId(Location::new(2, Here));
 				let amount_b = 101u128;
 
 				// set fee 100 with assetId asset_id_a for one domain
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id_a),
+					Box::new(asset_id_a.clone()),
 					amount_a
 				));
 				// set fee 200 with assetId asset_id_a for another domain
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					another_dest_domain_id,
-					Box::new(asset_id_a),
+					Box::new(asset_id_a.clone()),
 					amount_a * 2
 				));
-				assert_eq!(AssetFees::<Test>::get((dest_domain_id, asset_id_a)).unwrap(), amount_a);
 				assert_eq!(
-					AssetFees::<Test>::get((another_dest_domain_id, asset_id_a)).unwrap(),
+					AssetFees::<Test>::get((dest_domain_id, asset_id_a.clone())).unwrap(),
+					amount_a
+				);
+				assert_eq!(
+					AssetFees::<Test>::get((another_dest_domain_id, asset_id_a.clone())).unwrap(),
 					amount_a * 2
 				);
 
@@ -149,16 +155,25 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id_b),
+					Box::new(asset_id_b.clone()),
 					amount_b
 				));
-				assert_eq!(AssetFees::<Test>::get((dest_domain_id, asset_id_b)).unwrap(), amount_b);
+				assert_eq!(
+					AssetFees::<Test>::get((dest_domain_id, asset_id_b.clone())).unwrap(),
+					amount_b
+				);
 
 				// fee of asset_id_a should not be equal to amount_b
-				assert_ne!(AssetFees::<Test>::get((dest_domain_id, asset_id_a)).unwrap(), amount_b);
+				assert_ne!(
+					AssetFees::<Test>::get((dest_domain_id, asset_id_a.clone())).unwrap(),
+					amount_b
+				);
 
 				// fee of asset_id_b should not be equal to amount_a
-				assert_ne!(AssetFees::<Test>::get((dest_domain_id, asset_id_b)).unwrap(), amount_a);
+				assert_ne!(
+					AssetFees::<Test>::get((dest_domain_id, asset_id_b.clone())).unwrap(),
+					amount_a
+				);
 
 				// permission test: unauthorized account should not be able to set fee
 				let unauthorized_account = Origin::from(Some(ALICE));
@@ -166,7 +181,7 @@ pub mod pallet {
 					BasicFeeHandler::set_fee(
 						unauthorized_account,
 						dest_domain_id,
-						Box::new(asset_id_a),
+						Box::new(asset_id_a.clone()),
 						amount_a
 					),
 					basic_fee_handler::Error::<Test>::AccessDenied
@@ -175,12 +190,12 @@ pub mod pallet {
 				assert_events(vec![
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
 						domain: dest_domain_id,
-						asset: asset_id_a,
+						asset: asset_id_a.clone(),
 						amount: amount_a,
 					}),
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
 						domain: another_dest_domain_id,
-						asset: asset_id_a,
+						asset: asset_id_a.clone(),
 						amount: amount_a * 2,
 					}),
 					Event::BasicFeeHandler(BasicFeeHandlerEvent::FeeSet {
@@ -196,19 +211,19 @@ pub mod pallet {
 		fn access_control() {
 			new_test_ext().execute_with(|| {
 				let dest_domain_id: DomainID = 0;
-				let asset_id = Concrete(MultiLocation::new(0, Here));
+				let asset_id = AssetId(Location::new(0, Here));
 
 				assert_ok!(BasicFeeHandler::set_fee(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id),
+					Box::new(asset_id.clone()),
 					100
 				),);
 				assert_noop!(
 					BasicFeeHandler::set_fee(
 						Some(ALICE).into(),
 						dest_domain_id,
-						Box::new(asset_id),
+						Box::new(asset_id.clone()),
 						200
 					),
 					basic_fee_handler::Error::<Test>::AccessDenied
@@ -234,10 +249,13 @@ pub mod pallet {
 				assert_ok!(BasicFeeHandler::set_fee(
 					Some(ALICE).into(),
 					dest_domain_id,
-					Box::new(asset_id),
+					Box::new(asset_id.clone()),
 					200
 				),);
-				assert_eq!(AssetFees::<Test>::get((dest_domain_id, asset_id)).unwrap(), 200);
+				assert_eq!(
+					AssetFees::<Test>::get((dest_domain_id, asset_id.clone())).unwrap(),
+					200
+				);
 			})
 		}
 	}

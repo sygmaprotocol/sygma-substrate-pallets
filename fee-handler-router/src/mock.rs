@@ -15,7 +15,7 @@ use frame_support::{
 };
 use frame_system::{self as system, EnsureRoot, EnsureSigned};
 use sygma_traits::DomainID;
-use xcm::latest::MultiLocation;
+use xcm::v4::Location;
 
 use crate as fee_handler_router;
 
@@ -69,6 +69,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<2>;
+	type RuntimeTask = ();
 }
 
 parameter_types! {
@@ -88,7 +89,7 @@ impl pallet_balances::Config for Test {
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
 	type RuntimeHoldReason = ();
-	type MaxHolds = ();
+	type RuntimeFreezeReason = ();
 }
 
 parameter_types! {
@@ -134,7 +135,7 @@ parameter_types! {
 		(AccessSegregatorPalletIndex::get(), b"grant_access".to_vec()),
 		(FeeHandlerRouterPalletIndex::get(), b"set_fee_handler".to_vec()),
 	].to_vec();
-	pub PhaLocation: MultiLocation = MultiLocation::here();
+	pub PhaLocation: Location = Location::here();
 }
 
 impl sygma_basic_feehandler::Config for Test {
