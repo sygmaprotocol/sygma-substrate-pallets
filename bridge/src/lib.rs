@@ -113,6 +113,7 @@ pub mod pallet {
 		type AssetTransactor: TransactAsset;
 
 		/// AssetId and ResourceId pairs
+		#[pallet::constant]
 		type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 
 		/// Return true if asset reserved on current chain
