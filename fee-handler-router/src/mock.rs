@@ -33,7 +33,7 @@ frame_support::construct_runtime!(
 		AccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 3,
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 4,
 		FeeHandlerRouter: fee_handler_router::{Pallet, Call, Storage, Event<T>} = 5,
-		SygamPercenrageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 6,
+		SygmaPercenrageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 6,
 	}
 );
 
@@ -156,7 +156,7 @@ impl fee_handler_router::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BasicFeeHandler = SygmaBasicFeeHandler;
 	type DynamicFeeHandler = ();
-	type PercentageFeeHandler = SygamPercenrageFeeHandler;
+	type PercentageFeeHandler = SygmaPercenrageFeeHandler;
 	type PalletIndex = FeeHandlerRouterPalletIndex;
 	type WeightInfo = fee_handler_router::weights::SygmaWeightInfo<Test>;
 }
