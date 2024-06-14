@@ -199,7 +199,11 @@ pub mod pallet {
 		/// Insufficient balance on sender account
 		InsufficientBalance,
 		/// Asset transactor execution failed
-		TransactFailed,
+		TransactFailedDeposit,
+		TransactFailedWithdraw,
+		TransactFailedFeeDeposit,
+		TransactFailedHoldInReserved,
+		TransactFailedReleaseFromReserved,
 		/// The withdrawn amount can not cover the fee payment
 		FeeTooExpensive,
 		/// MPC address not set
@@ -468,7 +472,7 @@ pub mod pallet {
 				&Junction::AccountId32 { network: None, id: sender.clone().into() }.into(),
 				None,
 			)
-			.map_err(|_| Error::<T>::TransactFailed)?;
+			.map_err(|_| Error::<T>::TransactFailedWithdraw)?;
 
 			// Deposit `fee` of asset to treasury account
 			T::AssetTransactor::deposit_asset(
@@ -478,10 +482,11 @@ pub mod pallet {
 				// Put empty message hash here because we are not sending XCM message
 				Some(&XcmContext::with_message_id([0; 32])),
 			)
-			.map_err(|_| Error::<T>::TransactFailed)?;
+			.map_err(|_| Error::<T>::TransactFailedFeeDeposit)?;
 
 			let bridge_amount = amount - fee;
 
+			// TODO: FIX THIS: all registered token must have a reserved_account even though it is a mint-burn token
 			let token_reserved_account = Self::get_token_reserved_account(&asset.id)
 				.ok_or(Error::<T>::NoLiquidityHolderAccountBound)?;
 
@@ -494,7 +499,7 @@ pub mod pallet {
 					// Put empty message hash here because we are not sending XCM message
 					Some(&XcmContext::with_message_id([0; 32])),
 				)
-				.map_err(|_| Error::<T>::TransactFailed)?;
+				.map_err(|_| Error::<T>::TransactFailedHoldInReserved)?;
 			}
 
 			// Bump deposit nonce
@@ -921,7 +926,7 @@ pub mod pallet {
 					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
 					None,
 				)
-				.map_err(|_| Error::<T>::TransactFailed)?;
+				.map_err(|_| Error::<T>::TransactFailedReleaseFromReserved)?;
 			}
 
 			// Deposit `decimal_converted_asset` of asset to dest location
@@ -931,7 +936,7 @@ pub mod pallet {
 				// Put empty message hash here because we are not sending XCM message
 				Some(&XcmContext::with_message_id([0; 32])),
 			)
-			.map_err(|_| Error::<T>::TransactFailed)?;
+			.map_err(|_| Error::<T>::TransactFailedDeposit)?;
 
 			Ok(())
 		}
