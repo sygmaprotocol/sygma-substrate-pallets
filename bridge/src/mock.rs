@@ -19,13 +19,16 @@ use sp_runtime::{
 	AccountId32, BuildStorage, Perbill,
 };
 use sp_std::collections::btree_map::BTreeMap;
+use sp_std::sync::Arc;
 use sp_std::{marker::PhantomData, prelude::*, result};
+use xcm::latest::Junctions::X2;
 
 use sygma_traits::{
 	ChainID, DecimalConverter, DomainID, ExtractDestinationData, ResourceId,
 	VerifyingContractAddress,
 };
-use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
+use xcm::v4::{prelude::*, AssetId as XcmAssetId, Junctions::X1, Location};
+#[allow(deprecated)]
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
 	SiblingParachainConvertsVia,
@@ -82,6 +85,7 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<2>;
+	type RuntimeTask = ();
 }
 
 parameter_types! {
@@ -105,7 +109,7 @@ impl pallet_balances::Config for Runtime {
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
 	type RuntimeHoldReason = ();
-	type MaxHolds = ();
+	type RuntimeFreezeReason = ();
 }
 
 parameter_types! {
@@ -220,26 +224,26 @@ parameter_types! {
 	pub BridgeAccounts: BTreeMap<XcmAssetId, AccountId32> = bridge_accounts_generator();
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
 	pub RelayNetwork: NetworkId = NetworkId::Polkadot;
-	pub AssetsPalletLocation: MultiLocation =
+	pub AssetsPalletLocation: Location =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
-	pub NativeLocation: MultiLocation = MultiLocation::here();
+	pub NativeLocation: Location = Location::here();
 	pub UsdtAssetId: AssetId = 0;
-	pub UsdtLocation: MultiLocation = MultiLocation::new(
+	pub UsdtLocation: Location = Location::new(
 		1,
-		X3(
+		[
 			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
 			slice_to_generalkey(b"usdt"),
-		),
+		],
 	);
 	pub AstrAssetId: AssetId = 1;
-	pub AstrLocation: MultiLocation = MultiLocation::new(
+	pub AstrLocation: Location = Location::new(
 		1,
-		X3(
+		[
 			Parachain(2005),
 			slice_to_generalkey(b"sygma"),
 			slice_to_generalkey(b"astr"),
-		),
+		],
 	);
 	pub NativeResourceId: ResourceId = hex_literal::hex!("00e6dfb61a2fb903df487c401663825643bb825d41695e63df8af6162ab145a6");
 	pub UsdtResourceId: ResourceId = hex_literal::hex!("00b14e071ddad0b12be5aca6dffc5f2584ea158d9b0ce73e1437115e97a32a3e");
@@ -249,7 +253,7 @@ parameter_types! {
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
 }
 
-/// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
+/// Type for specifying how a `Location` can be converted into an `AccountId`. This is used
 /// when determining ownership of accounts for asset transacting and when attempting to use XCM
 /// `Transact` in order to determine the dispatch Origin.
 pub type LocationToAccountId = (
@@ -262,12 +266,13 @@ pub type LocationToAccountId = (
 );
 
 /// Means for transacting the native currency on this chain.
+#[allow(deprecated)]
 pub type CurrencyTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	IsConcrete<NativeLocation>,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -276,16 +281,16 @@ pub type CurrencyTransactor = CurrencyAdapter<
 >;
 
 /// A simple Asset converter that extract the bingding relationship between AssetId and
-/// MultiLocation, And convert Asset transfer amount to Balance
+/// Location, And convert Asset transfer amount to Balance
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
 
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
-	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
-		match (&a.fun, &a.id) {
-			(Fungible(ref amount), Concrete(ref id)) => {
-				if id == &UsdtLocation::get() {
+	fn matches_fungibles(a: &Asset) -> result::Result<(AssetId, Balance), ExecutionError> {
+		match (&a.fun, &a.id.0) {
+			(Fungible(ref amount), location) => {
+				if location == &UsdtLocation::get() {
 					Ok((UsdtAssetId::get(), *amount))
-				} else if id == &AstrLocation::get() {
+				} else if location == &AstrLocation::get() {
 					Ok((AstrAssetId::get(), *amount))
 				} else {
 					Err(ExecutionError::AssetNotHandled)
@@ -302,7 +307,7 @@ pub type FungiblesTransactor = FungiblesAdapter<
 	Assets,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	SimpleForeignAssetConverter,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -316,15 +321,15 @@ pub type AssetTransactors = (CurrencyTransactor, FungiblesTransactor);
 
 pub struct ConcrateSygmaAsset;
 impl ConcrateSygmaAsset {
-	pub fn id(asset: &MultiAsset) -> Option<MultiLocation> {
+	pub fn id(asset: &Asset) -> Option<Location> {
 		match (&asset.id, &asset.fun) {
 			// So far our native asset is concrete
-			(Concrete(id), Fungible(_)) => Some(*id),
+			(id, Fungible(_)) => Some(id.0.clone()),
 			_ => None,
 		}
 	}
 
-	pub fn origin(asset: &MultiAsset) -> Option<MultiLocation> {
+	pub fn origin(asset: &Asset) -> Option<Location> {
 		Self::id(asset).and_then(|id| {
 			match (id.parents, id.first_interior()) {
 				// Sibling parachain
@@ -335,18 +340,18 @@ impl ConcrateSygmaAsset {
 						// The registered foreign assets actually reserved on EVM chains, so when
 						// transfer back to EVM chains, they should be treated as non-reserve assets
 						// relative to current chain.
-						Some(MultiLocation::new(0, X1(slice_to_generalkey(b"sygma"))))
+						Some(Location::new(0, X1(Arc::new([slice_to_generalkey(b"sygma")]))))
 					} else {
 						// Other parachain assets should be treat as reserve asset when transfered
 						// to outside EVM chains
-						Some(MultiLocation::here())
+						Some(Location::here())
 					}
 				},
 				// Parent assets should be treat as reserve asset when transfered to outside EVM
 				// chains
-				(1, _) => Some(MultiLocation::here()),
+				(1, _) => Some(Location::here()),
 				// Children parachain
-				(0, Some(Parachain(id))) => Some(MultiLocation::new(0, X1(Parachain(*id)))),
+				(0, Some(Parachain(id))) => Some(Location::new(0, X1(Arc::new([Parachain(*id)])))),
 				// Local: (0, Here)
 				(0, None) => Some(id),
 				_ => None,
@@ -359,7 +364,7 @@ pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
 impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 	for SygmaDecimalConverter<DecimalPairs>
 {
-	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+	fn convert_to(asset: &Asset) -> Option<u128> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
 				for (asset_id, decimal) in DecimalPairs::get().iter() {
@@ -398,13 +403,13 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 		}
 	}
 
-	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+	fn convert_from(asset: &Asset) -> Option<Asset> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
 				for (asset_id, decimal) in DecimalPairs::get().iter() {
 					if *asset_id == asset.id {
 						return if *decimal == 18 {
-							Some((asset.id, *amount).into())
+							Some((asset.id.clone(), *amount).into())
 						} else {
 							type U112F16 = FixedU128<U16>;
 							if *decimal > 18 {
@@ -418,7 +423,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
 								let b = U112F16::from_num(*amount).saturating_mul(a);
 								let r: u128 = b.to_num();
-								Some((asset.id, r).into())
+								Some((asset.id.clone(), r).into())
 							} else {
 								let a =
 									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
@@ -427,7 +432,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								if r == 0 {
 									return None;
 								}
-								Some((asset.id, r).into())
+								Some((asset.id.clone(), r).into())
 							}
 						};
 					}
@@ -440,8 +445,8 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 }
 
 pub struct ReserveChecker;
-impl ContainsPair<MultiAsset, MultiLocation> for ReserveChecker {
-	fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool {
+impl ContainsPair<Asset, Location> for ReserveChecker {
+	fn contains(asset: &Asset, origin: &Location) -> bool {
 		if let Some(ref id) = ConcrateSygmaAsset::origin(asset) {
 			if id == origin {
 				return true;
@@ -454,21 +459,24 @@ impl ContainsPair<MultiAsset, MultiLocation> for ReserveChecker {
 // Project can have it's own implementation to adapt their own spec design.
 pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
-	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
-		match (dest.parents, &dest.interior) {
-			(
-				0,
-				Junctions::X2(
-					GeneralKey { length: recipient_len, data: recipient },
-					GeneralKey { length: _domain_len, data: dest_domain_id },
-				),
-			) => {
-				let d = u8::default();
-				let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
-				if *domain_id == d {
-					return None;
+	fn extract_dest(dest: &Location) -> Option<(Vec<u8>, DomainID)> {
+		match (dest.parents, dest.interior.clone()) {
+			(0, X2(xs)) => {
+				let [a, b] = *xs;
+				match (a, b) {
+					(
+						GeneralKey { length: recipient_len, data: recipient },
+						GeneralKey { length: _domain_len, data: dest_domain_id },
+					) => {
+						let d = u8::default();
+						let domain_id = dest_domain_id.as_slice().first().unwrap_or(&d);
+						if *domain_id == d {
+							return None;
+						}
+						Some((recipient[..recipient_len as usize].to_vec(), *domain_id))
+					},
+					_ => None,
 				}
-				Some((recipient[..*recipient_len as usize].to_vec(), *domain_id))
 			},
 			_ => None,
 		}

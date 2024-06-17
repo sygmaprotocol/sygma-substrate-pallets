@@ -22,12 +22,18 @@ use polkadot_parachain_primitives::primitives::Sibling;
 use sp_runtime::testing::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_runtime::{AccountId32, BuildStorage};
-use xcm::latest::{BodyId, Junction, MultiAsset, MultiLocation, NetworkId};
+use xcm::v4::{Asset, AssetId as XcmAssetId, BodyId, Junction, Location, NetworkId};
 
-use xcm::prelude::{Concrete, Fungible, GeneralKey, Parachain, X1, X3};
-
+use sp_std::sync::Arc;
 use sygma_traits::{AssetTypeIdentifier, Bridge, TransactorForwarder};
-use xcm::v3::Weight;
+use xcm::v4::prelude::{
+	Fungible, GeneralKey,
+	Junctions::{X1, X3},
+	Parachain,
+};
+use xcm::v4::Weight;
+// allowing the CurrencyAdapter for now and using FungibleAdapter in the next version upgrade
+#[allow(deprecated)]
 use xcm_builder::{
 	AccountId32Aliases, CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking, ParentIsPreset,
 	SiblingParachainConvertsVia,
@@ -65,6 +71,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeTask = ();
 	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
@@ -100,8 +107,8 @@ impl pallet_balances::Config for Runtime {
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
 	type RuntimeHoldReason = ();
-	type MaxHolds = ConstU32<1>;
 	type MaxFreezes = ConstU32<1>;
+	type RuntimeFreezeReason = ();
 }
 
 parameter_types! {
@@ -158,8 +165,8 @@ pub struct BridgeImplRuntime<T>(PhantomData<T>);
 impl<T> Bridge for BridgeImplRuntime<T> {
 	fn transfer(
 		_sender: [u8; 32],
-		_asset: MultiAsset,
-		_dest: MultiLocation,
+		_asset: Asset,
+		_dest: Location,
 		_max_weight: Option<Weight>,
 	) -> DispatchResult {
 		Ok(())
@@ -201,14 +208,16 @@ pub fn assert_events(mut expected: Vec<RuntimeEvent>) {
 
 // mock the generic types of XCMAssetTransactor
 parameter_types! {
-	pub NativeLocation: MultiLocation = MultiLocation::here();
+	pub NativeLocation: Location = Location::here();
 	pub UsdtAssetId: AssetId = 1;
-	pub UsdtLocation: MultiLocation = MultiLocation::new(
+	pub UsdtLocation: Location = Location::new(
 		1,
 		X3(
-			Parachain(2005),
-			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"usdt"),
+			Arc::new([
+				Parachain(2005),
+				slice_to_generalkey(b"sygma"),
+				slice_to_generalkey(b"usdt")
+			])
 		),
 	);
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
@@ -216,12 +225,14 @@ parameter_types! {
 	pub const RelayNetwork: NetworkId = NetworkId::Rococo;
 }
 
+// allowing the CurrencyAdapter for now and using FungibleAdapter in the next version upgrade
+#[allow(deprecated)]
 pub type CurrencyTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	IsConcrete<NativeLocation>,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -234,7 +245,7 @@ pub type FungiblesTransactor = FungiblesAdapter<
 	Assets,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	SimpleForeignAssetConverter,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -252,9 +263,9 @@ pub type LocationToAccountId = (
 
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
-	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
+	fn matches_fungibles(a: &Asset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
-			(Fungible(ref amount), Concrete(ref id)) => {
+			(Fungible(ref amount), XcmAssetId(ref id)) => {
 				if id == &UsdtLocation::get() {
 					Ok((UsdtAssetId::get(), *amount))
 				} else {
@@ -270,16 +281,16 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 /// This impl is only for local mock purpose, the integrated parachain might have their own version
 pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
 impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
-	/// check if the given MultiAsset is a native asset
-	fn is_native_asset(asset: &MultiAsset) -> bool {
+	/// check if the given Asset is a native asset
+	fn is_native_asset(asset: &Asset) -> bool {
 		// currently there are two multilocations are considered as native asset:
-		// 1. integrated parachain native asset(MultiLocation::here())
-		// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+		// 1. integrated parachain native asset(Location::here())
+		// 2. other parachain native asset(Location::new(1, X1(Parachain(T::get().into()))))
 		let native_locations =
-			[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
+			[Location::here(), Location::new(1, X1(Arc::new([Parachain(T::get().into())])))];
 
 		match (&asset.id, &asset.fun) {
-			(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
+			(XcmAssetId(ref id), Fungible(_)) => native_locations.contains(id),
 			_ => false,
 		}
 	}
@@ -303,16 +314,16 @@ pub struct ForwarderImplRuntime;
 impl TransactorForwarder for ForwarderImplRuntime {
 	fn xcm_transactor_forwarder(
 		_sender: [u8; 32],
-		_what: MultiAsset,
-		_dest: MultiLocation,
+		_what: Asset,
+		_dest: Location,
 	) -> DispatchResult {
 		Ok(())
 	}
 
 	fn other_world_transactor_forwarder(
 		_sender: [u8; 32],
-		_what: MultiAsset,
-		_dest: MultiLocation,
+		_what: Asset,
+		_dest: Location,
 	) -> DispatchResult {
 		Ok(())
 	}

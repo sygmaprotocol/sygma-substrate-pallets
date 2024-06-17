@@ -16,7 +16,8 @@ members = [
     "substrate-node/standalone/runtime",
     "parachain-info",
     "bridge-forwarder",
-    "xcm-bridge"
+    "xcm-bridge",
+    "xcm-mock-message-queue"
 ]
 
 exclude = [

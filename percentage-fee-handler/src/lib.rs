@@ -21,7 +21,8 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
-	use xcm::latest::{AssetId, Fungibility::Fungible, MultiAsset};
+	use xcm::opaque::v4::Asset;
+	use xcm::v4::{AssetId, Fungibility::Fungible};
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -125,11 +126,11 @@ pub mod pallet {
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
-			match (asset.fun, asset.id) {
+		fn get_fee(domain: DomainID, asset: Asset) -> Option<u128> {
+			match (asset.clone().fun, asset.clone().id) {
 				(Fungible(amount), _) => {
 					let (fee_rate_basis_point, fee_lower_bound, fee_upper_bound) =
-						AssetFeeRate::<T>::get((domain, asset.id))?;
+						AssetFeeRate::<T>::get((domain, asset.clone().id))?;
 					let fee_amount =
 						amount.saturating_mul(fee_rate_basis_point as u128).saturating_div(10000);
 
@@ -157,27 +158,27 @@ pub mod pallet {
 		};
 		use sp_std::boxed::Box;
 		use sygma_traits::DomainID;
-		use xcm::latest::{prelude::*, MultiLocation};
+		use xcm::v4::{prelude::*, Location};
 
 		#[test]
 		fn set_get_fee() {
 			new_test_ext().execute_with(|| {
 				let dest_domain_id: DomainID = 0;
 				let another_dest_domain_id: DomainID = 1;
-				let asset_id_a = Concrete(MultiLocation::new(1, Here));
-				let asset_id_b = Concrete(MultiLocation::new(2, Here));
-				let asset_a_deposit: MultiAsset = (asset_id_a, 100u128).into();
-				let asset_b_deposit: MultiAsset = (asset_id_b, 200u128).into();
+				let asset_id_a: AssetId = AssetId(Location::new(1, Here));
+				let asset_id_b: AssetId = AssetId(Location::new(2, Here));
+				let asset_a_deposit: Asset = (asset_id_a.clone(), 100u128).into();
+				let asset_b_deposit: Asset = (asset_id_b.clone(), 200u128).into();
 
 				// if not set fee rate, return None
-				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)), None);
+				assert_eq!(AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a.clone())), None);
 
 				// test the min fee rate case: 0u32 => 0%, should work
 				// set fee rate as 0 basis point aka 0% with assetId asset_id_a for one domain
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id_a),
+					Box::new(asset_id_a.clone()),
 					0u32,
 					0u128,
 					100u128
@@ -188,7 +189,7 @@ pub mod pallet {
 					PercentageFeeHandler::set_fee_rate(
 						Origin::root(),
 						dest_domain_id,
-						Box::new(asset_id_a),
+						Box::new(asset_id_a.clone()),
 						10_000u32,
 						0u128,
 						100u128
@@ -200,7 +201,7 @@ pub mod pallet {
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id_a),
+					Box::new(asset_id_a.clone()),
 					50u32,
 					0u128,
 					100u128
@@ -209,18 +210,19 @@ pub mod pallet {
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					another_dest_domain_id,
-					Box::new(asset_id_b),
+					Box::new(asset_id_b.clone()),
 					200u32,
 					0u128,
 					100u128
 				));
 
 				assert_eq!(
-					AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a)).unwrap(),
+					AssetFeeRate::<Test>::get((dest_domain_id, asset_id_a.clone())).unwrap(),
 					(50, 0, 100)
 				);
 				assert_eq!(
-					AssetFeeRate::<Test>::get((another_dest_domain_id, asset_id_b)).unwrap(),
+					AssetFeeRate::<Test>::get((another_dest_domain_id, asset_id_b.clone()))
+						.unwrap(),
 					(200, 0, 100)
 				);
 
@@ -230,7 +232,7 @@ pub mod pallet {
 					PercentageFeeHandler::set_fee_rate(
 						unauthorized_account,
 						dest_domain_id,
-						Box::new(asset_id_a),
+						Box::new(asset_id_a.clone()),
 						100u32,
 						0u128,
 						100u128
@@ -261,12 +263,12 @@ pub mod pallet {
 		fn access_control() {
 			new_test_ext().execute_with(|| {
 				let dest_domain_id: DomainID = 0;
-				let asset_id = Concrete(MultiLocation::new(0, Here));
+				let asset_id: AssetId = AssetId(Location::new(0, Here));
 
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
 					Origin::root(),
 					dest_domain_id,
-					Box::new(asset_id),
+					Box::new(asset_id.clone()),
 					100u32,
 					0u128,
 					100u128
@@ -275,7 +277,7 @@ pub mod pallet {
 					PercentageFeeHandler::set_fee_rate(
 						Some(ALICE).into(),
 						dest_domain_id,
-						Box::new(asset_id),
+						Box::new(asset_id.clone()),
 						200u32,
 						0u128,
 						100u128
@@ -301,7 +303,7 @@ pub mod pallet {
 				assert_ok!(PercentageFeeHandler::set_fee_rate(
 					Some(ALICE).into(),
 					dest_domain_id,
-					Box::new(asset_id),
+					Box::new(asset_id.clone()),
 					200u32,
 					0u128,
 					100u128

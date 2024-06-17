@@ -8,9 +8,8 @@ use super::*;
 use frame_benchmarking::v2::*;
 use frame_system::RawOrigin as SystemOrigin;
 
-use sp_std::vec;
 use sygma_traits::DomainID;
-use xcm::latest::prelude::*;
+use xcm::v4::prelude::*;
 
 #[benchmarks]
 mod benchmarks {
@@ -19,7 +18,7 @@ mod benchmarks {
 	#[benchmark]
 	fn set_fee_handler() {
 		let dest_domain_id: DomainID = 1;
-		let native_location: MultiLocation = MultiLocation::here();
+		let native_location: Location = Location::here();
 
 		#[extrinsic_call]
 		set_fee_handler(

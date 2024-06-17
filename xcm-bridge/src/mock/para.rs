@@ -1,14 +1,14 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
+use sp_std::sync::Arc;
 use std::marker::PhantomData;
 use std::result;
 
-use cumulus_primitives_core::{ChannelStatus, GetChannelInfo, ParaId, Weight};
-
-use frame_support::pallet_prelude::Get;
+use cumulus_primitives_core::{ParaId, Weight};
 
 use crate as sygma_xcm_bridge;
+use frame_support::pallet_prelude::Get;
 use frame_support::traits::{ConstU16, ConstU64, Nothing};
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -20,20 +20,26 @@ use polkadot_parachain_primitives::primitives::Sibling;
 use sp_core::{crypto::AccountId32, H256};
 use sp_runtime::traits::{IdentityLookup, Zero};
 use sygma_traits::AssetTypeIdentifier;
-use xcm::latest::{
-	AssetId as XcmAssetId, InteriorMultiLocation, MultiAsset, MultiLocation, NetworkId,
-	Weight as XCMWeight, XcmContext,
+use xcm::prelude::{
+	Fungible, GlobalConsensus,
+	Junctions::{X1, X2},
+	Parachain, XcmError,
 };
-use xcm::prelude::{Concrete, Fungible, GlobalConsensus, Parachain, XcmError, X1, X2};
+use xcm::v4::{
+	Asset, AssetId as XcmAssetId, InteriorLocation, Location, NetworkId, Weight as XCMWeight,
+	XcmContext,
+};
+#[allow(deprecated)]
 use xcm_builder::{
 	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, CurrencyAdapter,
-	FixedWeightBounds, FungiblesAdapter, IsConcrete, NativeAsset, NoChecking, ParentIsPreset,
-	RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
-	SignedAccountId32AsNative, SovereignSignedViaLocation, TakeWeightCredit,
+	FixedWeightBounds, FrameTransactionalProcessor, FungiblesAdapter, IsConcrete, NativeAsset,
+	NoChecking, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
+	SiblingParachainConvertsVia, SignedAccountId32AsNative, SovereignSignedViaLocation,
+	TakeWeightCredit,
 };
 use xcm_executor::{
 	traits::{Error as ExecutionError, MatchesFungibles, WeightTrader, WithOriginFilter},
-	Assets as XcmAssets, Config, XcmExecutor,
+	AssetsInHolding, Config, XcmExecutor,
 };
 
 use super::ParachainXcmRouter;
@@ -46,9 +52,9 @@ construct_runtime!(
 
 		ParachainInfo: pallet_parachain_info::{Pallet, Storage, Config<T>},
 
-		XcmpQueue: cumulus_pallet_xcmp_queue::{Pallet, Call, Storage, Event<T>},
+		// XcmpQueue: cumulus_pallet_xcmp_queue::{Pallet, Call, Storage, Event<T>},
 		CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
-		DmpQueue: cumulus_pallet_dmp_queue::{Pallet, Call, Storage, Event<T>},
+		MsgQueue: orml_xcm_mock_message_queue,
 
 		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>},
 	}
@@ -86,6 +92,7 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ConstU16<20>;
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
+	type RuntimeTask = ();
 }
 
 parameter_types! {
@@ -107,9 +114,9 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
-	type MaxHolds = ConstU32<1>;
 	type MaxFreezes = ConstU32<1>;
-	type RuntimeHoldReason = ();
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type RuntimeFreezeReason = RuntimeFreezeReason;
 }
 
 impl pallet_assets::Config for Runtime {
@@ -173,6 +180,7 @@ impl Config for XcmConfig {
 	type CallDispatcher = WithOriginFilter<Everything>;
 	type SafeCallFilter = Everything;
 	type Aliasers = ();
+	type TransactionalProcessor = FrameTransactionalProcessor;
 }
 
 pub type XcmRouter = ParachainXcmRouter<ParachainInfo>;
@@ -204,15 +212,17 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub NativeLocation: MultiLocation = MultiLocation::here();
+	pub NativeLocation: Location = Location::here();
 	pub NativeAssetId: AssetId = 0; // native asset ID is used for token registration on other parachain as foreign asset
-	pub PAALocation: MultiLocation = MultiLocation::new(1, X1(Parachain(1u32)));
-	pub PBALocation: MultiLocation = MultiLocation::new(1, X1(Parachain(2u32)));
+	pub PAALocation: Location = Location::new(1, X1(Arc::new([Parachain(1u32)])));
+	pub PBALocation: Location = Location::new(1, X1(Arc::new([Parachain(2u32)])));
 	pub UsdtAssetId: AssetId = 1;
-	pub UsdtLocation: MultiLocation = MultiLocation::new(
+	pub UsdtLocation: Location = Location::new(
 		1,
 		X1(
-			Parachain(2005),
+			Arc::new([
+				Parachain(2005)
+			])
 		),
 	);
 	// Parachain A and Parachain B native asset multilocation
@@ -220,8 +230,8 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into())));
-	pub UniversalLocation: InteriorMultiLocation = X2(GlobalConsensus(RelayNetwork::get()), Parachain(ParachainInfo::parachain_id().into()));
+	pub SelfLocation: Location = Location::new(1, X1(Arc::new([Parachain(ParachainInfo::parachain_id().into())])));
+	pub UniversalLocation: InteriorLocation = X2(Arc::new([GlobalConsensus(RelayNetwork::get()), Parachain(ParachainInfo::parachain_id().into())]));
 
 	// set 1 token as min fee
 	pub MinXcmFee: Vec<(XcmAssetId, u128)> = vec![(NativeLocation::get().into(), 1_000_000_000_000u128), (PBALocation::get().into(), 1_000_000_000_000u128), (UsdtLocation::get().into(), 1_000_000u128)];
@@ -229,9 +239,9 @@ parameter_types! {
 
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
-	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
+	fn matches_fungibles(a: &Asset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
-			(Fungible(ref amount), Concrete(ref id)) => {
+			(Fungible(ref amount), XcmAssetId(ref id)) => {
 				if id == &UsdtLocation::get() {
 					Ok((UsdtAssetId::get(), *amount))
 				} else if id == &PBALocation::get() || id == &PAALocation::get() {
@@ -245,12 +255,13 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	}
 }
 
+#[allow(deprecated)]
 pub type CurrencyTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	IsConcrete<NativeLocation>,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -264,7 +275,7 @@ pub type FungiblesTransactor = FungiblesAdapter<
 	Assets,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	SimpleForeignAssetConverter,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -278,83 +289,93 @@ pub type FungiblesTransactor = FungiblesAdapter<
 /// This impl is only for local mock purpose, the integrated parachain might have their own version
 pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
 impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
-	/// check if the given MultiAsset is a native asset
-	fn is_native_asset(asset: &MultiAsset) -> bool {
+	/// check if the given Asset is a native asset
+	fn is_native_asset(asset: &Asset) -> bool {
 		// currently there are two multilocations are considered as native asset:
-		// 1. integrated parachain native asset(MultiLocation::here())
-		// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+		// 1. integrated parachain native asset(Location::here())
+		// 2. other parachain native asset(Location::new(1, X1(Parachain(T::get().into()))))
 		let native_locations =
-			[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
+			[Location::here(), Location::new(1, X1(Arc::new([Parachain(T::get().into())])))];
 
 		match (&asset.id, &asset.fun) {
-			(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
+			(XcmAssetId(ref id), Fungible(_)) => native_locations.contains(id),
 			_ => false,
 		}
 	}
 }
 
-pub struct ChannelInfo;
-
-impl GetChannelInfo for ChannelInfo {
-	fn get_channel_status(_id: ParaId) -> ChannelStatus {
-		ChannelStatus::Ready(10, 10)
-	}
-	fn get_channel_max(_id: ParaId) -> Option<usize> {
-		Some(usize::max_value())
-	}
-}
-
-impl cumulus_pallet_xcmp_queue::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type ChannelInfo = ChannelInfo;
-	type VersionWrapper = ();
-	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
-	type ControllerOrigin = EnsureRoot<AccountId>;
-	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
-	type PriceForSiblingDelivery = ();
-	type WeightInfo = ();
-}
+// /// Information about an XCMP channel.
+// pub struct ChannelInfo {
+// 	/// The maximum number of messages that can be pending in the channel at once.
+// 	pub max_capacity: u32,
+// 	/// The maximum total size of the messages that can be pending in the channel at once.
+// 	pub max_total_size: u32,
+// 	/// The maximum message size that could be put into the channel.
+// 	pub max_message_size: u32,
+// 	/// The current number of messages pending in the channel.
+// 	/// Invariant: should be less or equal to `max_capacity`.s`.
+// 	pub msg_count: u32,
+// 	/// The total size in bytes of all message payloads in the channel.
+// 	/// Invariant: should be less or equal to `max_total_size`.
+// 	pub total_size: u32,
+// }
+//
+// impl GetChannelInfo for ChannelInfo {
+// 	fn get_channel_status(_id: ParaId) -> ChannelStatus {
+// 		ChannelStatus::Ready(10, 10)
+// 	}
+// 	fn get_channel_info(id: ParaId) -> Option<ChannelInfo> {
+// 		let channels = Self::relevant_messaging_state()?.egress_channels;
+// 		let index = channels.binary_search_by_key(&id, |item| item.0).ok()?;
+// 		let info = ChannelInfo {
+// 			max_capacity: channels[index].1.max_capacity,
+// 			max_total_size: channels[index].1.max_total_size,
+// 			max_message_size: channels[index].1.max_message_size,
+// 			msg_count: channels[index].1.msg_count,
+// 			total_size: channels[index].1.total_size,
+// 		};
+// 		Some(info)
+// 	}
+// }
 
 impl cumulus_pallet_xcm::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
 }
 
-impl cumulus_pallet_dmp_queue::Config for Runtime {
+impl orml_xcm_mock_message_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
 }
 
-pub struct AllTokensAreCreatedEqualToWeight(MultiLocation);
+pub struct AllTokensAreCreatedEqualToWeight(Location);
 impl WeightTrader for AllTokensAreCreatedEqualToWeight {
 	fn new() -> Self {
-		Self(MultiLocation::parent())
+		Self(Location::parent())
 	}
 
 	fn buy_weight(
 		&mut self,
 		weight: Weight,
-		payment: XcmAssets,
+		payment: AssetsInHolding,
 		_context: &XcmContext,
-	) -> Result<XcmAssets, XcmError> {
+	) -> Result<AssetsInHolding, XcmError> {
 		let asset_id = payment.fungible.iter().next().expect("Payment must be something; qed").0;
-		let required = MultiAsset { id: *asset_id, fun: Fungible(weight.ref_time() as u128) };
+		let required = Asset { id: asset_id.clone(), fun: Fungible(weight.ref_time() as u128) };
 
-		if let MultiAsset { fun: _, id: Concrete(ref id) } = &required {
-			self.0 = *id;
-		}
+		let Asset { fun: _, id: XcmAssetId(ref id) } = &required;
+
+		self.0 = id.clone();
 
 		let unused = payment.checked_sub(required).map_err(|_| XcmError::TooExpensive)?;
 		Ok(unused)
 	}
 
-	fn refund_weight(&mut self, weight: Weight, _context: &XcmContext) -> Option<MultiAsset> {
+	fn refund_weight(&mut self, weight: Weight, _context: &XcmContext) -> Option<Asset> {
 		if weight.is_zero() {
 			None
 		} else {
-			Some((self.0, weight.ref_time() as u128).into())
+			Some((self.0.clone(), weight.ref_time() as u128).into())
 		}
 	}
 }

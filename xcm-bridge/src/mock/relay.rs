@@ -16,12 +16,15 @@ use polkadot_runtime_parachains::{
 };
 use sp_core::H256;
 use sp_runtime::{traits::IdentityLookup, AccountId32};
-use xcm::latest::prelude::*;
+use std::sync::Arc;
+use xcm::v4::prelude::*;
+use xcm::v4::Junctions::X1;
+#[allow(deprecated)]
 use xcm_builder::{
 	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, ChildParachainAsNative,
 	ChildParachainConvertsVia, CurrencyAdapter as XcmCurrencyAdapter, FixedWeightBounds,
-	IsConcrete, SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation,
-	TakeWeightCredit, UsingComponents,
+	FrameTransactionalProcessor, IsConcrete, SignedAccountId32AsNative, SignedToAccountId32,
+	SovereignSignedViaLocation, TakeWeightCredit, UsingComponents,
 };
 use xcm_executor::{traits::WithOriginFilter, Config, XcmExecutor};
 
@@ -68,6 +71,7 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<2>;
+	type RuntimeTask = ();
 }
 
 parameter_types! {
@@ -87,26 +91,29 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
-	type MaxHolds = ConstU32<1>;
 	type MaxFreezes = ConstU32<1>;
 	type RuntimeHoldReason = ();
+	type RuntimeFreezeReason = ();
 }
 
-impl shared::Config for Runtime {}
+impl shared::Config for Runtime {
+	type DisabledValidators = ();
+}
 
 impl configuration::Config for Runtime {
 	type WeightInfo = configuration::TestWeightInfo;
 }
 
 parameter_types! {
-	pub RooLocation: MultiLocation = Here.into();
+	pub RooLocation: Location = Here.into();
 	pub const RococoNetwork: NetworkId = NetworkId::Rococo;
-	pub UniversalLocation: InteriorMultiLocation = X1(GlobalConsensus(RococoNetwork::get()));
+	pub UniversalLocation: InteriorLocation = X1(Arc::new([GlobalConsensus(RococoNetwork::get())]));
 }
 
 pub type SovereignAccountOf =
 	(ChildParachainConvertsVia<ParaId, AccountId>, AccountId32Aliases<RococoNetwork, AccountId>);
 
+#[allow(deprecated)]
 pub type LocalAssetTransactor =
 	XcmCurrencyAdapter<Balances, IsConcrete<RooLocation>, SovereignAccountOf, AccountId, ()>;
 
@@ -120,9 +127,9 @@ pub type XcmRouter = super::RelayChainXcmRouter;
 pub type Barrier = (TakeWeightCredit, AllowTopLevelPaidExecutionFrom<Everything>);
 
 parameter_types! {
-	pub Rococo: MultiAssetFilter = Wild(AllOf { fun: WildFungible, id: Concrete(RooLocation::get()) });
-	pub Statemine: MultiLocation = Parachain(3).into();
-	pub KusamaForStatemine: (MultiAssetFilter, MultiLocation) = (Rococo::get(), Statemine::get());
+	pub Rococo: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(RooLocation::get()) });
+	pub Statemine: Location = Parachain(3).into();
+	pub KusamaForStatemine: (AssetFilter, Location) = (Rococo::get(), Statemine::get());
 }
 
 parameter_types! {
@@ -158,13 +165,14 @@ impl Config for XcmConfig {
 	type CallDispatcher = WithOriginFilter<Everything>;
 	type SafeCallFilter = Everything;
 	type Aliasers = ();
+	type TransactionalProcessor = FrameTransactionalProcessor;
 }
 
 pub type LocalOriginToLocation = SignedToAccountId32<RuntimeOrigin, AccountId, RococoNetwork>;
 
 #[cfg(feature = "runtime-benchmarks")]
 parameter_types! {
-	pub ReachableDest: Option<MultiLocation> = Some(Parent.into());
+	pub ReachableDest: Option<Location> = Some(Parent.into());
 }
 
 impl pallet_xcm::Config for Runtime {
@@ -191,8 +199,6 @@ impl pallet_xcm::Config for Runtime {
 	type MaxRemoteLockConsumers = ConstU32<0>;
 	type RemoteLockConsumerIdentifier = ();
 	type WeightInfo = pallet_xcm::TestWeightInfo;
-	#[cfg(feature = "runtime-benchmarks")]
-	type ReachableDest = ReachableDest;
 	type AdminOrigin = EnsureRoot<AccountId>;
 }
 

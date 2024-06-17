@@ -2,14 +2,21 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 use std::{marker::PhantomData, sync::Arc};
 
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, RpcResult},
 	proc_macros::rpc,
 };
-use sp_api::{BlockT, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
+use sp_runtime::traits::Block as BlockT;
 use sygma_runtime_api::SygmaBridgeApi;
 use sygma_traits::{DepositNonce, DomainID};
+
+/// Converts a runtime trap into a [`CallError`].
+fn runtime_error_into_rpc_error(err: impl std::fmt::Debug) -> ErrorObjectOwned {
+	ErrorObject::owned(500, "Runtime trapped", Some(format!("{:?}", err)))
+}
 
 pub struct SygmaBridgeStorage<Block: BlockT, C> {
 	client: Arc<C>,
@@ -52,7 +59,9 @@ where
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 
-		let runtime_api_result = api.is_proposal_executed(at, nonce, domain_id);
-		runtime_api_result.map_err(|e| JsonRpseeError::Custom(format!("runtime error: {e:?}")))
+		api.is_proposal_executed(at, nonce, domain_id)
+			.map_err(runtime_error_into_rpc_error)?;
+
+		Ok(true)
 	}
 }

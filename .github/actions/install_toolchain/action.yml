@@ -13,5 +13,5 @@ runs:
         override: true
         target: wasm32-unknown-unknown
         components: rustfmt
-    - run: sudo apt update && sudo apt-get install build-essential cmake pkg-config libssl-dev git llvm clang libclang-dev protobuf-compiler -y
+    - run: sudo apt update && sudo apt-get install build-essential cmake pkg-config libssl-dev git llvm clang libclang-dev protobuf-compiler -y && rustup component add rust-src
       shell: bash

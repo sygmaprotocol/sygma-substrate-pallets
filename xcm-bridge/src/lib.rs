@@ -12,8 +12,9 @@ mod mock;
 pub mod pallet {
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, traits::StorageVersion};
 	use sp_runtime::traits::Zero;
+	use sp_std::sync::Arc;
 	use sp_std::{prelude::*, vec};
-	use xcm::latest::{prelude::*, MultiLocation, Weight as XCMWeight};
+	use xcm::v4::{prelude::*, Junctions::X1, Location, Weight as XCMWeight};
 	use xcm_executor::traits::WeightBounds;
 
 	use sygma_traits::{AssetReserveLocationParser, AssetTypeIdentifier, Bridge};
@@ -34,10 +35,10 @@ pub mod pallet {
 
 		type AssetReservedChecker: AssetTypeIdentifier;
 
-		type UniversalLocation: Get<InteriorMultiLocation>;
+		type UniversalLocation: Get<InteriorLocation>;
 
 		#[pallet::constant]
-		type SelfLocation: Get<MultiLocation>;
+		type SelfLocation: Get<Location>;
 
 		/// Minimum xcm execution fee paid on destination chain.
 		type MinXcmFee: Get<Vec<(AssetId, u128)>>;
@@ -56,11 +57,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		XCMTransferSend {
-			asset: Box<MultiAsset>,
-			origin: Box<MultiLocation>,
-			dest: Box<MultiLocation>,
-		},
+		XCMTransferSend { asset: Box<Asset>, origin: Box<Location>, dest: Box<Location> },
 	}
 
 	#[pallet::error]
@@ -76,17 +73,17 @@ pub mod pallet {
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 	struct XcmObject<T: Config> {
-		asset: MultiAsset,
-		fee: MultiAsset,
-		origin: MultiLocation,
-		dest: MultiLocation,
-		recipient: MultiLocation,
+		asset: Asset,
+		fee: Asset,
+		origin: Location,
+		dest: Location,
+		recipient: Location,
 		weight: XCMWeight,
 		_unused: PhantomData<T>,
 	}
 
 	pub trait XcmHandler<T: Config> {
-		fn transfer_kind(&self, asset_reserved_location: MultiLocation) -> Option<TransferKind>;
+		fn transfer_kind(&self, asset_reserved_location: Location) -> Option<TransferKind>;
 		fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError>;
 		fn execute_instructions(
 			&self,
@@ -95,7 +92,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> XcmHandler<T> for XcmObject<T> {
-		fn transfer_kind(&self, asset_reserved_location: MultiLocation) -> Option<TransferKind> {
+		fn transfer_kind(&self, asset_reserved_location: Location) -> Option<TransferKind> {
 			if T::AssetReservedChecker::is_native_asset(&self.asset.clone()) {
 				Some(TransferKind::SelfReserveAsset)
 			} else if asset_reserved_location == self.dest {
@@ -108,33 +105,33 @@ pub mod pallet {
 		fn create_instructions(&self) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
 			let asset_reserved_location = Pallet::<T>::reserved_location(&self.asset.clone())
 				.ok_or(Error::<T>::AssetReservedLocationNotFound)?;
-			let kind = Self::transfer_kind(self, asset_reserved_location)
+			let kind = Self::transfer_kind(self, asset_reserved_location.clone())
 				.ok_or(Error::<T>::UnknownTransferType)?;
 
-			let mut assets = MultiAssets::new();
+			let mut assets = Assets::new();
 			assets.push(self.asset.clone());
 
 			let xcm_instructions = match kind {
 				TransferKind::SelfReserveAsset => Pallet::<T>::transfer_self_reserve_asset(
 					assets,
 					self.fee.clone(),
-					self.dest,
-					self.recipient,
+					self.clone().dest,
+					self.clone().recipient,
 					WeightLimit::Limited(self.weight),
 				)?,
 				TransferKind::ToReserve => Pallet::<T>::transfer_to_reserve_asset(
 					assets,
-					self.fee.clone(),
-					self.dest,
-					self.recipient,
+					self.clone().fee.clone(),
+					self.clone().dest,
+					self.clone().recipient,
 					WeightLimit::Limited(self.weight),
 				)?,
 				TransferKind::ToNonReserve => Pallet::<T>::transfer_to_non_reserve_asset(
 					assets,
-					self.fee.clone(),
+					self.clone().fee.clone(),
 					asset_reserved_location,
-					self.dest,
-					self.recipient,
+					self.clone().dest,
+					self.clone().recipient,
 					WeightLimit::Limited(self.weight),
 				)?,
 			};
@@ -149,12 +146,12 @@ pub mod pallet {
 			let message_weight = T::Weigher::weight(xcm_instructions)
 				.map_err(|()| Error::<T>::FailToWeightMessage)?;
 
-			let hash = xcm_instructions.using_encoded(sp_io::hashing::blake2_256);
+			let mut hash: XcmHash = xcm_instructions.using_encoded(sp_io::hashing::blake2_256);
 
-			T::XcmExecutor::execute_xcm_in_credit(
-				self.origin,
+			T::XcmExecutor::prepare_and_execute(
+				self.clone().origin,
 				xcm_instructions.clone(),
-				hash,
+				&mut hash,
 				self.weight,
 				message_weight,
 			)
@@ -166,22 +163,26 @@ pub mod pallet {
 	}
 
 	impl<T: Config> AssetReserveLocationParser for Pallet<T> {
-		fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation> {
+		fn reserved_location(asset: &Asset) -> Option<Location> {
 			let location = match (&asset.id, &asset.fun) {
-				(Concrete(id), Fungible(_)) => Some(*id),
+				(id, Fungible(_)) => Some(&id.0),
 				_ => None,
 			};
 
 			location.and_then(|id| {
 				match (id.parents, id.first_interior()) {
 					// Sibling parachain
-					(1, Some(Parachain(id))) => Some(MultiLocation::new(1, X1(Parachain(*id)))),
+					(1, Some(Parachain(id))) => {
+						Some(Location::new(1, X1(Arc::new([Parachain(*id)]))))
+					},
 					// Parent
-					(1, _) => Some(MultiLocation::parent()),
+					(1, _) => Some(Location::parent()),
 					// Children parachain
-					(0, Some(Parachain(id))) => Some(MultiLocation::new(0, X1(Parachain(*id)))),
+					(0, Some(Parachain(id))) => {
+						Some(Location::new(0, X1(Arc::new([Parachain(*id)]))))
+					},
 					// Local: (0, Here)
-					(0, None) => Some(id),
+					(0, None) => Some(id.clone()),
 					_ => None,
 				}
 			})
@@ -193,11 +194,11 @@ pub mod pallet {
 	impl<T: Config> Bridge for BridgeImpl<T> {
 		fn transfer(
 			sender: [u8; 32],
-			asset: MultiAsset,
-			dest: MultiLocation,
+			asset: Asset,
+			dest: Location,
 			max_weight: Option<XCMWeight>,
 		) -> DispatchResult {
-			let origin_location: MultiLocation =
+			let origin_location: Location =
 				Junction::AccountId32 { network: None, id: sender }.into();
 
 			let (dest_location, recipient) =
@@ -216,12 +217,12 @@ pub mod pallet {
 				.position(|a| a.0 == asset.id)
 				.map(|idx| T::MinXcmFee::get()[idx].1)
 				.unwrap();
-			let min_fee_to_dest: MultiAsset = (asset.id, fee_per_asset).into();
+			let min_fee_to_dest: Asset = (asset.clone().id, fee_per_asset).into();
 
 			let xcm = XcmObject::<T> {
 				asset: asset.clone(),
 				fee: min_fee_to_dest,
-				origin: origin_location,
+				origin: origin_location.clone(),
 				dest: dest_location,
 				recipient,
 				weight: max_weight.unwrap_or(XCMWeight::from_parts(6_000_000_000u64, 2_000_000u64)),
@@ -243,28 +244,28 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// extract the dest_location, recipient_location
-		pub fn extract_dest(dest: &MultiLocation) -> Option<(MultiLocation, MultiLocation)> {
+		pub fn extract_dest(dest: &Location) -> Option<(Location, Location)> {
 			match (dest.parents, dest.first_interior()) {
 				(1, Some(Parachain(id))) => Some((
-					MultiLocation::new(1, X1(Parachain(*id))),
-					MultiLocation::new(0, dest.interior().split_first().0),
+					Location::new(1, X1(Arc::new([Parachain(*id)]))),
+					Location::new(0, dest.interior().clone().split_first().0),
 				)),
 				// parent: relay chain
-				(1, _) => Some((MultiLocation::parent(), MultiLocation::new(0, *dest.interior()))),
+				(1, _) => Some((Location::parent(), Location::new(0, dest.interior().clone()))),
 				// local and children parachain have been filtered out in the TransactAsset
 				_ => None,
 			}
 		}
 		fn transfer_self_reserve_asset(
-			assets: MultiAssets,
-			fee: MultiAsset,
-			dest: MultiLocation,
-			recipient: MultiLocation,
+			assets: Assets,
+			fee: Asset,
+			dest: Location,
+			recipient: Location,
 			dest_weight_limit: WeightLimit,
 		) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
 			Ok(Xcm(vec![TransferReserveAsset {
 				assets: assets.clone(),
-				dest,
+				dest: dest.clone(),
 				xcm: Xcm(vec![
 					Self::buy_execution(fee, &dest, dest_weight_limit)?,
 					Self::deposit_asset(recipient, assets.len() as u32),
@@ -273,17 +274,17 @@ pub mod pallet {
 		}
 
 		fn transfer_to_reserve_asset(
-			assets: MultiAssets,
-			fee: MultiAsset,
-			reserve: MultiLocation,
-			recipient: MultiLocation,
+			assets: Assets,
+			fee: Asset,
+			reserve: Location,
+			recipient: Location,
 			dest_weight_limit: WeightLimit,
 		) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
 			Ok(Xcm(vec![
 				WithdrawAsset(assets.clone()),
 				InitiateReserveWithdraw {
 					assets: All.into(),
-					reserve,
+					reserve: reserve.clone(),
 					xcm: Xcm(vec![
 						Self::buy_execution(fee, &reserve, dest_weight_limit)?,
 						Self::deposit_asset(recipient, assets.len() as u32),
@@ -293,17 +294,17 @@ pub mod pallet {
 		}
 
 		fn transfer_to_non_reserve_asset(
-			assets: MultiAssets,
-			fee: MultiAsset,
-			reserve: MultiLocation,
-			dest: MultiLocation,
-			recipient: MultiLocation,
+			assets: Assets,
+			fee: Asset,
+			reserve: Location,
+			dest: Location,
+			recipient: Location,
 			dest_weight_limit: WeightLimit,
 		) -> Result<Xcm<T::RuntimeCall>, DispatchError> {
-			let mut reanchored_dest = dest;
-			if reserve == MultiLocation::parent() {
-				if let MultiLocation { parents: 1, interior: X1(Parachain(id)) } = dest {
-					reanchored_dest = Parachain(id).into();
+			let mut reanchored_dest = dest.clone();
+			if reserve == Location::parent() {
+				if let (1, [Parachain(id)]) = dest.unpack() {
+					reanchored_dest = Parachain(*id).into();
 				}
 			}
 
@@ -313,7 +314,7 @@ pub mod pallet {
 				WithdrawAsset(assets),
 				InitiateReserveWithdraw {
 					assets: All.into(),
-					reserve,
+					reserve: reserve.clone(),
 					xcm: Xcm(vec![
 						Self::buy_execution(Self::half(&fee), &reserve, dest_weight_limit.clone())?,
 						DepositReserveAsset {
@@ -329,26 +330,26 @@ pub mod pallet {
 			]))
 		}
 
-		fn deposit_asset(recipient: MultiLocation, max_assets: u32) -> Instruction<()> {
+		fn deposit_asset(recipient: Location, max_assets: u32) -> Instruction<()> {
 			DepositAsset { assets: AllCounted(max_assets).into(), beneficiary: recipient }
 		}
 
 		fn buy_execution(
-			asset: MultiAsset,
-			at: &MultiLocation,
+			asset: Asset,
+			at: &Location,
 			weight_limit: WeightLimit,
 		) -> Result<Instruction<()>, DispatchError> {
 			let ancestry = T::SelfLocation::get();
 
 			let fees = asset
-				.reanchored(at, ancestry.interior)
+				.reanchored(at, &ancestry.interior)
 				.map_err(|_| Error::<T>::CannotReanchor)?;
 
 			Ok(BuyExecution { fees, weight_limit })
 		}
 
 		/// Returns amount if `asset` is fungible, or zero.
-		fn fungible_amount(asset: &MultiAsset) -> u128 {
+		fn fungible_amount(asset: &Asset) -> u128 {
 			if let Fungible(amount) = &asset.fun {
 				*amount
 			} else {
@@ -356,25 +357,16 @@ pub mod pallet {
 			}
 		}
 
-		fn half(asset: &MultiAsset) -> MultiAsset {
-			let half_amount =
-				Self::fungible_amount(asset).checked_div(2).expect("div 2 can't overflow; qed");
-			MultiAsset { fun: Fungible(half_amount), id: asset.id }
+		fn half(asset: &Asset) -> Asset {
+			let half_amount = Self::fungible_amount(&asset.clone())
+				.checked_div(2)
+				.expect("div 2 can't overflow; qed");
+			Asset { fun: Fungible(half_amount), id: asset.clone().id }
 		}
 	}
 
 	#[cfg(test)]
 	mod test {
-		use frame_support::{
-			assert_ok, traits::tokens::fungibles::metadata::Mutate as MetaMutate,
-			traits::tokens::fungibles::Create as FungibleCerate,
-		};
-		use polkadot_parachain_primitives::primitives::Sibling;
-		use sp_runtime::traits::AccountIdConversion;
-		use sp_runtime::AccountId32;
-		use sp_std::{boxed::Box, vec};
-		use xcm_simulator::TestExt;
-
 		use super::*;
 		use crate::mock::para::{
 			assert_events, Assets, NativeAssetId, PBALocation, Runtime, RuntimeEvent,
@@ -385,6 +377,16 @@ pub mod pallet {
 			ENDOWED_BALANCE,
 		};
 		use crate::Event as SygmaXcmBridgeEvent;
+		use frame_support::{
+			assert_ok, traits::tokens::fungibles::metadata::Mutate as MetaMutate,
+			traits::tokens::fungibles::Create as FungibleCerate,
+		};
+		use polkadot_parachain_primitives::primitives::Sibling;
+		use sp_runtime::traits::AccountIdConversion;
+		use sp_runtime::AccountId32;
+		use sp_std::{boxed::Box, vec};
+		use xcm::v4::Junctions::X2;
+		use xcm_simulator::TestExt;
 
 		fn init_logger() {
 			let _ = env_logger::builder()
@@ -437,13 +439,13 @@ pub mod pallet {
 				// transfer parachain A native asset from Alice to parachain B on Bob
 				assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ALICE.into(),
-					(Concrete(MultiLocation::new(0, Here)), Fungible(amount)).into(),
-					MultiLocation::new(
+					(AssetId(Location::new(0, Here)), Fungible(amount)).into(),
+					Location::new(
 						1,
-						X2(
+						X2(Arc::new([
 							Parachain(2u32),
-							Junction::AccountId32 { network: None, id: BOB.into() },
-						),
+							Junction::AccountId32 { network: None, id: BOB.into() }
+						])),
 					),
 					None
 				));
@@ -453,18 +455,16 @@ pub mod pallet {
 
 				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
 					SygmaXcmBridgeEvent::XCMTransferSend {
-						asset: Box::new(
-							(Concrete(MultiLocation::new(0, Here)), Fungible(amount)).into(),
-						),
+						asset: Box::new((AssetId(Location::new(0, Here)), Fungible(amount)).into()),
 						origin: Box::new(
 							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
 						),
-						dest: Box::new(MultiLocation::new(
+						dest: Box::new(Location::new(
 							1,
-							X2(
+							X2(Arc::new([
 								Parachain(2u32),
 								Junction::AccountId32 { network: None, id: BOB.into() },
-							),
+							])),
 						)),
 					},
 				)]);
@@ -513,13 +513,13 @@ pub mod pallet {
 
 				assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ALICE.into(),
-					(Concrete(MultiLocation::new(0, Here)), Fungible(amount)).into(),
-					MultiLocation::new(
+					(AssetId(Location::new(0, Here)), Fungible(amount)).into(),
+					Location::new(
 						1,
-						X2(
+						X2(Arc::new([
 							Parachain(1u32),
-							Junction::AccountId32 { network: None, id: ALICE.into() },
-						),
+							Junction::AccountId32 { network: None, id: ALICE.into() }
+						])),
 					),
 					None
 				));
@@ -535,12 +535,12 @@ pub mod pallet {
 				assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ALICE.into(),
 					(PBALocation::get(), Fungible(amount - fee)).into(),
-					MultiLocation::new(
+					Location::new(
 						1,
-						X2(
+						X2(Arc::new([
 							Parachain(2u32),
 							Junction::AccountId32 { network: None, id: BOB.into() }
-						)
+						]))
 					),
 					None
 				));
@@ -551,17 +551,17 @@ pub mod pallet {
 				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
 					SygmaXcmBridgeEvent::XCMTransferSend {
 						asset: Box::new(
-							(Concrete(PBALocation::get()), Fungible(amount - fee)).into(),
+							(AssetId(PBALocation::get()), Fungible(amount - fee)).into(),
 						),
 						origin: Box::new(
 							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
 						),
-						dest: Box::new(MultiLocation::new(
+						dest: Box::new(Location::new(
 							1,
-							X2(
+							X2(Arc::new([
 								Parachain(2u32),
 								Junction::AccountId32 { network: None, id: BOB.into() },
-							),
+							])),
 						)),
 					},
 				)]);
@@ -648,13 +648,13 @@ pub mod pallet {
 			ParaC::execute_with(|| {
 				assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ASSET_OWNER.into(),
-					(Concrete(UsdtLocation::get()), Fungible(100_000_000u128)).into(),
-					MultiLocation::new(
+					(AssetId(UsdtLocation::get()), Fungible(100_000_000u128)).into(),
+					Location::new(
 						1,
-						X2(
+						X2(Arc::new([
 							Parachain(1u32),
-							Junction::AccountId32 { network: None, id: ALICE.into() },
-						),
+							Junction::AccountId32 { network: None, id: ALICE.into() }
+						])),
 					),
 					None
 				));
@@ -696,13 +696,13 @@ pub mod pallet {
 				// Alice transfer USDT token from parachain A to Bob on parachain B
 				assert_ok!(BridgeImpl::<Runtime>::transfer(
 					ALICE.into(),
-					(Concrete(UsdtLocation::get()), Fungible(100_000_000u128 - 4u128)).into(),
-					MultiLocation::new(
+					(AssetId(UsdtLocation::get()), Fungible(100_000_000u128 - 4u128)).into(),
+					Location::new(
 						1,
-						X2(
+						X2(Arc::new([
 							Parachain(2u32),
-							Junction::AccountId32 { network: None, id: BOB.into() },
-						),
+							Junction::AccountId32 { network: None, id: BOB.into() }
+						])),
 					),
 					None
 				));
@@ -712,18 +712,18 @@ pub mod pallet {
 				assert_events(vec![RuntimeEvent::SygmaXcmBridge(
 					SygmaXcmBridgeEvent::XCMTransferSend {
 						asset: Box::new(
-							(Concrete(UsdtLocation::get()), Fungible(100_000_000u128 - 4u128))
+							(AssetId(UsdtLocation::get()), Fungible(100_000_000u128 - 4u128))
 								.into(),
 						),
 						origin: Box::new(
 							Junction::AccountId32 { network: None, id: ALICE.into() }.into(),
 						),
-						dest: Box::new(MultiLocation::new(
+						dest: Box::new(Location::new(
 							1,
-							X2(
+							X2(Arc::new([
 								Parachain(2u32),
 								Junction::AccountId32 { network: None, id: BOB.into() },
-							),
+							])),
 						)),
 					},
 				)]);

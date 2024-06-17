@@ -23,7 +23,7 @@ mod weights;
 pub mod xcm_config;
 
 use cumulus_pallet_parachain_system::RelayNumberStrictlyIncreases;
-use cumulus_primitives_core::ParaId;
+use cumulus_primitives_core::{AggregateMessageOrigin, ParaId};
 use fixed::{types::extra::U16, FixedU128};
 pub use frame_support::{
 	construct_runtime,
@@ -54,6 +54,7 @@ pub use frame_system::{Call as SystemCall, EnsureSigned};
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_xcm::{EnsureXcm, IsVoiceOfBody};
+use parachains_common::message_queue::NarrowOriginToSibling;
 use primitive_types::U256;
 use smallvec::smallvec;
 use sp_api::impl_runtime_apis;
@@ -68,6 +69,7 @@ use sp_runtime::{
 };
 pub use sp_runtime::{MultiAddress, Perbill, Permill};
 use sp_std::collections::btree_map::BTreeMap;
+use sp_std::sync::Arc;
 use sp_std::{marker::PhantomData, prelude::*, result, vec::Vec};
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -77,22 +79,28 @@ use sygma_traits::{
 	AssetTypeIdentifier, ChainID, DecimalConverter, DepositNonce, DomainID, ExtractDestinationData,
 	ResourceId, VerifyingContractAddress,
 };
-use xcm::latest::{prelude::*, AssetId as XcmAssetId, MultiLocation};
+use xcm::v4::{
+	prelude::*,
+	AssetId as XcmAssetId,
+	Junctions::{X1, X3},
+	Location,
+};
+#[allow(deprecated)]
 use xcm_builder::{CurrencyAdapter, FungiblesAdapter, IsConcrete, NoChecking};
-use xcm_config::{RelayLocation, XcmConfig, XcmOriginToTransactDispatchOrigin};
+use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 use xcm_executor::traits::{Error as ExecutionError, MatchesFungibles};
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 
 // Polkadot imports
+use polkadot_runtime_common::xcm_sender::NoPriceForMessageDelivery;
 use polkadot_runtime_common::{BlockHashCount, SlowAdjustingFeeUpdate};
 
 use weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight};
 
 // XCM Imports
 use xcm::latest::prelude::BodyId;
-use xcm_executor::XcmExecutor;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -316,6 +324,7 @@ impl frame_system::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	/// The aggregated dispatch type that is available for extrinsics.
 	type RuntimeCall = RuntimeCall;
+	type RuntimeTask = ();
 	/// The index type for storing how many extrinsics an account has signed.
 	type Nonce = Nonce;
 	/// The type for hashing blocks and tries.
@@ -378,8 +387,8 @@ impl pallet_balances::Config for Runtime {
 	type ReserveIdentifier = [u8; 8];
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type FreezeIdentifier = ();
-	type MaxHolds = ConstU32<0>;
 	type MaxFreezes = ConstU32<0>;
+	type RuntimeFreezeReason = ();
 }
 
 parameter_types! {
@@ -455,6 +464,7 @@ impl pallet_sudo::Config for Runtime {
 parameter_types! {
 	pub const ReservedXcmpWeight: Weight = MAXIMUM_BLOCK_WEIGHT.saturating_div(4);
 	pub const ReservedDmpWeight: Weight = MAXIMUM_BLOCK_WEIGHT.saturating_div(4);
+	pub const RelayOrigin: AggregateMessageOrigin = AggregateMessageOrigin::Parent;
 }
 
 impl cumulus_pallet_parachain_system::Config for Runtime {
@@ -462,11 +472,12 @@ impl cumulus_pallet_parachain_system::Config for Runtime {
 	type OnSystemEvent = ();
 	type SelfParaId = pallet_parachain_info::Pallet<Runtime>;
 	type OutboundXcmpMessageSource = XcmpQueue;
-	type DmpMessageHandler = DmpQueue;
+	type DmpQueue = frame_support::traits::EnqueueWithOrigin<MessageQueue, RelayOrigin>;
 	type ReservedDmpWeight = ReservedDmpWeight;
 	type XcmpMessageHandler = XcmpQueue;
 	type ReservedXcmpWeight = ReservedXcmpWeight;
 	type CheckAssociatedRelayNumber = RelayNumberStrictlyIncreases;
+	type WeightInfo = ();
 	type ConsensusHook = cumulus_pallet_aura_ext::FixedVelocityConsensusHook<
 		Runtime,
 		RELAY_CHAIN_SLOT_DURATION_MILLIS,
@@ -479,22 +490,21 @@ impl pallet_parachain_info::Config for Runtime {}
 
 impl cumulus_pallet_aura_ext::Config for Runtime {}
 
+parameter_types! {
+	/// The asset ID for the asset that we use to pay for message delivery fees.
+	pub FeeAssetId: XcmAssetId = AssetId(xcm_config::RelayLocation::get());
+}
+
 impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
 	type ChannelInfo = ParachainSystem;
 	type VersionWrapper = ();
-	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
 	type ControllerOrigin = EnsureRoot<AccountId>;
 	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
 	type WeightInfo = ();
-	type PriceForSiblingDelivery = ();
-}
-
-impl cumulus_pallet_dmp_queue::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
+	type PriceForSiblingDelivery = NoPriceForMessageDelivery<ParaId>;
+	type XcmpQueue = ();
+	type MaxInboundSuspended = ();
 }
 
 parameter_types! {
@@ -637,34 +647,40 @@ parameter_types! {
 	// As long as the relayer and pallet configured with the same address, EIP712Domain should be recognized properly.
 	pub DestVerifyingContractAddress: VerifyingContractAddress = primitive_types::H160::from_slice(hex::decode(DEST_VERIFYING_CONTRACT_ADDRESS).ok().unwrap().as_slice());
 	pub CheckingAccount: AccountId32 = AccountId32::new([102u8; 32]);
-	pub AssetsPalletLocation: MultiLocation =
+	pub AssetsPalletLocation: Location =
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
-	pub NativeLocation: MultiLocation = MultiLocation::here();
+	pub NativeLocation: Location = Location::here();
 	// UsdtLocation is the representation of the USDT asset location in substrate
 	// USDT is a foreign asset, and in our local testing env, it's being registered on Parachain 2004 with the following location
-	pub UsdtLocation: MultiLocation = MultiLocation::new(
+	pub UsdtLocation: Location = Location::new(
 		1,
 		X3(
-			Parachain(2005),
-			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"usdt"),
+			Arc::new([
+				Parachain(2005),
+				slice_to_generalkey(b"sygma"),
+				slice_to_generalkey(b"usdt")
+			])
 		),
 	);
-	pub ERC20TSTLocation: MultiLocation = MultiLocation::new(
+	pub ERC20TSTLocation: Location = Location::new(
 		1,
 		X3(
-			Parachain(2005),
-			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"erc20tst"),
+			Arc::new([
+				Parachain(2005),
+				slice_to_generalkey(b"sygma"),
+				slice_to_generalkey(b"erc20tst")
+			])
 		),
 	);
-	pub ERC20TSTD20Location: MultiLocation = MultiLocation::new(
+	pub ERC20TSTD20Location: Location = Location::new(
 		1,
 		X3(
-			Parachain(2005),
-			slice_to_generalkey(b"sygma"),
-			slice_to_generalkey(b"erc20tstd20"),
+			Arc::new([
+				Parachain(2005),
+				slice_to_generalkey(b"sygma"),
+				slice_to_generalkey(b"erc20tstd20")
+			])
 		),
 	);
 	// UsdtAssetId is the substrate assetID of USDT
@@ -687,13 +703,13 @@ parameter_types! {
 }
 
 /// A simple Asset converter that extract the bingding relationship between AssetId and
-/// MultiLocation, And convert Asset transfer amount to Balance
+/// Location, And convert Asset transfer amount to Balance
 pub struct SimpleForeignAssetConverter(PhantomData<()>);
 
 impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
-	fn matches_fungibles(a: &MultiAsset) -> result::Result<(AssetId, Balance), ExecutionError> {
+	fn matches_fungibles(a: &Asset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
-			(Fungible(ref amount), Concrete(ref id)) => {
+			(Fungible(ref amount), AssetId(ref id)) => {
 				if id == &UsdtLocation::get() {
 					Ok((UsdtAssetId::get(), *amount))
 				} else if id == &ERC20TSTLocation::get() {
@@ -710,12 +726,13 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 }
 
 /// Means for transacting assets on this chain.
+#[allow(deprecated)]
 pub type CurrencyTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	IsConcrete<RelayLocation>,
-	// Do a simple punn to convert an AccountId32 MultiLocation into a native chain account ID:
+	// Do a simple punn to convert an AccountId32 Location into a native chain account ID:
 	xcm_config::LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId,
@@ -729,7 +746,7 @@ pub type FungiblesTransactor = FungiblesAdapter<
 	Assets,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	SimpleForeignAssetConverter,
-	// Convert an XCM MultiLocation into a local account id:
+	// Convert an XCM Location into a local account id:
 	xcm_config::LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId32,
@@ -741,15 +758,15 @@ pub type FungiblesTransactor = FungiblesAdapter<
 
 pub struct ConcrateSygmaAsset;
 impl ConcrateSygmaAsset {
-	pub fn id(asset: &MultiAsset) -> Option<MultiLocation> {
+	pub fn id(asset: &Asset) -> Option<Location> {
 		match (&asset.id, &asset.fun) {
 			// So far our native asset is concrete
-			(Concrete(id), Fungible(_)) => Some(*id),
+			(AssetId(id), Fungible(_)) => Some(id.clone()),
 			_ => None,
 		}
 	}
 
-	pub fn origin(asset: &MultiAsset) -> Option<MultiLocation> {
+	pub fn origin(asset: &Asset) -> Option<Location> {
 		Self::id(asset).and_then(|id| {
 			match (id.parents, id.first_interior()) {
 				// Sibling parachain
@@ -760,18 +777,18 @@ impl ConcrateSygmaAsset {
 						// The registered foreign assets actually reserved on EVM chains, so when
 						// transfer back to EVM chains, they should be treated as non-reserve assets
 						// relative to current chain.
-						Some(MultiLocation::new(0, X1(slice_to_generalkey(b"sygma"))))
+						Some(Location::new(0, X1(Arc::new([slice_to_generalkey(b"sygma")]))))
 					} else {
-						// Other parachain assets should be treat as reserve asset when transfered
+						// Other parachain assets should be treated as reserve asset when transfer
 						// to outside EVM chains
-						Some(MultiLocation::here())
+						Some(Location::here())
 					}
 				},
-				// Parent assets should be treat as reserve asset when transfered to outside EVM
+				// Parent assets should be treated as reserve asset when transfer to outside EVM
 				// chains
-				(1, _) => Some(MultiLocation::here()),
+				(1, _) => Some(Location::here()),
 				// Children parachain
-				(0, Some(Parachain(id))) => Some(MultiLocation::new(0, X1(Parachain(*id)))),
+				(0, Some(Parachain(id))) => Some(Location::new(0, X1(Arc::new([Parachain(*id)])))),
 				// Local: (0, Here)
 				(0, None) => Some(id),
 				_ => None,
@@ -784,7 +801,7 @@ pub struct SygmaDecimalConverter<DecimalPairs>(PhantomData<DecimalPairs>);
 impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 	for SygmaDecimalConverter<DecimalPairs>
 {
-	fn convert_to(asset: &MultiAsset) -> Option<u128> {
+	fn convert_to(asset: &Asset) -> Option<u128> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
 				for (asset_id, decimal) in DecimalPairs::get().iter() {
@@ -823,13 +840,13 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 		}
 	}
 
-	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset> {
+	fn convert_from(asset: &Asset) -> Option<Asset> {
 		match (&asset.fun, &asset.id) {
 			(Fungible(amount), _) => {
 				for (asset_id, decimal) in DecimalPairs::get().iter() {
 					if *asset_id == asset.id {
 						return if *decimal == 18 {
-							Some((asset.id, *amount).into())
+							Some((asset.id.clone(), *amount).into())
 						} else {
 							type U112F16 = FixedU128<U16>;
 							if *decimal > 18 {
@@ -843,7 +860,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 									U112F16::from_num(10u128.saturating_pow(*decimal as u32 - 18));
 								let b = U112F16::from_num(*amount).saturating_mul(a);
 								let r: u128 = b.to_num();
-								Some((asset.id, r).into())
+								Some((asset.id.clone(), r).into())
 							} else {
 								let a =
 									U112F16::from_num(10u128.saturating_pow(18 - *decimal as u32));
@@ -852,7 +869,7 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 								if r == 0 {
 									return None;
 								}
-								Some((asset.id, r).into())
+								Some((asset.id.clone(), r).into())
 							}
 						};
 					}
@@ -865,8 +882,8 @@ impl<DecimalPairs: Get<Vec<(XcmAssetId, u8)>>> DecimalConverter
 }
 
 pub struct ReserveChecker;
-impl ContainsPair<MultiAsset, MultiLocation> for ReserveChecker {
-	fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool {
+impl ContainsPair<Asset, Location> for ReserveChecker {
+	fn contains(asset: &Asset, origin: &Location) -> bool {
 		if let Some(ref id) = ConcrateSygmaAsset::origin(asset) {
 			if id == origin {
 				return true;
@@ -879,22 +896,27 @@ impl ContainsPair<MultiAsset, MultiLocation> for ReserveChecker {
 // Project can have it's own implementation to adapt their own spec design.
 pub struct DestinationDataParser;
 impl ExtractDestinationData for DestinationDataParser {
-	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)> {
-		match (dest.parents, &dest.interior) {
-			(
-				0,
-				Junctions::X3(
-					GeneralKey { length: path_len, data: sygma_path },
-					GeneralIndex(dest_domain_id),
-					GeneralKey { length: recipient_len, data: recipient },
-				),
-			) => {
-				if sygma_path[..*path_len as usize] == [0x73, 0x79, 0x67, 0x6d, 0x61] {
-					return TryInto::<DomainID>::try_into(*dest_domain_id).ok().map(|domain_id| {
-						(recipient[..*recipient_len as usize].to_vec(), domain_id)
-					});
+	fn extract_dest(dest: &Location) -> Option<(Vec<u8>, DomainID)> {
+		match (dest.parents, dest.clone().interior) {
+			(0, Junctions::X3(xs)) => {
+				let [a, b, c] = *xs;
+				match (a, b, c) {
+					(
+						GeneralKey { length: path_len, data: sygma_path },
+						GeneralIndex(dest_domain_id),
+						GeneralKey { length: recipient_len, data: recipient },
+					) => {
+						if sygma_path[..path_len as usize] == [0x73, 0x79, 0x67, 0x6d, 0x61] {
+							return TryInto::<DomainID>::try_into(dest_domain_id).ok().map(
+								|domain_id| {
+									(recipient[..recipient_len as usize].to_vec(), domain_id)
+								},
+							);
+						}
+						None
+					},
+					_ => None,
 				}
-				None
 			},
 			_ => None,
 		}
@@ -940,19 +962,45 @@ pub fn slice_to_generalkey(key: &[u8]) -> Junction {
 /// This impl is only for local mock purpose, the integrated parachain might have their own version
 pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
 impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
-	/// check if the given MultiAsset is a native asset
-	fn is_native_asset(asset: &MultiAsset) -> bool {
+	/// check if the given Asset is a native asset
+	fn is_native_asset(asset: &Asset) -> bool {
 		// currently there are two multilocations are considered as native asset:
-		// 1. integrated parachain native asset(MultiLocation::here())
-		// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+		// 1. integrated parachain native asset(Location::here())
+		// 2. other parachain native asset(Location::new(1, X1(Parachain(T::get().into()))))
 		let native_locations =
-			[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
+			[Location::here(), Location::new(1, X1(Arc::new([Parachain(T::get().into())])))];
 
 		match (&asset.id, &asset.fun) {
-			(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
+			(AssetId(ref id), Fungible(_)) => native_locations.contains(id),
 			_ => false,
 		}
 	}
+}
+
+parameter_types! {
+	pub MessageQueueServiceWeight: Weight = Perbill::from_percent(35) * RuntimeBlockWeights::get().max_block;
+}
+
+impl pallet_message_queue::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor<
+		cumulus_primitives_core::AggregateMessageOrigin,
+	>;
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	type MessageProcessor = xcm_builder::ProcessXcmMessage<
+		AggregateMessageOrigin,
+		xcm_executor::XcmExecutor<xcm_config::XcmConfig>,
+		RuntimeCall,
+	>;
+	type Size = u32;
+	// The XCMP queue pallet is only ever able to handle the `Sibling(ParaId)` origin:
+	type QueueChangeHandler = NarrowOriginToSibling<XcmpQueue>;
+	type QueuePausedQuery = NarrowOriginToSibling<XcmpQueue>;
+	type HeapSize = sp_core::ConstU32<{ 64 * 1024 }>;
+	type MaxStale = sp_core::ConstU32<8>;
+	type ServiceWeight = MessageQueueServiceWeight;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -983,7 +1031,6 @@ construct_runtime!(
 		XcmpQueue: cumulus_pallet_xcmp_queue = 30,
 		PolkadotXcm: pallet_xcm = 31,
 		CumulusXcm: cumulus_pallet_xcm = 32,
-		DmpQueue: cumulus_pallet_dmp_queue = 33,
 
 		SygmaAccessSegregator: sygma_access_segregator::{Pallet, Call, Storage, Event<T>} = 40, // 9
 		SygmaBasicFeeHandler: sygma_basic_feehandler::{Pallet, Call, Storage, Event<T>} = 41, // 10,
@@ -992,6 +1039,10 @@ construct_runtime!(
 		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 44, // 13
 		SygmaXcmBridge: sygma_xcm_bridge::{Pallet, Event<T>} = 45,
 		SygmaBridgeForwarder: sygma_bridge_forwarder::{Pallet, Event<T>} = 46,
+
+		// Message Queue. Importantly, is registered last so that messages are processed after
+		// the `on_initialize` hooks of bridging pallets.
+		MessageQueue: pallet_message_queue = 250,
 	}
 );
 
