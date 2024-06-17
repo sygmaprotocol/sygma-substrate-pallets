@@ -225,7 +225,11 @@ pub mod pallet {
 		/// Transactor operation failed
 		TransactorFailed,
 		/// Deposit data not correct
-		InvalidDepositData,
+		InvalidDepositDataInvalidLength,
+		InvalidDepositDataInvalidAmount,
+		InvalidDepositDataInvalidRecipientLength,
+		InvalidDepositDataRecipientLengthNotMatch,
+		InvalidDepositDataInvalidRecipient,
 		/// Dest domain not supported
 		DestDomainNotSupported,
 		/// Dest chain id not match
@@ -845,24 +849,24 @@ pub mod pallet {
 		/// Only fungible transfer is supported so far.
 		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, Location), DispatchError> {
 			if data.len() < 64 {
-				return Err(Error::<T>::InvalidDepositData.into());
+				return Err(Error::<T>::InvalidDepositDataInvalidLength.into());
 			}
 
 			let amount: u128 = U256::from_big_endian(&data[0..32])
 				.try_into()
-				.map_err(|_| Error::<T>::InvalidDepositData)?;
+				.map_err(|_| Error::<T>::InvalidDepositDataInvalidAmount)?;
 			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
-				.map_err(|_| Error::<T>::InvalidDepositData)?;
+				.map_err(|_| Error::<T>::InvalidDepositDataInvalidRecipientLength)?;
 			if (data.len() - 64) != recipient_len {
-				return Err(Error::<T>::InvalidDepositData.into());
+				return Err(Error::<T>::InvalidDepositDataRecipientLengthNotMatch.into());
 			}
 
 			let recipient = data[64..data.len()].to_vec();
 			if let Ok(location) = <Location>::decode(&mut recipient.as_slice()) {
 				Ok((amount, location))
 			} else {
-				Err(Error::<T>::InvalidDepositData.into())
+				Err(Error::<T>::InvalidDepositDataInvalidRecipient.into())
 			}
 		}
 
@@ -1776,6 +1780,24 @@ pub mod pallet {
 					),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
+			})
+		}
+
+		#[test]
+		fn extract_deposit_data_test() {
+			new_test_ext().execute_with(|| {
+				let deposit_data_remote = "0000000000000000000000000000000000000000000000000d2f13f7789f00000000000000000000000000000000000000000000000000000000000000000027010200511f0100d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+				let deposit_data_local = "0000000000000000000000000000000000000000000000000d2f13f7789f0000000000000000000000000000000000000000000000000000000000000000002400010100c668b505f6a7012a50dca169757c629651bfd6cefbfc24301dea2d2cc0ab2732";
+
+				let decoded_remote = hex::decode(deposit_data_remote).expect("Decoding failed");
+				let (amount_remote, location_remote) = SygmaBridge::extract_deposit_data(&decoded_remote).unwrap();
+				assert_eq!(amount_remote, 950000000000000000);
+				assert_eq!(location_remote, Location::new(1, Junctions::X2(Arc::new([Parachain(2004), Junction::AccountId32 { network: None, id: [212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125] }]))));
+
+				let decoded_local = hex::decode(deposit_data_local).expect("Decoding failed");
+				let (amount_local, location_local) = SygmaBridge::extract_deposit_data(&decoded_local).unwrap();
+				assert_eq!(amount_local, 950000000000000000);
+				assert_eq!(location_local, Location::new(0, Junctions::X1(Arc::new([Junction::AccountId32 { network: None, id: [198, 104, 181, 5, 246, 167, 1, 42, 80, 220, 161, 105, 117, 124, 98, 150, 81, 191, 214, 206, 251, 252, 36, 48, 29, 234, 45, 44, 192, 171, 39, 50] }]))));
 			})
 		}
 
