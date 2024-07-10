@@ -19,8 +19,12 @@ WORKDIR /tangle
 RUN apt update && apt install lsof
 
 # Copy the node binary.
-# /tangle
-COPY --from=builder /code/tangle/ .
+# /tangle/scripts
+# /tangle/target
+# /tangle/.git
+COPY --from=builder /code/tangle/scripts ./scripts
+COPY --from=builder /code/tangle/target ./target
+COPY --from=builder /code/tangle/.git ./.git
 
 # /tangle/e2e_setup.sh
 COPY --from=builder /code/e2e_setup.sh .
