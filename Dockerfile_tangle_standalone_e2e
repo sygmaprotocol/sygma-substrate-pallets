@@ -1,0 +1,47 @@
+# The Licensed Work is (c) 2022 Sygma
+# SPDX-License-Identifier: LGPL-3.0-only
+
+FROM --platform=linux/amd64 paritytech/ci-linux:production as builder
+
+WORKDIR /code
+
+COPY ./scripts/tangle .
+
+# build
+RUN git clone https://github.com/webb-tools/tangle.git ./tangle
+WORKDIR /code/tangle
+RUN git checkout sygma/polkadot-version-upgrade
+RUN cargo build --release --features testnet
+
+FROM --platform=linux/amd64 node:18.14.2
+WORKDIR /node
+
+RUN apt update && apt install lsof
+
+# Copy the node binary.
+# /node/tangle
+COPY --from=builder /code/tangle/ ./tangle
+
+# /node/e2e_setup.sh
+COPY --from=builder /code/e2e_setup.sh .
+RUN chmod +x ./e2e_setup.sh
+
+# Install root certs, see: https://github.com/paritytech/substrate/issues/9984
+RUN apt update && \
+    apt install -y ca-certificates && \
+    update-ca-certificates && \
+    apt remove ca-certificates -y && \
+    rm -rf /var/lib/apt/lists/*
+
+# JSON-RPC WS server
+EXPOSE 9944
+# JSON-RPC HTTP server
+EXPOSE 9933
+
+ARG mpc_address
+ENV MPCADDR $mpc_address
+
+WORKDIR /node
+RUN ["./e2e_setup.sh"]
+
+ENTRYPOINT ["./tangle/scripts/run-standalone-local.sh"]
