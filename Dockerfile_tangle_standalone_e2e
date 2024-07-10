@@ -20,10 +20,10 @@ RUN apt update && apt install lsof
 
 # Copy the node binary.
 # /tangle/scripts
-# /tangle/target
+# /tangle/target/release/tangle
 # /tangle/.git
 COPY --from=builder /code/tangle/scripts ./scripts
-COPY --from=builder /code/tangle/target ./target
+COPY --from=builder /code/tangle/target/release/tangle ./target/release/tangle
 COPY --from=builder /code/tangle/.git ./.git
 
 # /tangle/e2e_setup.sh
