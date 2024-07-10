@@ -6,9 +6,6 @@ set -e
 
 echo ${PWD}
 
-# go into project dir which is required by the launching script
-cd tangle
-
 # Run dev node
 echo "start the dev node up..."
 ./scripts/run-standalone-local.sh --clean > substrate_node.log 2>&1 &

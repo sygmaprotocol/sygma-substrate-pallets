@@ -14,15 +14,15 @@ RUN git checkout sygma/polkadot-version-upgrade
 RUN cargo build --release --features testnet
 
 FROM --platform=linux/amd64 node:18.14.2
-WORKDIR /node
+WORKDIR /tangle
 
 RUN apt update && apt install lsof
 
 # Copy the node binary.
-# /node/tangle
-COPY --from=builder /code/tangle/ ./tangle
+# /tangle
+COPY --from=builder /code/tangle/ .
 
-# /node/e2e_setup.sh
+# /tangle/e2e_setup.sh
 COPY --from=builder /code/e2e_setup.sh .
 RUN chmod +x ./e2e_setup.sh
 
@@ -41,7 +41,7 @@ EXPOSE 9933
 ARG mpc_address
 ENV MPCADDR $mpc_address
 
-WORKDIR /node
+WORKDIR /tangle
 RUN ["./e2e_setup.sh"]
 
-ENTRYPOINT ["./tangle/scripts/run-standalone-local.sh"]
+ENTRYPOINT ["./scripts/run-standalone-local.sh"]
