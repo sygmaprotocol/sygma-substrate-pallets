@@ -4,8 +4,6 @@
 
 set -e
 
-echo ${PWD}
-
 # Run dev node
 echo "start the dev node up..."
 ./scripts/run-standalone-local.sh --clean > substrate_node.log 2>&1 &
