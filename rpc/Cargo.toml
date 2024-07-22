@@ -10,11 +10,11 @@ scale-info = { version = "2.5.0" }
 jsonrpsee = { version = "0.20.3", features = ["server", "macros"] }
 
 # Substrate
-sp-runtime = { version = "31.0.1", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.7.0" }
-sp-blockchain = { version = "28.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.7.0" }
-sp-api = { version = "26.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.7.0" }
-sc-client-api = { version = "28.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.7.0" }
-sc-rpc = { version = "29.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.7.0" }
+sp-runtime = { version = "32.0.0", default-features = false }
+sp-api = { version = "27.0.0", default-features = false }
+sp-blockchain = { version = "29.0.0", default-features = false }
+sc-client-api = { version = "29.0.0", default-features = false }
+sc-rpc = { version = "30.0.0", default-features = false }
 
 sygma-runtime-api = { path = "../runtime-api", default-features = false }
 sygma-traits = { path = "../traits", default-features = false }
