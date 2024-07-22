@@ -39,9 +39,10 @@ pub mod pallet {
 	use scale_info::TypeInfo;
 	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 	use sp_runtime::{
-		traits::{AccountIdConversion, Clear},
+		traits::{Clear},
 		RuntimeDebug as RuntimeDebugT,
 	};
+	use frame_support::sp_runtime::traits::AccountIdConversion;
 	use sp_std::collections::btree_map::BTreeMap;
 	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
 	use xcm::v4::{prelude::*, Location};
