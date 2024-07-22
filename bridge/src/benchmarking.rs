@@ -21,8 +21,8 @@ use sygma_basic_feehandler::Pallet as BasicFeeHandler;
 use sygma_fee_handler_router::Pallet as FeeHandlerRouter;
 
 use pallet_balances::Pallet as Balances;
-use sp_std::{boxed::Box, vec};
-use xcm::latest::prelude::*;
+use sp_std::{boxed::Box, vec, Arc};
+use xcm::v4::prelude::*;
 
 pub fn slice_to_generalkey(key: &[u8]) -> Junction {
 	let len = key.len();
@@ -115,7 +115,7 @@ mod benchmarks {
 	fn deposit() {
 		let treasury_account: AccountId32 = AccountId32::new([100u8; 32]);
 		let bridge_account: AccountId32 = AccountId32::new([101u8; 32]);
-		let native_location: MultiLocation = MultiLocation::here();
+		let native_location: Location = Location::here();
 
 		let dest_domain_id: DomainID = 1;
 		let dest_chain_id: ChainID = U256::from(1);
@@ -151,13 +151,13 @@ mod benchmarks {
 		#[extrinsic_call]
 		deposit(
 			SystemOrigin::Signed(caller.clone().into()),
-			Box::new((Concrete(native_location), Fungible(amount)).into()),
-			Box::new(MultiLocation {
+			Box::new((AssetId(native_location), Fungible(amount)).into()),
+			Box::new(Location {
 				parents: 0,
-				interior: X2(
+				interior: X2(Arc::new([
 					slice_to_generalkey(b"ethereum recipient"),
 					slice_to_generalkey(&[dest_domain_id]),
-				),
+				])),
 			}),
 		);
 
@@ -215,9 +215,12 @@ mod benchmarks {
 			resource_id: native_resourceid,
 			data: SygmaBridge::<T>::create_deposit_data(
 				amount,
-				MultiLocation::new(
+				Location::new(
 					0,
-					X1(Junction::AccountId32 { network: None, id: caller.clone().into() }),
+					Arc::new([X1(Junction::AccountId32 {
+						network: None,
+						id: caller.clone().into(),
+					})]),
 				)
 				.encode(),
 			),

@@ -8,8 +8,9 @@ use super::{
 };
 use cumulus_primitives_core::ParaId;
 use frame_support::pallet_prelude::Get;
+use frame_support::traits::Contains;
 use frame_support::{
-	match_types, parameter_types,
+	parameter_types,
 	traits::{ConstU32, Everything, Nothing},
 	weights::Weight,
 };
@@ -18,32 +19,35 @@ use pallet_xcm::XcmPassthrough;
 use polkadot_parachain_primitives::primitives::Sibling;
 use polkadot_runtime_common::impls::ToAuthor;
 use sp_runtime::traits::CheckedConversion;
+use sp_std::sync::Arc;
 use sp_std::vec;
 use sp_std::{marker::PhantomData, vec::Vec};
 use sygma_traits::AssetTypeIdentifier;
 use sygma_xcm_bridge::BridgeImpl;
-use xcm::latest::prelude::*;
+use xcm::v4::prelude::*;
+use xcm::v4::Junctions::X1;
+#[allow(deprecated)]
 use xcm_builder::{
 	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowTopLevelPaidExecutionFrom,
 	CurrencyAdapter, DenyReserveTransferToRelayChain, DenyThenTry, EnsureXcmOrigin,
-	FixedWeightBounds, NativeAsset, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
-	SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
-	SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId, UsingComponents,
-	WithComputedOrigin, WithUniqueTopic,
+	FixedWeightBounds, FrameTransactionalProcessor, NativeAsset, ParentIsPreset,
+	RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
+	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
+	TrailingSetTopicAsId, UsingComponents, WithComputedOrigin, WithUniqueTopic,
 };
 use xcm_executor::{traits::MatchesFungible, XcmExecutor};
 
 parameter_types! {
-	pub const RelayLocation: MultiLocation = MultiLocation::parent();
+	pub const RelayLocation: Location = Location::parent();
 	pub const RelayNetwork: Option<NetworkId> = None;
 	pub RelayChainOrigin: RuntimeOrigin = cumulus_pallet_xcm::Origin::Relay.into();
-	pub UniversalLocation: InteriorMultiLocation = Parachain(ParachainInfo::parachain_id().into()).into();
-	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::parachain_id().into())));
+	pub UniversalLocation: InteriorLocation = Parachain(ParachainInfo::parachain_id().into()).into();
+	pub SelfLocation: Location = Location::new(1, X1(Arc::new([Parachain(ParachainInfo::parachain_id().into())])));
 	// set 1 token as min fee
 	pub MinXcmFee: Vec<(XcmAssetId, u128)> = vec![(NativeLocation::get().into(), 1_000_000_000_000u128)];
 }
 
-/// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
+/// Type for specifying how a `Location` can be converted into an `AccountId`. This is used
 /// when determining ownership of accounts for asset transacting and when attempting to use XCM
 /// `Transact` in order to determine the dispatch Origin.
 pub type LocationToAccountId = (
@@ -56,12 +60,13 @@ pub type LocationToAccountId = (
 );
 
 /// Means for transacting assets on this chain.
+#[allow(deprecated)]
 pub type LocalAssetTransactor = CurrencyAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
 	NativeAssetMatcher<NativeAssetTypeIdentifier<ParachainInfo>>,
-	// Do a simple punn to convert an AccountId32 MultiLocation into a native chain account ID:
+	// Do a simple punn to convert an AccountId32 Location into a native chain account ID:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
 	AccountId,
@@ -97,11 +102,18 @@ parameter_types! {
 	pub const MaxAssetsIntoHolding: u32 = 64;
 }
 
-match_types! {
-	pub type ParentOrParentsExecutivePlurality: impl Contains<MultiLocation> = {
-		MultiLocation { parents: 1, interior: Here } |
-		MultiLocation { parents: 1, interior: X1(Plurality { id: BodyId::Executive, .. }) }
-	};
+// match_types! {
+// 	pub type ParentOrParentsExecutivePlurality: impl Contains<Location> = {
+// 		Location { parents: 1, interior: Here } |
+// 		Location { parents: 1, interior: X1(Plurality { id: BodyId::Executive, .. }) }
+// 	};
+// }
+
+pub struct ParentOrParentsExecutivePlurality;
+impl Contains<Location> for ParentOrParentsExecutivePlurality {
+	fn contains(location: &Location) -> bool {
+		matches!(location.unpack(), (1, []) | (1, [Plurality { id: BodyId::Executive, .. }]))
+	}
 }
 
 pub type Barrier = TrailingSetTopicAsId<
@@ -150,6 +162,7 @@ impl xcm_executor::Config for XcmConfig {
 	type CallDispatcher = RuntimeCall;
 	type SafeCallFilter = Everything;
 	type Aliasers = Nothing;
+	type TransactionalProcessor = FrameTransactionalProcessor;
 }
 
 /// No local origins on this chain are allowed to dispatch XCM sends/executions.
@@ -166,7 +179,7 @@ pub type XcmRouter = WithUniqueTopic<(
 
 #[cfg(feature = "runtime-benchmarks")]
 parameter_types! {
-	pub ReachableDest: Option<MultiLocation> = Some(Parent.into());
+	pub ReachableDest: Option<Location> = Some(Parent.into());
 }
 
 impl pallet_xcm::Config for Runtime {
@@ -194,8 +207,6 @@ impl pallet_xcm::Config for Runtime {
 	type SovereignAccountOf = LocationToAccountId;
 	type MaxLockers = ConstU32<8>;
 	type WeightInfo = pallet_xcm::TestWeightInfo;
-	#[cfg(feature = "runtime-benchmarks")]
-	type ReachableDest = ReachableDest;
 	type AdminOrigin = EnsureRoot<AccountId>;
 	type MaxRemoteLockConsumers = ConstU32<0>;
 	type RemoteLockConsumerIdentifier = ();
@@ -224,9 +235,9 @@ impl sygma_bridge_forwarder::Config for Runtime {
 
 pub struct NativeAssetMatcher<C>(PhantomData<C>);
 impl<C: AssetTypeIdentifier, B: TryFrom<u128>> MatchesFungible<B> for NativeAssetMatcher<C> {
-	fn matches_fungible(a: &MultiAsset) -> Option<B> {
+	fn matches_fungible(a: &Asset) -> Option<B> {
 		match (&a.id, &a.fun) {
-			(Concrete(_), Fungible(ref amount)) if C::is_native_asset(a) => {
+			(AssetId(_), Fungible(ref amount)) if C::is_native_asset(a) => {
 				CheckedConversion::checked_from(*amount)
 			},
 			_ => None,
@@ -238,16 +249,16 @@ impl<C: AssetTypeIdentifier, B: TryFrom<u128>> MatchesFungible<B> for NativeAsse
 /// This impl is only for local mock purpose, the integrated parachain might have their own version
 pub struct NativeAssetTypeIdentifier<T>(PhantomData<T>);
 impl<T: Get<ParaId>> AssetTypeIdentifier for NativeAssetTypeIdentifier<T> {
-	/// check if the given MultiAsset is a native asset
-	fn is_native_asset(asset: &MultiAsset) -> bool {
+	/// check if the given Asset is a native asset
+	fn is_native_asset(asset: &Asset) -> bool {
 		// currently there are two multilocations are considered as native asset:
-		// 1. integrated parachain native asset(MultiLocation::here())
-		// 2. other parachain native asset(MultiLocation::new(1, X1(Parachain(T::get().into()))))
+		// 1. integrated parachain native asset(Location::here())
+		// 2. other parachain native asset(Location::new(1, X1(Parachain(T::get().into()))))
 		let native_locations =
-			[MultiLocation::here(), MultiLocation::new(1, X1(Parachain(T::get().into())))];
+			[Location::here(), Location::new(1, X1(Arc::new([Parachain(T::get().into())])))];
 
 		match (&asset.id, &asset.fun) {
-			(Concrete(ref id), Fungible(_)) => native_locations.contains(id),
+			(AssetId(ref id), Fungible(_)) => native_locations.contains(id),
 			_ => false,
 		}
 	}

@@ -8,7 +8,8 @@ use frame_support::dispatch::DispatchResult;
 use primitive_types::{H160, U256};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
-use xcm::latest::{prelude::*, MultiLocation};
+use xcm::opaque::v4::{Asset, Location};
+use xcm::v4::prelude::*;
 
 pub type DomainID = u8;
 pub type DepositNonce = u64;
@@ -40,56 +41,52 @@ pub enum TransferType {
 pub struct MpcAddress(pub [u8; 20]);
 
 pub trait ExtractDestinationData {
-	fn extract_dest(dest: &MultiLocation) -> Option<(Vec<u8>, DomainID)>;
+	fn extract_dest(dest: &Location) -> Option<(Vec<u8>, DomainID)>;
 }
 
 pub trait FeeHandler {
 	// Return fee represent by a specific asset
-	fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128>;
+	fn get_fee(domain: DomainID, asset: Asset) -> Option<u128>;
 }
 
 impl FeeHandler for () {
-	fn get_fee(_domain: DomainID, _asset: MultiAsset) -> Option<u128> {
+	fn get_fee(_domain: DomainID, _asset: Asset) -> Option<u128> {
 		None
 	}
 }
 
 pub trait DecimalConverter {
-	/// convert_to converts the MultiAsset to u128 when bridging from sygma substrate pallet.
+	/// convert_to converts the Asset to u128 when bridging from sygma substrate pallet.
 	/// Sygma relayer will always expect asset in 18 decimal
-	fn convert_to(asset: &MultiAsset) -> Option<u128>;
-	/// convert_from converts a u128 to MultiAsset when bridging to sygma substrate pallet.
+	fn convert_to(asset: &Asset) -> Option<u128>;
+	/// convert_from converts a u128 to Asset when bridging to sygma substrate pallet.
 	/// Sygma relayer will always send asset in 18 decimal
-	fn convert_from(asset: &MultiAsset) -> Option<MultiAsset>;
+	fn convert_from(asset: &Asset) -> Option<Asset>;
 }
 
 // when integrating with parachain, parachain team can implement their own version
 pub trait AssetTypeIdentifier {
-	fn is_native_asset(asset: &MultiAsset) -> bool;
+	fn is_native_asset(asset: &Asset) -> bool;
 }
 
 pub trait TransactorForwarder {
-	fn xcm_transactor_forwarder(
-		sender: [u8; 32],
-		what: MultiAsset,
-		dest: MultiLocation,
-	) -> DispatchResult;
+	fn xcm_transactor_forwarder(sender: [u8; 32], what: Asset, dest: Location) -> DispatchResult;
 	fn other_world_transactor_forwarder(
 		sender: [u8; 32],
-		what: MultiAsset,
-		dest: MultiLocation,
+		what: Asset,
+		dest: Location,
 	) -> DispatchResult;
 }
 
 pub trait Bridge {
 	fn transfer(
 		sender: [u8; 32],
-		asset: MultiAsset,
-		dest: MultiLocation,
+		asset: Asset,
+		dest: Location,
 		max_weight: Option<Weight>,
 	) -> DispatchResult;
 }
 
 pub trait AssetReserveLocationParser {
-	fn reserved_location(asset: &MultiAsset) -> Option<MultiLocation>;
+	fn reserved_location(asset: &Asset) -> Option<Location>;
 }

@@ -44,7 +44,7 @@ pub mod pallet {
 	};
 	use sp_std::collections::btree_map::BTreeMap;
 	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
-	use xcm::latest::{prelude::*, MultiLocation};
+	use xcm::v4::{prelude::*, Location};
 	use xcm_executor::traits::TransactAsset;
 
 	use sygma_traits::{
@@ -113,12 +113,13 @@ pub mod pallet {
 		type AssetTransactor: TransactAsset;
 
 		/// AssetId and ResourceId pairs
+		#[pallet::constant]
 		type ResourcePairs: Get<Vec<(AssetId, ResourceId)>>;
 
 		/// Return true if asset reserved on current chain
-		type IsReserve: ContainsPair<MultiAsset, MultiLocation>;
+		type IsReserve: ContainsPair<Asset, Location>;
 
-		/// Extract dest data from given MultiLocation
+		/// Extract dest data from given Location
 		type ExtractDestData: ExtractDestinationData;
 
 		/// Config ID for the current pallet instance
@@ -198,7 +199,11 @@ pub mod pallet {
 		/// Insufficient balance on sender account
 		InsufficientBalance,
 		/// Asset transactor execution failed
-		TransactFailed,
+		TransactFailedDeposit,
+		TransactFailedWithdraw,
+		TransactFailedFeeDeposit,
+		TransactFailedHoldInReserved,
+		TransactFailedReleaseFromReserved,
 		/// The withdrawn amount can not cover the fee payment
 		FeeTooExpensive,
 		/// MPC address not set
@@ -220,7 +225,11 @@ pub mod pallet {
 		/// Transactor operation failed
 		TransactorFailed,
 		/// Deposit data not correct
-		InvalidDepositData,
+		InvalidDepositDataInvalidLength,
+		InvalidDepositDataInvalidAmount,
+		InvalidDepositDataInvalidRecipientLength,
+		InvalidDepositDataRecipientLengthNotMatch,
+		InvalidDepositDataInvalidRecipient,
 		/// Dest domain not supported
 		DestDomainNotSupported,
 		/// Dest chain id not match
@@ -435,14 +444,14 @@ pub mod pallet {
 		#[pallet::weight(< T as Config >::WeightInfo::deposit())]
 		pub fn deposit(
 			origin: OriginFor<T>,
-			asset: Box<MultiAsset>,
-			dest: Box<MultiLocation>,
+			asset: Box<Asset>,
+			dest: Box<Location>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(!MpcAddr::<T>::get().is_clear(), Error::<T>::MissingMpcAddress);
 
-			// Extract dest (MultiLocation) to get corresponding dest domainID and Ethereum
+			// Extract dest (Location) to get corresponding dest domainID and Ethereum
 			// recipient address
 			let (recipient, dest_domain_id) =
 				T::ExtractDestData::extract_dest(&dest).ok_or(Error::<T>::ExtractDestDataFailed)?;
@@ -451,7 +460,7 @@ pub mod pallet {
 
 			ensure!(DestDomainIds::<T>::get(dest_domain_id), Error::<T>::DestDomainNotSupported);
 
-			// Extract asset (MultiAsset) to get corresponding ResourceId, transfer amount and the
+			// Extract asset (Asset) to get corresponding ResourceId, transfer amount and the
 			// transfer type
 			let (resource_id, amount, transfer_type) =
 				Self::extract_asset(&asset.clone()).ok_or(Error::<T>::AssetNotBound)?;
@@ -467,33 +476,34 @@ pub mod pallet {
 				&Junction::AccountId32 { network: None, id: sender.clone().into() }.into(),
 				None,
 			)
-			.map_err(|_| Error::<T>::TransactFailed)?;
+			.map_err(|_| Error::<T>::TransactFailedWithdraw)?;
 
 			// Deposit `fee` of asset to treasury account
 			T::AssetTransactor::deposit_asset(
-				&(asset.id, Fungible(fee)).into(),
+				&(asset.id.clone(), Fungible(fee)).into(),
 				&Junction::AccountId32 { network: None, id: T::FeeReserveAccount::get().into() }
 					.into(),
 				// Put empty message hash here because we are not sending XCM message
-				&XcmContext::with_message_id([0; 32]),
+				Some(&XcmContext::with_message_id([0; 32])),
 			)
-			.map_err(|_| Error::<T>::TransactFailed)?;
+			.map_err(|_| Error::<T>::TransactFailedFeeDeposit)?;
 
 			let bridge_amount = amount - fee;
 
+			// TODO: FIX THIS: all registered token must have a reserved_account even though it is a mint-burn token
 			let token_reserved_account = Self::get_token_reserved_account(&asset.id)
 				.ok_or(Error::<T>::NoLiquidityHolderAccountBound)?;
 
 			// Deposit `bridge_amount` of asset to reserve account if asset is reserved in local
 			// chain.
-			if T::IsReserve::contains(&asset, &MultiLocation::here()) {
+			if T::IsReserve::contains(&asset, &Location::here()) {
 				T::AssetTransactor::deposit_asset(
-					&(asset.id, Fungible(bridge_amount)).into(),
+					&(asset.id.clone(), Fungible(bridge_amount)).into(),
 					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
 					// Put empty message hash here because we are not sending XCM message
-					&XcmContext::with_message_id([0; 32]),
+					Some(&XcmContext::with_message_id([0; 32])),
 				)
-				.map_err(|_| Error::<T>::TransactFailed)?;
+				.map_err(|_| Error::<T>::TransactFailedHoldInReserved)?;
 			}
 
 			// Bump deposit nonce
@@ -505,7 +515,7 @@ pub mod pallet {
 
 			// convert the asset decimal
 			let decimal_converted_amount =
-				T::DecimalConverter::convert_to(&(asset.id, bridge_amount).into())
+				T::DecimalConverter::convert_to(&(asset.id.clone(), bridge_amount).into())
 					.ok_or(Error::<T>::DecimalConversionFail)?;
 
 			// Emit Deposit event
@@ -690,8 +700,8 @@ pub mod pallet {
 	{
 		fn transfer(
 			sender: [u8; 32],
-			asset: MultiAsset,
-			dest: MultiLocation,
+			asset: Asset,
+			dest: Location,
 			_max_weight: Option<Weight>,
 		) -> DispatchResult {
 			let sender_origin = OriginFor::<T>::from(RawOrigin::Signed(sender.into()));
@@ -807,9 +817,9 @@ pub mod pallet {
 			keccak_256(bytes.as_slice())
 		}
 
-		/// Extract asset id and transfer amount from `MultiAsset`, currently only fungible asset
+		/// Extract asset id and transfer amount from `Asset`, currently only fungible asset
 		/// are supported.
-		fn extract_asset(asset: &MultiAsset) -> Option<(ResourceId, u128, TransferType)> {
+		fn extract_asset(asset: &Asset) -> Option<(ResourceId, u128, TransferType)> {
 			match (&asset.fun, &asset.id) {
 				(Fungible(amount), _) => {
 					T::ResourcePairs::get().iter().position(|a| a.0 == asset.id).map(|idx| {
@@ -837,26 +847,26 @@ pub mod pallet {
 		/// recipient data            bytes       bytes  64 - END
 		///
 		/// Only fungible transfer is supported so far.
-		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, MultiLocation), DispatchError> {
+		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, Location), DispatchError> {
 			if data.len() < 64 {
-				return Err(Error::<T>::InvalidDepositData.into());
+				return Err(Error::<T>::InvalidDepositDataInvalidLength.into());
 			}
 
 			let amount: u128 = U256::from_big_endian(&data[0..32])
 				.try_into()
-				.map_err(|_| Error::<T>::InvalidDepositData)?;
+				.map_err(|_| Error::<T>::InvalidDepositDataInvalidAmount)?;
 			let recipient_len: usize = U256::from_big_endian(&data[32..64])
 				.try_into()
-				.map_err(|_| Error::<T>::InvalidDepositData)?;
+				.map_err(|_| Error::<T>::InvalidDepositDataInvalidRecipientLength)?;
 			if (data.len() - 64) != recipient_len {
-				return Err(Error::<T>::InvalidDepositData.into());
+				return Err(Error::<T>::InvalidDepositDataRecipientLengthNotMatch.into());
 			}
 
 			let recipient = data[64..data.len()].to_vec();
-			if let Ok(location) = <MultiLocation>::decode(&mut recipient.as_slice()) {
+			if let Ok(location) = <Location>::decode(&mut recipient.as_slice()) {
 				Ok((amount, location))
 			} else {
-				Err(Error::<T>::InvalidDepositData.into())
+				Err(Error::<T>::InvalidDepositDataInvalidRecipient.into())
 			}
 		}
 
@@ -864,7 +874,7 @@ pub mod pallet {
 			T::ResourcePairs::get()
 				.iter()
 				.position(|a| &a.1 == rid)
-				.map(|idx| T::ResourcePairs::get()[idx].0)
+				.map(|idx| T::ResourcePairs::get()[idx].0.clone())
 		}
 
 		fn hex_zero_padding_32(i: u128) -> [u8; 32] {
@@ -899,28 +909,28 @@ pub mod pallet {
 				!Self::is_proposal_executed(proposal.deposit_nonce, proposal.origin_domain_id),
 				Error::<T>::ProposalAlreadyComplete
 			);
-			// Extract ResourceId from proposal data to get corresponding asset (MultiAsset)
+			// Extract ResourceId from proposal data to get corresponding asset (XCM V4 Asset)
 			let asset_id =
 				Self::rid_to_assetid(&proposal.resource_id).ok_or(Error::<T>::AssetNotBound)?;
-			// Extract Receipt from proposal data to get corresponding location (MultiLocation)
+			// Extract Receipt from proposal data to get corresponding location (Location)
 			let (amount, location) = Self::extract_deposit_data(&proposal.data)?;
 
 			// convert the asset decimal
 			let decimal_converted_asset =
-				T::DecimalConverter::convert_from(&(asset_id, amount).into())
+				T::DecimalConverter::convert_from(&(asset_id.clone(), amount).into())
 					.ok_or(Error::<T>::DecimalConversionFail)?;
 
-			let token_reserved_account = Self::get_token_reserved_account(&asset_id)
+			let token_reserved_account = Self::get_token_reserved_account(&asset_id.clone())
 				.ok_or(Error::<T>::NoLiquidityHolderAccountBound)?;
 
 			// Withdraw `decimal_converted_asset` of asset from reserve account
-			if T::IsReserve::contains(&decimal_converted_asset, &MultiLocation::here()) {
+			if T::IsReserve::contains(&decimal_converted_asset, &Location::here()) {
 				T::AssetTransactor::withdraw_asset(
 					&decimal_converted_asset,
 					&Junction::AccountId32 { network: None, id: token_reserved_account }.into(),
 					None,
 				)
-				.map_err(|_| Error::<T>::TransactFailed)?;
+				.map_err(|_| Error::<T>::TransactFailedReleaseFromReserved)?;
 			}
 
 			// Deposit `decimal_converted_asset` of asset to dest location
@@ -928,9 +938,9 @@ pub mod pallet {
 				&decimal_converted_asset,
 				&location,
 				// Put empty message hash here because we are not sending XCM message
-				&XcmContext::with_message_id([0; 32]),
+				Some(&XcmContext::with_message_id([0; 32])),
 			)
-			.map_err(|_| Error::<T>::TransactFailed)?;
+			.map_err(|_| Error::<T>::TransactFailedDeposit)?;
 
 			Ok(())
 		}
@@ -959,7 +969,8 @@ pub mod pallet {
 		use primitive_types::U256;
 		use sp_core::{ecdsa, ByteArray, Pair};
 		use sp_std::{boxed::Box, vec};
-		use xcm::latest::prelude::*;
+		use std::sync::Arc;
+		use xcm::v4::prelude::*;
 
 		use bridge::mock::{
 			assert_events, new_test_ext, slice_to_generalkey, AccessSegregator, Assets, Balances,
@@ -978,6 +989,7 @@ pub mod pallet {
 			DestChainIds, DestDomainIds, Error, Event as SygmaBridgeEvent, IsPaused, MpcAddr,
 			Proposal,
 		};
+		use xcm::v4::Junctions::{X1, X2, X3};
 
 		#[test]
 		fn get_token_reserved_account_test() {
@@ -998,13 +1010,13 @@ pub mod pallet {
 				// unknown token should return None
 				assert_eq!(
 					SygmaBridge::get_token_reserved_account(
-						&MultiLocation::new(
+						&Location::new(
 							2,
-							X3(
+							X3(Arc::new([
 								Parachain(1000),
 								slice_to_generalkey(b"sygma"),
-								slice_to_generalkey(b"unknown"),
-							),
+								slice_to_generalkey(b"unknown")
+							])),
 						)
 						.into()
 					),
@@ -1288,13 +1300,13 @@ pub mod pallet {
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -1359,13 +1371,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 
-				let asset: MultiAsset = (Concrete(NativeLocation::get()), Fungible(amount)).into();
-				let dest: MultiLocation = MultiLocation {
+				let asset: Asset = (AssetId(NativeLocation::get()), Fungible(amount)).into();
+				let dest: Location = Location {
 					parents: 0,
-					interior: X2(
+					interior: X2(Arc::new([
 						slice_to_generalkey(b"ethereum recipient"),
 						slice_to_generalkey(&[1]),
-					),
+					])),
 				};
 
 				// Call transfer instead of deposit
@@ -1489,13 +1501,13 @@ pub mod pallet {
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(UsdtLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(UsdtLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -1540,7 +1552,7 @@ pub mod pallet {
 		#[test]
 		fn deposit_unbounded_asset_should_fail() {
 			new_test_ext().execute_with(|| {
-				let unbounded_asset_location = MultiLocation::new(1, X1(GeneralIndex(123)));
+				let unbounded_asset_location = Location::new(1, X1(Arc::new([GeneralIndex(123)])));
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
 				let amount = 200u128;
@@ -1549,7 +1561,7 @@ pub mod pallet {
 				assert_ok!(SygmaBasicFeeHandler::set_fee(
 					Origin::root(),
 					DEST_DOMAIN_ID,
-					Box::new(unbounded_asset_location.into()),
+					Box::new(unbounded_asset_location.clone().into()),
 					fee
 				));
 				assert_ok!(SygmaBridge::register_domain(
@@ -1561,13 +1573,13 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(unbounded_asset_location), Fungible(amount)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(unbounded_asset_location), Fungible(amount)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::AssetNotBound
@@ -1578,9 +1590,9 @@ pub mod pallet {
 		#[test]
 		fn deposit_to_unrecognized_dest_should_fail() {
 			new_test_ext().execute_with(|| {
-				let invalid_dest = MultiLocation::new(
+				let invalid_dest = Location::new(
 					0,
-					X2(GeneralIndex(0), slice_to_generalkey(b"ethereum recipient")),
+					X2(Arc::new([GeneralIndex(0), slice_to_generalkey(b"ethereum recipient")])),
 				);
 				let test_mpc_addr: MpcAddress = MpcAddress([1u8; 20]);
 				let fee = 100u128;
@@ -1602,7 +1614,7 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
 						Box::new(invalid_dest),
 					),
 					bridge::Error::<Runtime>::ExtractDestDataFailed
@@ -1624,13 +1636,13 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::MissingFeeConfig
@@ -1666,13 +1678,13 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::FeeTooExpensive
@@ -1714,13 +1726,13 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::BridgePaused
@@ -1730,13 +1742,13 @@ pub mod pallet {
 				// Should success
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 			})
@@ -1757,17 +1769,35 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::MissingMpcAddress
 				);
+			})
+		}
+
+		#[test]
+		fn extract_deposit_data_test() {
+			new_test_ext().execute_with(|| {
+				let deposit_data_remote = "0000000000000000000000000000000000000000000000000d2f13f7789f00000000000000000000000000000000000000000000000000000000000000000027010200511f0100d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+				let deposit_data_local = "0000000000000000000000000000000000000000000000000d2f13f7789f0000000000000000000000000000000000000000000000000000000000000000002400010100c668b505f6a7012a50dca169757c629651bfd6cefbfc24301dea2d2cc0ab2732";
+
+				let decoded_remote = hex::decode(deposit_data_remote).expect("Decoding failed");
+				let (amount_remote, location_remote) = SygmaBridge::extract_deposit_data(&decoded_remote).unwrap();
+				assert_eq!(amount_remote, 950000000000000000);
+				assert_eq!(location_remote, Location::new(1, Junctions::X2(Arc::new([Parachain(2004), Junction::AccountId32 { network: None, id: [212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125] }]))));
+
+				let decoded_local = hex::decode(deposit_data_local).expect("Decoding failed");
+				let (amount_local, location_local) = SygmaBridge::extract_deposit_data(&decoded_local).unwrap();
+				assert_eq!(amount_local, 950000000000000000);
+				assert_eq!(location_local, Location::new(0, Junctions::X1(Arc::new([Junction::AccountId32 { network: None, id: [198, 104, 181, 5, 246, 167, 1, 42, 80, 220, 161, 105, 117, 124, 98, 150, 81, 191, 214, 206, 251, 252, 36, 48, 29, 234, 45, 44, 192, 171, 39, 50] }]))));
 			})
 		}
 
@@ -1864,13 +1894,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 
@@ -1918,8 +1948,11 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: BOB.into() }])),
+						)
+						.encode(),
 					),
 				};
 				// amount is in 18 decimal 0.000200000000000000, will be convert to 18 decimal
@@ -1930,8 +1963,11 @@ pub mod pallet {
 					resource_id: UsdtResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: BOB.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let invalid_depositnonce_proposal = Proposal {
@@ -1940,8 +1976,11 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: BOB.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let invalid_domainid_proposal = Proposal {
@@ -1950,8 +1989,11 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: BOB.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let invalid_resourceid_proposal = Proposal {
@@ -1960,8 +2002,11 @@ pub mod pallet {
 					resource_id: [2u8; 32],
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: BOB.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let invalid_recipient_proposal = Proposal {
@@ -2307,14 +2352,14 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new(
-						(Concrete(NativeLocation::get()), Fungible(amount_native_asset)).into()
+						(AssetId(NativeLocation::get()), Fungible(amount_native_asset)).into()
 					),
-					Box::new(MultiLocation {
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -2370,13 +2415,13 @@ pub mod pallet {
 				// deposit
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(UsdtLocation::get()), Fungible(amount_usdt_asset)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(UsdtLocation::get()), Fungible(amount_usdt_asset)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -2441,13 +2486,13 @@ pub mod pallet {
 				// deposit
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(AstrLocation::get()), Fungible(amount_astr_asset)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(AstrLocation::get()), Fungible(amount_astr_asset)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -2513,17 +2558,17 @@ pub mod pallet {
 						Origin::signed(ALICE),
 						Box::new(
 							(
-								Concrete(AstrLocation::get()),
+								AssetId(AstrLocation::get()),
 								Fungible(amount_astr_asset_extreme_small_amount)
 							)
 								.into()
 						),
-						Box::new(MultiLocation {
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::DecimalConversionFail
@@ -2566,14 +2611,14 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new(
-						(Concrete(NativeLocation::get()), Fungible(ENDOWED_BALANCE / 2)).into()
+						(AssetId(NativeLocation::get()), Fungible(ENDOWED_BALANCE / 2)).into()
 					),
-					Box::new(MultiLocation {
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// BridgeAccount should have half of alice native asset - fee
@@ -2596,8 +2641,11 @@ pub mod pallet {
 					deposit_nonce: 1,
 					data: SygmaBridge::create_deposit_data(
 						bridge_amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: ALICE.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: ALICE.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let proposals = vec![p_native];
@@ -2652,8 +2700,11 @@ pub mod pallet {
 					resource_id: UsdtResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						bridge_amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: ALICE.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: ALICE.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let proposals_usdt = vec![p_usdt];
@@ -2707,8 +2758,11 @@ pub mod pallet {
 					resource_id: AstrResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						bridge_amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: ALICE.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: ALICE.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let proposals_astr = vec![p_astr];
@@ -2738,8 +2792,11 @@ pub mod pallet {
 					deposit_nonce: 4,
 					data: SygmaBridge::create_deposit_data(
 						extreme_small_bridge_amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: ALICE.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: ALICE.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let proposals_extreme = vec![p_native_extreme];
@@ -2879,7 +2936,7 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::pause_bridge(Origin::from(Some(ALICE)), 1u8));
 				assert_ok!(SygmaBridge::unpause_bridge(Origin::from(Some(ALICE)), 1u8));
-				// pause domain 2 again to see if mpc address setup will unpause it
+				// pause domain 1 again to see if mpc address setup will unpause it
 				assert_ok!(SygmaBridge::pause_bridge(Origin::from(Some(ALICE)), 1u8));
 
 				// double check if it's paused
@@ -2894,13 +2951,13 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(AstrLocation::get()), Fungible(100)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(AstrLocation::get()), Fungible(100)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::MissingMpcAddress
@@ -2917,7 +2974,7 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::set_mpc_address(Origin::root(), test_mpc_addr));
 				assert_eq!(MpcAddr::<Runtime>::get(), test_mpc_addr);
 
-				// double check if it's unpause now
+				// double check if it's unpause now, should not be paused
 				assert!(!SygmaBridge::is_paused(1));
 
 				// retry again, should work
@@ -2945,13 +3002,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -2972,8 +3029,11 @@ pub mod pallet {
 					resource_id: NativeResourceId::get(),
 					data: SygmaBridge::create_deposit_data(
 						amount,
-						MultiLocation::new(0, X1(AccountId32 { network: None, id: BOB.into() }))
-							.encode(),
+						Location::new(
+							0,
+							X1(Arc::new([AccountId32 { network: None, id: BOB.into() }])),
+						)
+						.encode(),
 					),
 				};
 				let proposals = vec![valid_native_transfer_proposal];
@@ -3028,13 +3088,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances of Alice after deposit 200 native token
@@ -3099,13 +3159,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check reserved native token, should increase by 0.02 to 190.020000000000
@@ -3131,13 +3191,13 @@ pub mod pallet {
 				));
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check reserved native token, should increase by 200 to 390.020000000000
@@ -3193,13 +3253,13 @@ pub mod pallet {
 				// 5% fee of 200 token should be 10 but fee lower bound is 100, so fee is 100 now
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check reserved native token, should increase by 100 to 490.020000000000
@@ -3219,14 +3279,14 @@ pub mod pallet {
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
 					Box::new(
-						(Concrete(NativeLocation::get()), Fungible(200_000_000_000_000_000)).into()
+						(AssetId(NativeLocation::get()), Fungible(200_000_000_000_000_000)).into()
 					),
-					Box::new(MultiLocation {
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check reserved native token, should increase by 199000 to 199490.020000000000
@@ -3271,13 +3331,13 @@ pub mod pallet {
 				assert_noop!(
 					SygmaBridge::deposit(
 						Origin::signed(ALICE),
-						Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-						Box::new(MultiLocation {
+						Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+						Box::new(Location {
 							parents: 0,
-							interior: X2(
+							interior: X2(Arc::new([
 								slice_to_generalkey(b"ethereum recipient"),
-								slice_to_generalkey(&[1]),
-							)
+								slice_to_generalkey(&[1])
+							]))
 						}),
 					),
 					bridge::Error::<Runtime>::MissingFeeConfig
@@ -3315,13 +3375,13 @@ pub mod pallet {
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances
@@ -3353,13 +3413,13 @@ pub mod pallet {
 
 				assert_ok!(SygmaBridge::deposit(
 					Origin::signed(ALICE),
-					Box::new((Concrete(NativeLocation::get()), Fungible(amount)).into()),
-					Box::new(MultiLocation {
+					Box::new((AssetId(NativeLocation::get()), Fungible(amount)).into()),
+					Box::new(Location {
 						parents: 0,
-						interior: X2(
+						interior: X2(Arc::new([
 							slice_to_generalkey(b"ethereum recipient"),
-							slice_to_generalkey(&[1]),
-						)
+							slice_to_generalkey(&[1])
+						]))
 					}),
 				));
 				// Check balances

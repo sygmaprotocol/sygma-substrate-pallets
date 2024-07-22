@@ -21,7 +21,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::boxed::Box;
 	use sygma_traits::{DomainID, FeeHandler};
-	use xcm::latest::{AssetId, MultiAsset};
+	use xcm::v4::{Asset, AssetId};
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 	pub enum FeeHandlerType {
@@ -111,8 +111,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> FeeHandler for Pallet<T> {
-		fn get_fee(domain: DomainID, asset: MultiAsset) -> Option<u128> {
-			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset.id)) {
+		fn get_fee(domain: DomainID, asset: Asset) -> Option<u128> {
+			if let Some(handler_type) = HandlerType::<T>::get((&domain, asset.clone().id)) {
 				match handler_type {
 					FeeHandlerType::BasicFeeHandler => {
 						sygma_basic_feehandler::Pallet::<T>::get_fee(domain, asset)
@@ -143,24 +143,23 @@ pub mod pallet {
 		use frame_support::{assert_noop, assert_ok};
 		use sp_std::boxed::Box;
 		use sygma_traits::FeeHandler;
-		use xcm::latest::prelude::*;
 
 		#[test]
 		fn access_control() {
 			new_test_ext().execute_with(|| {
-				let asset_id = Concrete(PhaLocation::get());
+				let asset_id: AssetId = AssetId(PhaLocation::get());
 
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Origin::root(),
 					EthereumDomainID::get(),
-					Box::new(asset_id),
+					Box::new(asset_id.clone()),
 					FeeHandlerType::BasicFeeHandler,
 				));
 				assert_noop!(
 					FeeHandlerRouter::set_fee_handler(
 						Some(ALICE).into(),
 						EthereumDomainID::get(),
-						Box::new(asset_id),
+						Box::new(asset_id.clone()),
 						FeeHandlerType::BasicFeeHandler,
 					),
 					fee_router::Error::<Test>::AccessDenied
@@ -186,7 +185,7 @@ pub mod pallet {
 				assert_ok!(FeeHandlerRouter::set_fee_handler(
 					Some(ALICE).into(),
 					MoonbeamDomainID::get(),
-					Box::new(asset_id),
+					Box::new(asset_id.clone()),
 					FeeHandlerType::DynamicFeeHandler,
 				),);
 				assert_eq!(
