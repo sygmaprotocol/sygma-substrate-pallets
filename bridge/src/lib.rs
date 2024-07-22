@@ -40,7 +40,7 @@ pub mod pallet {
 	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 	use sp_runtime::{
 		traits::{AccountIdConversion, Clear},
-		RuntimeDebug,
+		RuntimeDebug as RuntimeDebugT,
 	};
 	use sp_std::collections::btree_map::BTreeMap;
 	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
@@ -59,7 +59,7 @@ pub mod pallet {
 	const LOG_TARGET: &str = "runtime::sygmabridge";
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugT)]
 	pub struct Proposal {
 		pub origin_domain_id: DomainID,
 		pub deposit_nonce: DepositNonce,
