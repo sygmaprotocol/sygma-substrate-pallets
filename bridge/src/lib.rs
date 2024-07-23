@@ -28,6 +28,7 @@ pub mod pallet {
 	use codec::{Decode, Encode};
 	use ethabi::{encode as abi_encode, token::Token};
 	use frame_support::dispatch::RawOrigin;
+	use frame_support::sp_runtime::traits::AccountIdConversion;
 	use frame_support::{
 		dispatch::DispatchResult,
 		pallet_prelude::*,
@@ -38,11 +39,7 @@ pub mod pallet {
 	use primitive_types::U256;
 	use scale_info::TypeInfo;
 	use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
-	use sp_runtime::{
-		traits::{Clear},
-		RuntimeDebug as RuntimeDebugT,
-	};
-	use frame_support::sp_runtime::traits::AccountIdConversion;
+	use sp_runtime::{traits::Clear, RuntimeDebug as RuntimeDebugT};
 	use sp_std::collections::btree_map::BTreeMap;
 	use sp_std::{boxed::Box, convert::From, vec, vec::Vec};
 	use xcm::v4::{prelude::*, Location};
@@ -789,8 +786,8 @@ pub mod pallet {
 				}
 			}
 
-			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
-			let bytes = encode_packed(final_keccak_data_input);
+			let final_keccak_data_input = [SolidityDataType::Bytes(&final_keccak_data)];
+			let bytes = encode_packed(&final_keccak_data_input);
 			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
 			let struct_hash = keccak_256(&abi_encode(&[
@@ -809,12 +806,12 @@ pub mod pallet {
 			};
 			let domain_separator = eip712_domain.separator();
 
-			let typed_data_hash_input = &vec![
+			let typed_data_hash_input = [
 				SolidityDataType::String("\x19\x01"),
 				SolidityDataType::Bytes(&domain_separator),
 				SolidityDataType::Bytes(&struct_hash),
 			];
-			let bytes = encode_packed(typed_data_hash_input);
+			let bytes = encode_packed(&typed_data_hash_input);
 			keccak_256(bytes.as_slice())
 		}
 
@@ -848,7 +845,7 @@ pub mod pallet {
 		/// recipient data            bytes       bytes  64 - END
 		///
 		/// Only fungible transfer is supported so far.
-		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, Location), DispatchError> {
+		fn extract_deposit_data(data: &[u8]) -> Result<(u128, Location), DispatchError> {
 			if data.len() < 64 {
 				return Err(Error::<T>::InvalidDepositDataInvalidLength.into());
 			}

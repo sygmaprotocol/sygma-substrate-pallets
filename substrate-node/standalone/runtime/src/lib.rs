@@ -62,6 +62,7 @@ pub use frame_support::{
 pub use frame_system::{Call as SystemCall, EnsureSigned};
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
+#[allow(deprecated)]
 use pallet_transaction_payment::{
 	ConstFeeMultiplier, CurrencyAdapter as PaymentCurrencyAdapter, Multiplier,
 };
@@ -277,6 +278,7 @@ parameter_types! {
 	pub FeeMultiplier: Multiplier = Multiplier::one();
 }
 
+#[allow(deprecated)]
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = PaymentCurrencyAdapter<Balances, ()>;

@@ -1,8 +1,6 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
-#![cfg(test)]
-
 use frame_support::{
 	pallet_prelude::ConstU32,
 	parameter_types,

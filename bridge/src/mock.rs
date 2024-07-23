@@ -1,8 +1,6 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
-#![cfg(test)]
-
 use crate as sygma_bridge;
 use fixed::{types::extra::U16, FixedU128};
 use frame_support::{

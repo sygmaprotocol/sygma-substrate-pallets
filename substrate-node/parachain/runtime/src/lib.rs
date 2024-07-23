@@ -446,6 +446,7 @@ parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MICROUNIT;
 }
 
+#[allow(deprecated)]
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<Balances, ()>;
