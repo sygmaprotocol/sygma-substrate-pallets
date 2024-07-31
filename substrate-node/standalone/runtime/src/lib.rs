@@ -10,7 +10,12 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use fixed::{types::extra::U16, FixedU128};
-use frame_support::{pallet_prelude::*, traits::ContainsPair, PalletId};
+use frame_support::{
+	genesis_builder_helper::{build_config, create_default_config},
+	pallet_prelude::*,
+	traits::ContainsPair,
+	PalletId,
+};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use polkadot_parachain_primitives::primitives::Sibling;
 use primitive_types::U256;
@@ -1063,6 +1068,16 @@ impl_runtime_apis! {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
+		}
+	}
+
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+		fn create_default_config() -> Vec<u8> {
+			create_default_config::<RuntimeGenesisConfig>()
+		}
+
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			build_config::<RuntimeGenesisConfig>(config)
 		}
 	}
 }
