@@ -76,6 +76,11 @@ async function main() {
         await setFeeRate(api, domain.domainID, getNativeAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound, true, sudo);
     }
 
+    // transfer some native asset to FeeReserveAccount and TransferReserveAccounts as Existential Deposit(aka ED)
+    await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
+    await setBalance(api, TransferReserveNativeAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
+    await setBalance(api, TransferReserveOtherAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
+
     // create USDC test asset (foreign asset)
     // UsdcAssetId: AssetId defined in runtime.rs
     const usdcAssetID = 2000;
@@ -124,11 +129,6 @@ async function main() {
         await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
         await setFeeRate(api, domain.domainID, getERC20TSTD20AssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
     }
-
-    // transfer some native asset to FeeReserveAccount and TransferReserveAccounts as Existential Deposit(aka ED)
-    await setBalance(api, FeeReserveAccountAddress, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
-    await setBalance(api, TransferReserveNativeAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
-    await setBalance(api, TransferReserveOtherAccount, bn1e12.mul(new BN(10000)), true, sudo); // set balance to 10000 native asset
 
     // set up MPC address(will also unpause all registered domains)
     if (mpcAddr) {
