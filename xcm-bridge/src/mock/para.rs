@@ -300,7 +300,7 @@ impl GetChannelInfo for ChannelInfo {
 		ChannelStatus::Ready(10, 10)
 	}
 	fn get_channel_max(_id: ParaId) -> Option<usize> {
-		Some(usize::max_value())
+		Some(usize::MAX)
 	}
 }
 
