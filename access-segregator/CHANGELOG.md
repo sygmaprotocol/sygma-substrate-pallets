@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-access-segregator-v0.2.0...sygma-access-segregator-v0.3.0) (2024-08-01)
+
+
+### Features
+
+* Add pause/unpause all bridges extrinsics ([#124](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/124)) ([c0aaeda](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/c0aaeda7b7eb1628b99360305c3e9c85e6b5a6b2))
+* standalone runtime and parachain runtime ([#148](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/148)) ([0a67e27](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/0a67e27cc2467777432cd61fd10c14491023c35e))
+* Upgrade to polkadot v0.9.43 ([#111](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/111)) ([1d7fc5a](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/1d7fc5afe34d50168823bef92e610ea50ed9bdd4))
+* Upgrade to polkadot v1.0.0 ([#125](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/125)) ([f334bfe](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/f334bfee2f4ef61755d4d6c37d749db7c319c366))
+* Upgrade to polkadot v1.1.0 ([#131](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/131)) ([c6c923e](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/c6c923e697511bacbdaa7c6ae812b453b2158292))
+* Upgrade to polkadot v1.2.0 ([#132](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/132)) ([3ff60b9](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/3ff60b9f833ba6769825cfa74eddb5776619fc26))
+
 ## [0.2.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-access-segregator-v0.1.0...sygma-access-segregator-v0.2.0) (2023-05-11)
 
 

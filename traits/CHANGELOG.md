@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-traits-v0.2.0...sygma-traits-v0.3.0) (2024-08-01)
+
+
+### Features
+
+* Add AssetTransactor implementation with XCM ([#145](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/145)) ([9dd2b53](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/9dd2b533cf37c5bf4de9d6ff44f0e45bb72507b0))
+* Add percentage fee handler pallet ([#118](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/118)) ([da8445c](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/da8445c508e25b014a9c06ae30f48fa1151084a8))
+* Upgrade to polkadot v0.9.43 ([#111](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/111)) ([1d7fc5a](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/1d7fc5afe34d50168823bef92e610ea50ed9bdd4))
+* Upgrade to polkadot v1.0.0 ([#125](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/125)) ([f334bfe](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/f334bfee2f4ef61755d4d6c37d749db7c319c366))
+* Upgrade to polkadot v1.1.0 ([#131](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/131)) ([c6c923e](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/c6c923e697511bacbdaa7c6ae812b453b2158292))
+* Upgrade to polkadot v1.2.0 ([#132](https://github.com/sygmaprotocol/sygma-substrate-pallets/issues/132)) ([3ff60b9](https://github.com/sygmaprotocol/sygma-substrate-pallets/commit/3ff60b9f833ba6769825cfa74eddb5776619fc26))
+
 ## [0.2.0](https://github.com/sygmaprotocol/sygma-substrate-pallets/compare/sygma-traits-v0.1.0...sygma-traits-v0.2.0) (2023-05-11)
 
 
