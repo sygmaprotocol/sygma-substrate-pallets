@@ -51,7 +51,7 @@ const TransferReserveNativeAccount = "5EYCAe5jLbHcAAMKvLFSXgCTbPrLgBJusvPwfKcaKz
 const TransferReserveOtherAccount = "5EYCAe5jLbHcAAMKvLFiGhk3htXY8jQncbLTDGJQnpnPMAVp";
 
 async function main() {
-    const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9900');
+    const sygmaPalletProvider = new WsProvider(process.env.PALLETWSENDPOINT || 'ws://127.0.0.1:9944');
     const api = await ApiPromise.create({
         provider: sygmaPalletProvider,
     });
