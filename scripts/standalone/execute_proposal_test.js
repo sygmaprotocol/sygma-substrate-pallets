@@ -60,7 +60,7 @@ async function main() {
     // USDC
     const usdcBalanceBefore = await queryAssetBalance(api, assetID || 2000, aliceAddress);
     console.log('usdc asset balance before: ', usdcBalanceBefore.balance);
-    await executeProposal(api, [proposal_usdc], signature_usdc, true, sudo);
+    await executeProposal(api, [proposal_usdc], signature_usdc, false, sudo);
     const usdcbalanceAfter = await queryAssetBalance(api, assetID || 2000, aliceAddress);
     console.log('usdc asset balance after: ', usdcbalanceAfter.balance);
 
@@ -71,7 +71,7 @@ async function main() {
     // Native asset
     const nativeBalanceBefore = await queryBalance(api, aliceAddress);
     console.log('native asset balance before: ', nativeBalanceBefore.data.free);
-    await executeProposal(api, [proposal_native], signature_native, true, sudo);
+    await executeProposal(api, [proposal_native], signature_native, false, sudo);
     const nativeBalanceAfter = await queryBalance(api, aliceAddress);
     console.log('native asset balance after: ', nativeBalanceAfter.data.free);
 
