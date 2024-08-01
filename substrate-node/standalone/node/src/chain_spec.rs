@@ -3,12 +3,15 @@
 
 use cumulus_primitives_core::ParaId;
 use sc_chain_spec::{ChainSpecExtension, ChainSpecGroup};
+use sc_consensus_grandpa::AuthorityId as GrandpaId;
 use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use standalone_template_runtime::{AccountId, SessionKeys, Signature, EXISTENTIAL_DEPOSIT};
+use standalone_template_runtime::{
+	AccountId, SessionKeys, Signature, EXISTENTIAL_DEPOSIT, WASM_BINARY,
+};
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -65,8 +68,8 @@ where
 /// Generate the session keys from individual elements.
 ///
 /// The input must be a tuple of individual keys (a single arg for now since we have just one key).
-pub fn template_session_keys(keys: AuraId) -> SessionKeys {
-	SessionKeys { aura: keys }
+pub fn template_session_keys(keys: AuraId, grandpa: GrandpaId) -> SessionKeys {
+	SessionKeys { aura: keys, grandpa }
 }
 
 pub fn development_config() -> ChainSpec {
@@ -77,8 +80,7 @@ pub fn development_config() -> ChainSpec {
 	properties.insert("ss58Format".into(), 42.into());
 
 	ChainSpec::builder(
-		standalone_template_runtime::WASM_BINARY
-			.expect("WASM binary was not built, please build it!"),
+		WASM_BINARY.expect("WASM binary was not built, please build it!"),
 		Extensions {
 			relay_chain: "rococo-local".into(),
 			// You MUST set this to the correct network!
@@ -94,10 +96,12 @@ pub fn development_config() -> ChainSpec {
 			(
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				get_collator_keys_from_seed("Alice"),
+				get_from_seed::<GrandpaId>("Alice"),
 			),
 			(
 				get_account_id_from_seed::<sr25519::Public>("Bob"),
 				get_collator_keys_from_seed("Bob"),
+				get_from_seed::<GrandpaId>("Bob"),
 			),
 		],
 		vec![
@@ -126,11 +130,8 @@ pub fn local_testnet_config() -> ChainSpec {
 	properties.insert("tokenSymbol".into(), "UNIT".into());
 	properties.insert("tokenDecimals".into(), 12.into());
 	properties.insert("ss58Format".into(), 42.into());
-
-	#[allow(deprecated)]
 	ChainSpec::builder(
-		standalone_template_runtime::WASM_BINARY
-			.expect("WASM binary was not built, please build it!"),
+		WASM_BINARY.expect("WASM binary was not built, please build it!"),
 		Extensions {
 			relay_chain: "rococo-local".into(),
 			// You MUST set this to the correct network!
@@ -146,10 +147,12 @@ pub fn local_testnet_config() -> ChainSpec {
 			(
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				get_collator_keys_from_seed("Alice"),
+				get_from_seed::<GrandpaId>("Alice"),
 			),
 			(
 				get_account_id_from_seed::<sr25519::Public>("Bob"),
 				get_collator_keys_from_seed("Bob"),
+				get_from_seed::<GrandpaId>("Bob"),
 			),
 		],
 		vec![
@@ -175,7 +178,7 @@ pub fn local_testnet_config() -> ChainSpec {
 }
 
 fn testnet_genesis(
-	invulnerables: Vec<(AccountId, AuraId)>,
+	invulnerables: Vec<(AccountId, AuraId, GrandpaId)>,
 	endowed_accounts: Vec<AccountId>,
 	root: AccountId,
 	id: ParaId,
@@ -188,21 +191,21 @@ fn testnet_genesis(
 			"parachainId": id,
 		},
 		"collatorSelection": {
-			"invulnerables": invulnerables.iter().cloned().map(|(acc, _)| acc).collect::<Vec<_>>(),
+			"invulnerables": invulnerables.iter().cloned().map(|(acc, _, _)| acc).collect::<Vec<_>>(),
 			"candidacyBond": EXISTENTIAL_DEPOSIT * 16,
 		},
 		"session": {
 			"keys": invulnerables
 				.into_iter()
-				.map(|(acc, aura)| {
+				.map(|(acc, aura, grandpa_id)| {
 					(
 						acc.clone(),                 // account id
 						acc,                         // validator id
-						template_session_keys(aura), // session keys
+						template_session_keys(aura, grandpa_id), // session keys
 					)
 				})
 			.collect::<Vec<_>>(),
 		},
-		"sudo": { "key": Some(root) }
+		"sudo": { "key": Some(root) },
 	})
 }

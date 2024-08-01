@@ -10,7 +10,12 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use fixed::{types::extra::U16, FixedU128};
-use frame_support::{pallet_prelude::*, traits::ContainsPair, PalletId};
+use frame_support::{
+	genesis_builder_helper::{build_config, create_default_config},
+	pallet_prelude::*,
+	traits::ContainsPair,
+	PalletId,
+};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use polkadot_parachain_primitives::primitives::Sibling;
 use primitive_types::U256;
@@ -108,6 +113,7 @@ pub mod opaque {
 impl_opaque_keys! {
 	pub struct SessionKeys {
 		pub aura: Aura,
+		pub grandpa: Grandpa,
 	}
 }
 
@@ -342,6 +348,49 @@ impl pallet_assets::Config for Runtime {
 }
 
 parameter_types! {
+	pub const Period: u32 = 6 * HOURS;
+	pub const Offset: u32 = 0;
+}
+
+impl pallet_session::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	// we don't have stash and controller, thus we don't need the convert as well.
+	type ValidatorIdOf = pallet_collator_selection::IdentityCollator;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionManager = CollatorSelection;
+	// Essentially just Aura, but lets be pedantic.
+	type SessionHandler = <SessionKeys as sp_runtime::traits::OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = SessionKeys;
+	type WeightInfo = ();
+}
+
+parameter_types! {
+	pub const PotId: PalletId = PalletId(*b"PotStake");
+	pub const MaxCollatorCandidates: u32 = 1000;
+	pub const MinEligibleCollators: u32 = 5;
+	pub const SessionLength: BlockNumber = 6 * HOURS;
+	pub const MaxInvulnerables: u32 = 100;
+}
+
+impl pallet_collator_selection::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type UpdateOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type PotId = PotId;
+	type MaxCandidates = MaxCollatorCandidates;
+	type MinEligibleCollators = MinEligibleCollators;
+	type MaxInvulnerables = MaxInvulnerables;
+	// should be a multiple of session or things will get inconsistent
+	type KickThreshold = Period;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type ValidatorIdOf = pallet_collator_selection::IdentityCollator;
+	type ValidatorRegistration = Session;
+	type WeightInfo = ();
+}
+
+parameter_types! {
 	// Make sure put same value with `construct_runtime`
 	pub const AccessSegregatorPalletIndex: u8 = 9;
 	pub const BasicFeeHandlerPalletIndex: u8 = 10;
@@ -401,7 +450,7 @@ const DEST_VERIFYING_CONTRACT_ADDRESS: &str = "6CdE2Cd82a4F8B74693Ff5e194c19CA08
 fn bridge_accounts_generator() -> BTreeMap<XcmAssetId, AccountId32> {
 	let mut account_map: BTreeMap<XcmAssetId, AccountId32> = BTreeMap::new();
 	account_map.insert(NativeLocation::get().into(), BridgeAccountNative::get());
-	account_map.insert(UsdtLocation::get().into(), BridgeAccountOtherToken::get());
+	account_map.insert(UsdcLocation::get().into(), BridgeAccountOtherToken::get());
 	account_map.insert(ERC20TSTLocation::get().into(), BridgeAccountOtherToken::get());
 	account_map.insert(ERC20TSTD20Location::get().into(), BridgeAccountOtherToken::get());
 	account_map
@@ -429,19 +478,20 @@ parameter_types! {
 		PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	// NativeLocation is the representation of the current parachain's native asset location in substrate, it can be various on different parachains
 	pub NativeLocation: Location = Location::here();
-	// UsdtLocation is the representation of the USDT asset location in substrate
-	// USDT is a foreign asset, and in our local testing env, it's being registered on Parachain 2004 with the following location
-	pub UsdtLocation: Location = Location::new(
+	// UsdcLocation is the representation of the USDC asset location in substrate
+	// USDC is a reserved token
+	pub UsdcLocation: Location = Location::new(
 		1,
 		X3(
 			Arc::new([
 				Parachain(2005),
 				slice_to_generalkey(b"sygma"),
-				slice_to_generalkey(b"usdt")
+				slice_to_generalkey(b"usdc")
 			])
 
 		),
 	);
+	// ERC20TSTLocation is a reserved token
 	pub ERC20TSTLocation: Location = Location::new(
 		1,
 		X3(
@@ -452,6 +502,7 @@ parameter_types! {
 			])
 		),
 	);
+	// ERC20TSTD20Location is a reserved token
 	pub ERC20TSTD20Location: Location = Location::new(
 		1,
 		X3(
@@ -462,23 +513,22 @@ parameter_types! {
 			])
 		),
 	);
-	// UsdtAssetId is the substrate assetID of USDT
-	pub UsdtAssetId: AssetId = 2000;
+	pub UsdcAssetId: AssetId = 2000;
 	pub ERC20TSTAssetId: AssetId = 2001;
 	pub ERC20TSTD20AssetId: AssetId = 2002;
 	// NativeResourceId is the resourceID that mapping with the current parachain native asset
 	pub NativeResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000001");
-	// UsdtResourceId is the resourceID that mapping with the foreign asset USDT
-	pub UsdtResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
+	// UsdcResourceId is the resourceID that mapping with the foreign asset USDc
+	pub UsdcResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000300");
 	pub ERC20TSTResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000");
 	pub ERC20TSTD20ResourceId: ResourceId = hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000900");
 
 	// ResourcePairs is where all supported assets and their associated resourceID are binding
-	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdtLocation::get().into(), UsdtResourceId::get()), (ERC20TSTLocation::get().into(), ERC20TSTResourceId::get()), (ERC20TSTD20Location::get().into(), ERC20TSTD20ResourceId::get())];
+	pub ResourcePairs: Vec<(XcmAssetId, ResourceId)> = vec![(NativeLocation::get().into(), NativeResourceId::get()), (UsdcLocation::get().into(), UsdcResourceId::get()), (ERC20TSTLocation::get().into(), ERC20TSTResourceId::get()), (ERC20TSTD20Location::get().into(), ERC20TSTD20ResourceId::get())];
 	// SygmaBridgePalletId is the palletIDl
 	// this is used as the replacement of handler address in the ProposalExecution event
 	pub const SygmaBridgePalletId: PalletId = PalletId(*b"sygma/01");
-	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdtLocation::get().into(), 12u8), (ERC20TSTLocation::get().into(), 18u8), (ERC20TSTD20Location::get().into(), 20u8)];
+	pub AssetDecimalPairs: Vec<(XcmAssetId, u8)> = vec![(NativeLocation::get().into(), 12u8), (UsdcLocation::get().into(), 12u8), (ERC20TSTLocation::get().into(), 18u8), (ERC20TSTD20Location::get().into(), 20u8)];
 }
 
 /// Type for specifying how a `Location` can be converted into an `AccountId`. This is used
@@ -516,8 +566,8 @@ impl MatchesFungibles<AssetId, Balance> for SimpleForeignAssetConverter {
 	fn matches_fungibles(a: &Asset) -> result::Result<(AssetId, Balance), ExecutionError> {
 		match (&a.fun, &a.id) {
 			(Fungible(ref amount), AssetId(ref id)) => {
-				if id == &UsdtLocation::get() {
-					Ok((UsdtAssetId::get(), *amount))
+				if id == &UsdcLocation::get() {
+					Ok((UsdcAssetId::get(), *amount))
 				} else if id == &ERC20TSTLocation::get() {
 					Ok((ERC20TSTAssetId::get(), *amount))
 				} else if id == &ERC20TSTD20Location::get() {
@@ -761,6 +811,8 @@ construct_runtime!(
 		SygmaFeeHandlerRouter: sygma_fee_handler_router::{Pallet, Call, Storage, Event<T>} = 12,
 		SygmaPercentageFeeHandler: sygma_percentage_feehandler::{Pallet, Call, Storage, Event<T>} = 13,
 		ParachainInfo: pallet_parachain_info = 20,
+		CollatorSelection: pallet_collator_selection,
+		Session: pallet_session,
 	}
 );
 
@@ -1063,6 +1115,16 @@ impl_runtime_apis! {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
+		}
+	}
+
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+		fn create_default_config() -> Vec<u8> {
+			create_default_config::<RuntimeGenesisConfig>()
+		}
+
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			build_config::<RuntimeGenesisConfig>(config)
 		}
 	}
 }
