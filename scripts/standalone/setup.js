@@ -38,10 +38,10 @@ const supportedDestDomains = [
         domainID: 1,
         chainID: 1
     },
-    // {
-    //     domainID: 2,
-    //     chainID: 2
-    // }
+    {
+        domainID: 2,
+        chainID: 2
+    }
 ]
 
 // those account are configured in the substrate-node runtime, and are only applicable for sygma pallet standalone node,
@@ -96,10 +96,10 @@ async function main() {
     const erc20tstName = "erc20tst test asset";
     const erc20tstSymbol = "ERC20TST";
     const erc20tstDecimal = 18;
-    // await createAsset(api, erc20tstAssetID, erc20tstAdmin, erc20tstMinBalance, true, sudo);
-    // await setAssetMetadata(api, erc20tstAssetID, erc20tstName, erc20tstSymbol, erc20tstDecimal, true, sudo);
-    // await mintAsset(api, erc20tstAssetID, erc20tstAdmin, bn1e18.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to Alice
-    // await mintAsset(api, erc20tstAssetID, TransferReserveOtherAccount, bn1e12.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to OtherTokenReserved account
+    await createAsset(api, erc20tstAssetID, erc20tstAdmin, erc20tstMinBalance, true, sudo);
+    await setAssetMetadata(api, erc20tstAssetID, erc20tstName, erc20tstSymbol, erc20tstDecimal, true, sudo);
+    await mintAsset(api, erc20tstAssetID, erc20tstAdmin, bn1e18.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to Alice
+    await mintAsset(api, erc20tstAssetID, TransferReserveOtherAccount, bn1e12.mul(new BN(100)), true, sudo); // mint 100 ERC20TST to OtherTokenReserved account
 
     // create ERC20TSTD20 test asset (foreign asset)
     const erc20tstd20AssetID = 2002;
@@ -108,21 +108,21 @@ async function main() {
     const erc20tstd20Name = "erc20tstd20 test asset";
     const erc20tstd20Symbol = "ERC20TSTD20";
     const erc20tstd20Decimal = 20;
-    // await createAsset(api, erc20tstd20AssetID, erc20tstd20Admin, erc20tstd20MinBalance, true, sudo);
-    // await setAssetMetadata(api, erc20tstd20AssetID, erc20tstd20Name, erc20tstd20Symbol, erc20tstd20Decimal, true, sudo);
-    // await mintAsset(api, erc20tstd20AssetID, erc20tstd20Admin, bn1e20.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to Alice
-    // await mintAsset(api, erc20tstd20AssetID, TransferReserveOtherAccount, bn1e12.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to OtherTokenReserved account
+    await createAsset(api, erc20tstd20AssetID, erc20tstd20Admin, erc20tstd20MinBalance, true, sudo);
+    await setAssetMetadata(api, erc20tstd20AssetID, erc20tstd20Name, erc20tstd20Symbol, erc20tstd20Decimal, true, sudo);
+    await mintAsset(api, erc20tstd20AssetID, erc20tstd20Admin, bn1e20.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to Alice
+    await mintAsset(api, erc20tstd20AssetID, TransferReserveOtherAccount, bn1e12.mul(new BN(100)), true, sudo); // mint 100 ERC20TSTD20 to OtherTokenReserved account
 
     // set fee for tokens with domains
     for (const domain of supportedDestDomains) {
         await setFeeHandler(api, domain.domainID, getUSDCAssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
         await setFeeRate(api, domain.domainID, getUSDCAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
 
-        // await setFeeHandler(api, domain.domainID, getERC20TSTAssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
-        // await setFeeRate(api, domain.domainID, getERC20TSTAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
-        //
-        // await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
-        // await setFeeRate(api, domain.domainID, getERC20TSTD20AssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
+        await setFeeHandler(api, domain.domainID, getERC20TSTAssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
+        await setFeeRate(api, domain.domainID, getERC20TSTAssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
+
+        await setFeeHandler(api, domain.domainID, getERC20TSTD20AssetId(api), feeHandlerType.PercentageFeeHandler, true, sudo)
+        await setFeeRate(api, domain.domainID, getERC20TSTD20AssetId(api), percentageFeeRate, feeRateLowerBound, feeRateUpperBound,true, sudo);
     }
 
     // transfer some native asset to FeeReserveAccount and TransferReserveAccounts as Existential Deposit(aka ED)
