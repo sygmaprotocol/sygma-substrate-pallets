@@ -328,7 +328,7 @@ function getUSDCAssetId(api) {
             interior: api.createType('StagingXcmV3Junctions', {
                 X3: [
                     api.createType('StagingXcmV3Junction', {
-                        Parachain: api.createType('Compact<U32>', 2004)
+                        Parachain: api.createType('Compact<U32>', 2005)
                     }),
                     api.createType('StagingXcmV3Junction', {
                         // 0x7379676d61 is general key of USDC defined in sygma substrate pallet runtime for testing
@@ -359,7 +359,7 @@ function getERC20TSTAssetId(api) {
             interior: api.createType('StagingXcmV3Junctions', {
                 X3: [
                     api.createType('StagingXcmV3Junction', {
-                        Parachain: api.createType('Compact<U32>', 2004)
+                        Parachain: api.createType('Compact<U32>', 2005)
                     }),
                     api.createType('StagingXcmV3Junction', {
                         GeneralKey: {
@@ -386,7 +386,7 @@ function getERC20TSTD20AssetId(api) {
             interior: api.createType('StagingXcmV3Junctions', {
                 X3: [
                     api.createType('StagingXcmV3Junction', {
-                        Parachain: api.createType('Compact<U32>', 2004)
+                        Parachain: api.createType('Compact<U32>', 2005)
                     }),
                     api.createType('StagingXcmV3Junction', {
                         GeneralKey: {

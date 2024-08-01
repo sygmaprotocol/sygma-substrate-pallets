@@ -788,7 +788,7 @@ pub mod pallet {
 				}
 			}
 
-			let final_keccak_data_input = &vec![SolidityDataType::Bytes(&final_keccak_data)];
+			let final_keccak_data_input = &[SolidityDataType::Bytes(&final_keccak_data)];
 			let bytes = encode_packed(final_keccak_data_input);
 			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
@@ -808,7 +808,7 @@ pub mod pallet {
 			};
 			let domain_separator = eip712_domain.separator();
 
-			let typed_data_hash_input = &vec![
+			let typed_data_hash_input = &[
 				SolidityDataType::String("\x19\x01"),
 				SolidityDataType::Bytes(&domain_separator),
 				SolidityDataType::Bytes(&struct_hash),
@@ -847,7 +847,7 @@ pub mod pallet {
 		/// recipient data            bytes       bytes  64 - END
 		///
 		/// Only fungible transfer is supported so far.
-		fn extract_deposit_data(data: &Vec<u8>) -> Result<(u128, Location), DispatchError> {
+		fn extract_deposit_data(data: &[u8]) -> Result<(u128, Location), DispatchError> {
 			if data.len() < 64 {
 				return Err(Error::<T>::InvalidDepositDataInvalidLength.into());
 			}

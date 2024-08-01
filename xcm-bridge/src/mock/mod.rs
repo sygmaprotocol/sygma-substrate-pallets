@@ -1,8 +1,6 @@
 // The Licensed Work is (c) 2022 Sygma
 // SPDX-License-Identifier: LGPL-3.0-only
 
-#![cfg(test)]
-
 use frame_support::sp_runtime::{AccountId32, BuildStorage};
 use sp_io::TestExternalities;
 use xcm_simulator::{decl_test_network, decl_test_parachain, decl_test_relay_chain, TestExt};
