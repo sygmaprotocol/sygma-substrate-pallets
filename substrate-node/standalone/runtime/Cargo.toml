@@ -45,6 +45,9 @@ sp-session = { version = "28.0.0", default-features = false }
 sp-std = { version = "14.0.0", default-features = false }
 sp-transaction-pool = { version = "27.0.0", default-features = false }
 sp-version = { version = "30.0.0", default-features = false }
+pallet-session = { version = "29.0.0", default-features = false }
+pallet-collator-selection = { version = "10.0.0", default-features = false }
+sp-genesis-builder = { version = "0.8.0", default-features = false }
 
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "27.0.0", default-features = false }
@@ -92,6 +95,8 @@ std = [
 	"pallet-grandpa/std",
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-sudo/std",
+	"pallet-session/std",
+	"pallet-collator-selection/std",
 	"sygma-basic-feehandler/std",
 	"sygma-percentage-feehandler/std",
 	"sygma-traits/std",
@@ -113,6 +118,7 @@ std = [
 	"sp-std/std",
 	"sp-transaction-pool/std",
 	"sp-version/std",
+	"sp-genesis-builder/std",
 	"xcm/std",
 	"xcm-builder/std",
 	"xcm-executor/std",

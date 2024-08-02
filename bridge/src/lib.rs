@@ -786,8 +786,8 @@ pub mod pallet {
 				}
 			}
 
-			let final_keccak_data_input = [SolidityDataType::Bytes(&final_keccak_data)];
-			let bytes = encode_packed(&final_keccak_data_input);
+			let final_keccak_data_input = &[SolidityDataType::Bytes(&final_keccak_data)];
+			let bytes = encode_packed(final_keccak_data_input);
 			let hashed_keccak_data = keccak_256(bytes.as_slice());
 
 			let struct_hash = keccak_256(&abi_encode(&[
@@ -806,12 +806,12 @@ pub mod pallet {
 			};
 			let domain_separator = eip712_domain.separator();
 
-			let typed_data_hash_input = [
+			let typed_data_hash_input = &[
 				SolidityDataType::String("\x19\x01"),
 				SolidityDataType::Bytes(&domain_separator),
 				SolidityDataType::Bytes(&struct_hash),
 			];
-			let bytes = encode_packed(&typed_data_hash_input);
+			let bytes = encode_packed(typed_data_hash_input);
 			keccak_256(bytes.as_slice())
 		}
 

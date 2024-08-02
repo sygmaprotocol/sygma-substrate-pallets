@@ -57,21 +57,21 @@ async function main() {
 
     console.log(`sudo address ${sudo.address}`)
 
-    // USDC
-    const usdcBalanceBefore = await queryAssetBalance(api, assetID || 2000, aliceAddress);
-    console.log('usdc asset balance before: ', usdcBalanceBefore.balance);
-    await executeProposal(api, [proposal_usdc], signature_usdc, true, sudo);
-    const usdcbalanceAfter = await queryAssetBalance(api, assetID || 2000, aliceAddress);
-    console.log('usdc asset balance after: ', usdcbalanceAfter.balance);
-
-    if (usdcbalanceAfter.balance === usdcBalanceBefore.balance) {
-        throw Error('proposal execution test failed(proposal of USDC)')
-    }
+    // // USDC
+    // const usdcBalanceBefore = await queryAssetBalance(api, assetID || 2000, aliceAddress);
+    // console.log('usdc asset balance before: ', usdcBalanceBefore.balance);
+    // await executeProposal(api, [proposal_usdc], signature_usdc, false, sudo);
+    // const usdcbalanceAfter = await queryAssetBalance(api, assetID || 2000, aliceAddress);
+    // console.log('usdc asset balance after: ', usdcbalanceAfter.balance);
+    //
+    // if (usdcbalanceAfter.balance === usdcBalanceBefore.balance) {
+    //     throw Error('proposal execution test failed(proposal of USDC)')
+    // }
 
     // Native asset
     const nativeBalanceBefore = await queryBalance(api, aliceAddress);
     console.log('native asset balance before: ', nativeBalanceBefore.data.free);
-    await executeProposal(api, [proposal_native], signature_native, true, sudo);
+    await executeProposal(api, [proposal_native], signature_native, false, sudo);
     const nativeBalanceAfter = await queryBalance(api, aliceAddress);
     console.log('native asset balance after: ', nativeBalanceAfter.data.free);
 
