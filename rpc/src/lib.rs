@@ -60,8 +60,6 @@ where
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		api.is_proposal_executed(at, nonce, domain_id)
-			.map_err(runtime_error_into_rpc_error)?;
-
-		Ok(true)
+			.map_err(runtime_error_into_rpc_error)
 	}
 }
