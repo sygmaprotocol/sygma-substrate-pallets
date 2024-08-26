@@ -50,7 +50,7 @@ jobs:
           submodules: "true"
       - uses: ./.github/actions/install_toolchain
       - name: Install cargo deny
-        run: cargo install --locked cargo-deny
+        run: cargo install --locked cargo-deny --version 0.14.24
       - name: Run cargo deny checks for pallets
         run: cargo-deny check licenses
 
