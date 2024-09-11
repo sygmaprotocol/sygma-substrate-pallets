@@ -10,7 +10,8 @@ COPY ./scripts/tangle .
 # build
 RUN git clone https://github.com/webb-tools/tangle.git ./tangle
 WORKDIR /code/tangle
-RUN git checkout sygma/polkadot-version-upgrade
+# checkout to the latest release tag
+RUN git checkout v$(git tag --sort=committerdate | grep -E '[0-9]' | tail -1 | cut -b 2-7)
 RUN cargo build --release --features testnet
 
 FROM --platform=linux/amd64 node:18.14.2

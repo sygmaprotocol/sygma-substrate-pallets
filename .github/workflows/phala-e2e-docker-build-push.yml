@@ -1,7 +1,7 @@
 # The Licensed Work is (c) 2022 Sygma
 # SPDX-License-Identifier: LGPL-3.0-only
 
-name: Build and publish E2E Docker image with Tangle standalone chain node
+name: Build and publish E2E Docker image with Phala Subbridge parachain node
 
 on:
   pull_request:
@@ -13,9 +13,25 @@ env:
 
 jobs:
   push_e2e_to_registry:
-    name: Push E2E Docker image with Tangle standalone chain node to GitHub Container Registry
+    name: Push Phala subbridge integrated E2E Docker image to GitHub Container Registry
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
+          swap-storage: true
+
       - name: Check out the repo
         uses: actions/checkout@v3
         with:
@@ -26,32 +42,19 @@ jobs:
         id: prep
         run: |
           # creates local variable of docker image
-
           # creates local variable of commit hash that triggered workflow
           COMMIT_HASH=$(echo $GITHUB_SHA | head -c7)
-
           # creates local variable to hold docker images
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-tangle-latest"
-
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_HASH},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-phala-latest"
           # check if branch/tag that triggered workflow was from tags
           if [[ $GITHUB_REF == refs/tags/* ]]; then
-
             # set version
             VERSION=${GITHUB_REF#refs/tags/}
-
             # append version and e2e testing name to tags
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-tangle-${VERSION}"
-
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:e2e-phala-${VERSION}"
           fi
-
           # sets output of step
           echo ::set-output name=tags::${TAGS}
-
-      - name: Remove unnecessary files
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -71,8 +74,7 @@ jobs:
         with:
           context: .
           push: true
-          file: ./Dockerfile_tangle_standalone_e2e
-          build-args: mpc_address=${{ env.MPCADDR }}
+          file: ./Dockerfile_phala_parachain_e2e
           tags: ${{ steps.prep.outputs.tags }}
 
       - name: Image digest
